@@ -45,6 +45,7 @@ struct OverviewView: View {
                         .background(FinanceTheme.petroleum.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
                         .accessibilityHidden(true)
                 }
+                if !setupSteps.allSatisfy(\.done) { gettingStarted }
                 cards(current, previous)
                 HStack(alignment: .top, spacing: 16) {
                     if let budget { cashFlow(budget) }
@@ -73,6 +74,39 @@ struct OverviewView: View {
                 Button("Mes siguiente", systemImage: "chevron.right") { month = MonthKey.next(month) }
                     .keyboardShortcut(.rightArrow, modifiers: .command)
             }
+        }
+    }
+
+    // MARK: Getting started
+
+    /// The envelope method in three steps; the guide disappears once all are done.
+    private var setupSteps: [(title: String, hint: String, done: Bool)] {
+        [
+            ("Crea una cuenta", "En la barra lateral, «Nueva cuenta».", accounts.contains { !$0.closed }),
+            ("Registra tu ingreso", "Un movimiento tipo Ingreso con categoría de ingreso.",
+             entries.contains { $0.amount > 0 && $0.category?.group?.isIncome == true }),
+            ("Asígnalo en el presupuesto", "En Presupuesto, escribe cuánto va a cada categoría.",
+             amounts.contains { $0.amount > 0 }),
+        ]
+    }
+
+    private var gettingStarted: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(setupSteps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Image(systemName: step.done ? "checkmark.circle.fill" : "\(index + 1).circle")
+                            .foregroundStyle(step.done ? FinanceTheme.emerald : FinanceTheme.petroleum)
+                            .accessibilityLabel(step.done ? "Hecho" : "Paso \(index + 1)")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title).strikethrough(step.done).foregroundStyle(step.done ? .secondary : .primary)
+                            Text(step.hint).font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text("Primeros pasos").font(.headline)
         }
     }
 

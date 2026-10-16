@@ -4,19 +4,33 @@ import SwiftUI
 
 @main
 struct FinanzasApp: App {
-    let container: ModelContainer
+    @State private var container: ModelContainer
+    @State private var mcpChanges: ExternalChanges
+    private let tick = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     init() {
+        let container: ModelContainer
         do { container = try FinanzasStore.onDisk() }
         catch { fatalError("No se pudo abrir la base de datos: \(error)") }
+        _container = State(initialValue: container)
+        _mcpChanges = State(initialValue: ExternalChanges(context: container.mainContext))
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onReceive(tick) { _ in reloadIfMCPWrote() }
         }
         .modelContainer(container)
         .commands { ImportFromActualCommand(container: container) }
+    }
+
+    /// The MCP helper writes from its own process; the main context would not see those rows,
+    /// so a fresh container is opened when its history shows MCP-authored changes.
+    private func reloadIfMCPWrote() {
+        guard (try? mcpChanges.poll()) == true, let fresh = try? FinanzasStore.onDisk() else { return }
+        container = fresh
+        mcpChanges = ExternalChanges(context: fresh.mainContext)
     }
 }
 

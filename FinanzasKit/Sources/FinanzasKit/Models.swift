@@ -137,14 +137,16 @@ public enum FinanzasStore {
 
     /// `~/Library/Application Support/Finanzas/Finanzas.store` — explicit, because an unsandboxed
     /// app would otherwise share the generic `default.store` name with other apps.
+    /// `FINANZAS_STORE` overrides it (tests and manual checks against a copy).
     public static var storeURL: URL {
-        URL.applicationSupportDirectory.appending(path: "Finanzas/Finanzas.store")
+        ProcessInfo.processInfo.environment["FINANZAS_STORE"].map { URL(filePath: $0) }
+            ?? URL.applicationSupportDirectory.appending(path: "Finanzas/Finanzas.store")
     }
 
-    public static func onDisk() throws -> ModelContainer {
-        try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    public static func onDisk(at url: URL = storeURL) throws -> ModelContainer {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         return try ModelContainer(for: Schema(models),
-                                  configurations: ModelConfiguration(url: storeURL, cloudKitDatabase: .none))
+                                  configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
     }
 
     public static func inMemory() throws -> ModelContainer {

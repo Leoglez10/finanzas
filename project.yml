@@ -7,6 +7,9 @@ options:
 packages:
   FinanzasKit:
     path: FinanzasKit
+  MCP:
+    url: https://github.com/modelcontextprotocol/swift-sdk.git
+    exactVersion: 0.12.1
 targets:
   Finanzas:
     type: application
@@ -14,6 +17,9 @@ targets:
     sources: [Finanzas]
     dependencies:
       - package: FinanzasKit
+      - target: finanzas-mcp
+        copy:
+          destination: executables
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leoglez.finanzas
@@ -21,5 +27,19 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Finanzas
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+  finanzas-mcp:
+    type: tool
+    platform: macOS
+    sources: [FinanzasMCP]
+    dependencies:
+      - package: FinanzasKit
+      - package: MCP
+        product: MCP
+    settings:
+      base:
+        PRODUCT_NAME: finanzas-mcp
+        SWIFT_VERSION: "6.0"
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: YES

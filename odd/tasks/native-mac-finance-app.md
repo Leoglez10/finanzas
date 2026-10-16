@@ -32,3 +32,4 @@ Delivery: exception-ok (local repo, no remote/PRs yet). Test runner: `swift test
 - L6 T1 committed as ddc85f9.
 - L7 (2026-10-15) "toda la app en español" → added S10; T1 shell labels translated and development region set to es.
 - L8 T1 follow-up commit cebf927 (Spanish UI). RDD assess: risk medium, review_due false (under_budget). Next: T2 Actual importer.
+- L9 T2 committed as 216b695. RDD assess: "risk": "medium" "review_due_reason": "under_budget" 

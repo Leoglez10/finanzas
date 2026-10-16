@@ -42,6 +42,9 @@ struct BudgetView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(FinanceTheme.amber.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 }
+                Label("Escribe cuánto asignas a cada categoría, o usa +100 / -50 para sumar o restar.",
+                      systemImage: "keyboard")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             .padding(24)
             List {
@@ -192,8 +195,14 @@ private struct BudgetRow: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack {
-            Text(name)
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(name)
+                ProgressView(value: row?.spentShare ?? 0)
+                    .tint((row?.available ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.petroleum)
+                    .frame(maxWidth: 280)
+                    .accessibilityLabel("Gastado \(Int((row?.spentShare ?? 0) * 100))%")
+            }
             Spacer()
             TextField("Asignado", text: $text)
                 .multilineTextAlignment(.trailing)

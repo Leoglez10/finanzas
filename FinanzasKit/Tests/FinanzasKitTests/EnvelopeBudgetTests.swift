@@ -68,3 +68,15 @@ private func k(_ month: Int, _ cat: String) -> Budget.Key { .init(month: month, 
     #expect(b.month(202601).toBudget == 0)
     #expect(b.month(202601).rows["food"]?.available == 0)
 }
+
+@Test(arguments: [
+    (50_000, -45_000, 5_000, 0.9),    // 450 of 500 spent
+    (50_000, -60_000, -10_000, 1.0),  // overspent caps at full
+    (0, 0, 0, 0.0),                   // nothing assigned or spent
+    (0, 0, 20_000, 0.0),              // carried-over funds, nothing spent
+    (30_000, 10_000, 40_000, 0.0),    // a refund is not spending
+] as [(Int, Int, Int, Double)])
+func spentShareIsSpendingOverAvailableFunds(budgeted: Int, activity: Int, available: Int, share: Double) {
+    let row = EnvelopeBudget<String>.Row(budgeted: budgeted, activity: activity, available: available)
+    #expect(row.spentShare == share)
+}

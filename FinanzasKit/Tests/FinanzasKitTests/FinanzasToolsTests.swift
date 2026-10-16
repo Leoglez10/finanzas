@@ -229,3 +229,55 @@ private func list(_ v: Any) -> [[String: Any]] { v as! [[String: Any]] }
     #expect(try ModelID.find(Schedule.self, first, in: s.context) == nil)
     #expect(try ModelID.find(Account.self, "Account/p999", in: s.context) == nil)
 }
+
+/// Arguments as an MCP client sends them: parsed from JSON text (0 and 1 bridge oddly on Darwin).
+@MainActor private func callJSON(_ s: Seed, _ name: String, _ json: String) throws -> Any {
+    let args = try JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+    return try FinanzasTools.call(name, arguments: args, context: s.context, today: day(2026, 10, 15))
+}
+
+@MainActor @Test func jsonZeroAndOneAreAmountsNotBooleans() throws {
+    let s = try Seed()
+    let food = s.id(s.food), bank = s.id(s.bank)
+    let zero = dict(try callJSON(s, "set_budget_amount", #"{"month":"2026-09","categoryId":"\#(food)","amount":0}"#))
+    #expect(zero["budgeted"] as? Double == 0)
+    let one = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":1}"#))
+    #expect(one["amount"] as? Double == 1)
+    let updated = dict(try callJSON(s, "update_transaction", #"{"id":"\#(one["id"]!)","amount":0}"#))
+    #expect(updated["amount"] as? Double == 0)
+    let fromFloat = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":1.0}"#))
+    #expect(fromFloat["amount"] as? Double == 1)
+}
+
+@MainActor @Test func wrongTypedArgumentsAreRejectedNotIgnored() throws {
+    let s = try Seed()
+    let bank = s.id(s.bank)
+    let range = #""startDate":"2026-09-01","endDate":"2026-09-30""#
+    #expect(throws: FinanzasTools.ToolError("accountId: expected a string")) {
+        try callJSON(s, "get_transactions", "{\(range),\"accountId\":123}")
+    }
+    #expect(throws: FinanzasTools.ToolError("includeOffBudget: expected true or false")) {
+        try callJSON(s, "spending_by_category", "{\(range),\"includeOffBudget\":\"yes\"}")
+    }
+    #expect(throws: FinanzasTools.ToolError("cleared: expected true or false")) {
+        try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":5,"cleared":"false"}"#)
+    }
+    #expect(throws: FinanzasTools.ToolError("cleared: expected true or false")) {
+        try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":5,"cleared":1}"#)
+    }
+    #expect(throws: FinanzasTools.ToolError("limit: expected an integer from 1 to 1000")) {
+        try callJSON(s, "get_transactions", "{\(range),\"limit\":1.5}")
+    }
+    #expect(throws: FinanzasTools.ToolError("days: expected an integer from 0 to 365")) {
+        try callJSON(s, "get_upcoming", #"{"days":true}"#)
+    }
+    #expect(throws: FinanzasTools.ToolError("amount: expected a number")) {
+        try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":"12.5"}"#)
+    }
+    #expect(throws: FinanzasTools.ToolError("through: expected YYYY-MM-DD")) {
+        try callJSON(s, "skip_schedule", #"{"id":"\#(s.id(s.gym))","through":12}"#)
+    }
+    // Valid booleans still work.
+    let t = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":5,"cleared":false}"#))
+    #expect(t["cleared"] as? Bool == false)
+}

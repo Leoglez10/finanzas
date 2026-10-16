@@ -123,7 +123,7 @@ public enum FinanzasTools {
                       }] as [String: Any]
         case "spending_by_category":
             let (start, end) = try a.range()
-            let includeOff = a.bool("includeOffBudget") ?? false
+            let includeOff = try a.bool("includeOffBudget") ?? false
             var totals: [String: (id: Any, name: String, cents: Int)] = [:]
             for e in try entries(from: start, through: end, context: context) where e.amount < 0 {
                 guard includeOff || !(e.account?.offBudget ?? false) else { continue }
@@ -141,8 +141,8 @@ public enum FinanzasTools {
             let category = try a.optionalString("categoryId").map { try a.model(Category.self, "categoryId", $0, context) }
             let payee = try a.optionalString("payee").flatMap { try Payee.findOrCreate(named: $0, in: context) }
             let entry = LedgerEntry(date: try a.date("date"), amount: try a.cents("amount"), account: account,
-                                    category: category, payee: payee, notes: a.optionalString("notes") ?? "",
-                                    cleared: a.bool("cleared") ?? true)
+                                    category: category, payee: payee, notes: try a.optionalString("notes") ?? "",
+                                    cleared: try a.bool("cleared") ?? true)
             context.insert(entry)
             try context.save()  // ids are temporary until saved
             result = json(entry)
@@ -152,15 +152,15 @@ public enum FinanzasTools {
             guard fields.contains(where: { a.values[$0] != nil }) else {
                 throw ToolError("Provide at least one field to change (date, amount, payee, categoryId, notes, cleared)")
             }
-            if let name = a.optionalString("payee") {
+            if let name = try a.optionalString("payee") {
                 guard let payee = try Payee.findOrCreate(named: name, in: context) else { throw ToolError("Payee must not be empty") }
                 entry.payee = payee
             }
             if a.values["date"] != nil { entry.date = try a.date("date") }
             if a.values["amount"] != nil { entry.amount = try a.cents("amount") }
-            if let c = a.optionalString("categoryId") { entry.category = try a.model(Category.self, "categoryId", c, context) }
-            if let notes = a.optionalString("notes") { entry.notes = notes }
-            if let cleared = a.bool("cleared") { entry.cleared = cleared }
+            if let c = try a.optionalString("categoryId") { entry.category = try a.model(Category.self, "categoryId", c, context) }
+            if let notes = try a.optionalString("notes") { entry.notes = notes }
+            if let cleared = try a.bool("cleared") { entry.cleared = cleared }
             try context.save()  // a newly created payee needs its permanent id
             result = json(entry)
         case "delete_transaction":
@@ -249,24 +249,39 @@ public enum FinanzasTools {
     struct Args {
         let values: [String: Any]
 
-        func optionalString(_ key: String) -> String? { values[key] as? String }
-        func requiredString(_ key: String) throws -> String {
-            guard let s = values[key] as? String, !s.isEmpty else { throw ToolError("\(key): required") }
+        /// JSON booleans arrive as CFBoolean; plain 0/1 numbers also cast to Bool, so `is Bool` can't tell them apart.
+        static func isBoolean(_ v: Any) -> Bool {
+            (v as AnyObject) is NSNumber && CFGetTypeID(v as CFTypeRef) == CFBooleanGetTypeID()
+        }
+        private func present(_ key: String) -> Any? { values[key].flatMap { $0 is NSNull ? nil : $0 } }
+
+        func optionalString(_ key: String) throws -> String? {
+            guard let v = present(key) else { return nil }
+            guard let s = v as? String else { throw ToolError("\(key): expected a string") }
             return s
         }
-        func bool(_ key: String) -> Bool? { values[key] as? Bool }
+        func requiredString(_ key: String) throws -> String {
+            guard let s = try optionalString(key), !s.isEmpty else { throw ToolError("\(key): required") }
+            return s
+        }
+        func bool(_ key: String) throws -> Bool? {
+            guard let v = present(key) else { return nil }
+            guard Self.isBoolean(v), let b = v as? Bool else { throw ToolError("\(key): expected true or false") }
+            return b
+        }
 
         func int(_ key: String, default value: Int, in range: ClosedRange<Int>) throws -> Int {
-            guard let raw = values[key] else { return value }
-            guard let n = (raw as? NSNumber)?.intValue, range.contains(n) else {
+            guard let raw = present(key) else { return value }
+            guard !Self.isBoolean(raw), let d = (raw as? NSNumber)?.doubleValue, d == d.rounded(),
+                  range.contains(Int(d)) else {
                 throw ToolError("\(key): expected an integer from \(range.lowerBound) to \(range.upperBound)")
             }
-            return n
+            return Int(d)
         }
 
         func date(_ key: String) throws -> Date {
-            guard let s = values[key] as? String else { throw ToolError("\(key): required") }
-            guard s.wholeMatch(of: /\d{4}-\d{2}-\d{2}/) != nil, let d = ActualImporter.date(iso: s),
+            guard let v = present(key) else { throw ToolError("\(key): required") }
+            guard let s = v as? String, s.wholeMatch(of: /\d{4}-\d{2}-\d{2}/) != nil, let d = ActualImporter.date(iso: s),
                   FinanzasTools.day(d) == s else { throw ToolError("\(key): expected YYYY-MM-DD") }
             return d
         }
@@ -278,7 +293,7 @@ public enum FinanzasTools {
         }
 
         func month(_ key: String) throws -> Int {
-            guard let s = values[key] as? String, let m = s.wholeMatch(of: /(\d{4})-(0[1-9]|1[0-2])/) else {
+            guard let s = present(key) as? String, let m = s.wholeMatch(of: /(\d{4})-(0[1-9]|1[0-2])/) else {
                 throw ToolError("\(key): expected YYYY-MM")
             }
             return Int(m.1)! * 100 + Int(m.2)!
@@ -287,7 +302,8 @@ public enum FinanzasTools {
 
         /// Decimal currency units → cents, rejecting more than 2 decimals.
         func cents(_ key: String) throws -> Int {
-            guard let n = values[key] as? NSNumber, !(values[key] is Bool) else { throw ToolError("\(key): required") }
+            guard let v = present(key) else { throw ToolError("\(key): required") }
+            guard !Self.isBoolean(v), let n = v as? NSNumber else { throw ToolError("\(key): expected a number") }
             // Go through the shortest decimal text so 89.9 stays 89.9 rather than 89.8999….
             guard var value = Decimal(string: "\(n.doubleValue)", locale: Locale(identifier: "en_US_POSIX")) else {
                 throw ToolError("\(key): expected a number")

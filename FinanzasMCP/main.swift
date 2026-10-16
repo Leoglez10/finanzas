@@ -28,7 +28,7 @@ await server.withMethodHandler(CallTool.self) { params in
             let context = ModelContext(container)
             context.author = ExternalChanges.mcpAuthor
             let result = try FinanzasTools.call(name, arguments: args, context: context)
-            let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed])
+            let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed, .withoutEscapingSlashes])
             return String(decoding: data, as: UTF8.self)
         }
         return .init(content: [.text(text: text)], isError: false)

@@ -34,12 +34,13 @@ struct EntriesView: View {
                 subtitle: "Tu historial de movimientos", icon: "creditcard")
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Saldo de los movimientos").font(.subheadline).foregroundStyle(.secondary)
-                    Text(Money.format(entries.reduce(0) { $0 + $1.amount }))
+                    Text(search.isEmpty ? "Saldo de los movimientos" : "Total de la búsqueda")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(Money.format(filtered.reduce(0) { $0 + $1.amount }))
                         .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
                 }
                 Spacer()
-                Text("\(entries.count) movimientos")
+                Text("\(filtered.count) movimientos")
                     .font(.callout).foregroundStyle(.secondary)
             }
             .padding(20)

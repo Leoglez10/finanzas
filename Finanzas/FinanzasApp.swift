@@ -56,6 +56,7 @@ enum SidebarItem: Hashable {
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.undoManager) private var undoManager
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var schedules: [Schedule]
     @State private var selection: SidebarItem? = .overview
@@ -137,6 +138,8 @@ struct RootView: View {
             }
         }
         .tint(FinanceTheme.petroleum)
+        // Edit ▸ Undo (⌘Z) reverts deletes and edits; re-run when an MCP reload swaps the context.
+        .task(id: ObjectIdentifier(context)) { context.undoManager = undoManager }
     }
 
     private var scheduleSignature: [String] {

@@ -172,6 +172,7 @@ private struct BudgetRow: View {
     let row: EnvelopeBudget<PersistentIdentifier>.Row?
     let onAssign: (Int) -> Void
     @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack {
@@ -183,10 +184,10 @@ private struct BudgetRow: View {
                 .frame(width: 110)
                 .textFieldStyle(.roundedBorder)
                 .help("Escribe un monto, o +100 / -50 para sumar o restar")
-                .onSubmit {
-                    if let cents = Money.budgeted(from: text, current: row?.budgeted ?? 0) { onAssign(cents) }
-                    text = Money.format(row?.budgeted ?? 0)
-                }
+                .focused($focused)
+                .onSubmit(commit)
+                // Tab or a click elsewhere commits too, so a typed amount is never silently dropped.
+                .onChange(of: focused) { if !focused { commit() } }
             Text(Money.format(row?.activity ?? 0)).monospacedDigit().foregroundStyle(.secondary)
                 .frame(width: 110, alignment: .trailing)
             Text(Money.format(row?.available ?? 0)).monospacedDigit()
@@ -198,6 +199,13 @@ private struct BudgetRow: View {
         .padding(.vertical, 8)
         .onAppear { text = Money.format(row?.budgeted ?? 0) }
         .onChange(of: row?.budgeted) { text = Money.format(row?.budgeted ?? 0) }
+    }
+
+    private func commit() {
+        let current = row?.budgeted ?? 0
+        guard text != Money.format(current) else { return }
+        if let cents = Money.budgeted(from: text, current: current) { onAssign(cents) }
+        text = Money.format(current)
     }
 
     private var availableColor: Color {

@@ -11,6 +11,9 @@ enum FinanceTheme {
     static let card = adaptive(light: 0xFFFFFF, dark: 0x1E2936)
     static let border = adaptive(light: 0xDEE7ED, dark: 0x354453)
     static let hero = Color(red: 21 / 255, green: 94 / 255, blue: 117 / 255)
+    // Fixed fills for white-label buttons; the adaptive dark-mode tints are too light for white text.
+    static let expenseFill = Color(red: 190 / 255, green: 73 / 255, blue: 61 / 255)
+    static let incomeFill = Color(red: 20 / 255, green: 125 / 255, blue: 89 / 255)
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(

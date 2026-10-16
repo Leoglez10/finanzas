@@ -16,6 +16,7 @@ struct EntriesView: View {
     @State private var selection = Set<PersistentIdentifier>()
     @State private var search = ""
     @State private var showingNewEntry = false
+    @State private var newEntryIsExpense = true
     @State private var editingEntry: LedgerEntry?
 
     init(account: Account?) {
@@ -41,8 +42,23 @@ struct EntriesView: View {
                         .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
                 }
                 Spacer()
-                Text("\(filtered.count) movimientos")
-                    .font(.callout).foregroundStyle(.secondary)
+                VStack(alignment: .trailing, spacing: 12) {
+                    Text("\(filtered.count) movimientos")
+                        .font(.callout).foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Button { newEntry(expense: true) } label: {
+                            Label("Agregar gasto", systemImage: "minus.circle.fill")
+                        }
+                        .buttonStyle(ActionButtonStyle(color: FinanceTheme.expenseFill))
+                        .help("Agregar gasto (⌘N)")
+                        Button { newEntry(expense: false) } label: {
+                            Label("Agregar ingreso", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(ActionButtonStyle(color: FinanceTheme.incomeFill))
+                        .keyboardShortcut("n", modifiers: [.command, .shift])
+                        .help("Agregar ingreso (⇧⌘N)")
+                    }
+                }
             }
             .padding(20)
             .financeCard()
@@ -55,10 +71,10 @@ struct EntriesView: View {
         .navigationTitle(account?.name ?? "Todas las cuentas")
         .navigationSubtitle(Money.format(entries.reduce(0) { $0 + $1.amount }))
         .toolbar {
-            Button("Nuevo movimiento", systemImage: "plus") { showingNewEntry = true }
+            Button("Nuevo gasto", systemImage: "plus") { newEntry(expense: true) }
                 .keyboardShortcut("n")
         }
-        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account) }
+        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account, startAsExpense: newEntryIsExpense) }
         .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
     }
 
@@ -120,6 +136,11 @@ struct EntriesView: View {
         }
     }
 
+    private func newEntry(expense: Bool) {
+        newEntryIsExpense = expense
+        showingNewEntry = true
+    }
+
     /// Double-click opens the whole entry in the editor; every column is editable there.
     private func edit(_ ids: Set<PersistentIdentifier>) {
         guard ids.count == 1, let id = ids.first else { return }
@@ -136,6 +157,7 @@ struct EntriesView: View {
 struct NewEntrySheet: View {
     let defaultAccount: Account?
     var editing: LedgerEntry? = nil
+    var startAsExpense = true
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
@@ -220,6 +242,7 @@ struct NewEntrySheet: View {
         .navigationTitle(editing == nil ? "Nuevo movimiento" : "Editar movimiento")
         .onAppear {
             account = defaultAccount ?? accounts.first { !$0.closed }
+            if editing == nil { isExpense = startAsExpense }
             if let editing {
                 isExpense = editing.amount <= 0
                 amountText = Money.format(abs(editing.amount))
@@ -269,5 +292,19 @@ struct NewEntrySheet: View {
         entry.applyPayeeRule()
         context.saveOrAlert()
         dismiss()
+    }
+}
+
+/// Filled capsule that keeps its color when the window is inactive, unlike `.borderedProminent`.
+private struct ActionButtonStyle: ButtonStyle {
+    let color: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 9)
+            .background(color.opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
+            .contentShape(Capsule())
     }
 }

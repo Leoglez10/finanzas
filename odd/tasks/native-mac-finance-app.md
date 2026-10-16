@@ -34,3 +34,4 @@ Delivery: exception-ok (local repo, no remote/PRs yet). Test runner: `swift test
 - L8 T1 follow-up commit cebf927 (Spanish UI). RDD assess: risk medium, review_due false (under_budget). Next: T2 Actual importer.
 - L9 T2 committed as 216b695. RDD assess: "risk": "medium" "review_due_reason": "under_budget" 
 - L10 (2026-10-15) "importa lo de mi app y despues continua" → imported ~/.actual-mcp cache (2026-09-29, fresher than Aug blob) into app store via scratchpad importer: 4 accounts / 15 categories / 5 payees / 95 entries / 3 schedules. All balances are $0 in Actual too (income == spending per account). Note: Category name clashes with ObjC Category → typealias in app target; do not rename the model (store already has data).
+- L11 T3 committed as 7b12066. RDD assess: "risk": "medium" "review_due": false "review_due_reason": "under_budget" 

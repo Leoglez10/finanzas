@@ -7,11 +7,12 @@ import SwiftData
 /// split parents are skipped (their children carry the amounts), tombstoned rows are ignored.
 public enum ActualImporter {
     public struct Summary: Equatable, Sendable {
-        public var accounts = 0, categories = 0, payees = 0, entries = 0, schedules = 0
+        public var accounts = 0, categories = 0, payees = 0, entries = 0, schedules = 0, budgets = 0
     }
 
     public enum ImportError: Error, Equatable {
         case storeNotEmpty
+        case budgetsNotEmpty
         case cannotOpen(String)
         case query(String)
     }
@@ -91,6 +92,7 @@ public enum ActualImporter {
                 summary.entries += 1
             }
 
+            summary.budgets = try importBudgetRows(from: db, categories: categories, into: context)
             summary.accounts = accounts.count
             summary.categories = categories.count
             summary.payees = payees.count
@@ -101,6 +103,54 @@ public enum ActualImporter {
             throw error
         }
         return summary
+    }
+
+    /// Imports only the monthly assigned amounts into a store that already has the categories
+    /// (matched by group and category name). Returns how many amounts were created.
+    @MainActor
+    public static func importBudgets(at url: URL, into context: ModelContext) throws -> Int {
+        guard try context.fetchCount(FetchDescriptor<BudgetAmount>()) == 0 else { throw ImportError.budgetsNotEmpty }
+        let db = try SQLiteReader(url: url)
+        let byName = Dictionary(try context.fetch(FetchDescriptor<Category>()).map { ("\($0.group?.name ?? "")/\($0.name)", $0) },
+                                uniquingKeysWith: { first, _ in first })
+        var categories: [String: Category] = [:]
+        try db.each("""
+            SELECT c.id, IFNULL(g.name,'') || '/' || c.name FROM categories c
+            LEFT JOIN category_groups g ON g.id = c.cat_group
+            WHERE IFNULL(c.tombstone,0)=0
+            """) { r in categories[r.text(0)] = byName[r.text(1)] }
+        do {
+            let count = try importBudgetRows(from: db, categories: categories, into: context)
+            try context.save()
+            return count
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    /// Merged categories resolve through `category_mapping`, so several Actual rows can sum into one.
+    @MainActor
+    private static func importBudgetRows(from db: SQLiteReader, categories: [String: Category],
+                                         into context: ModelContext) throws -> Int {
+        struct Row { var amount = 0; var carryover = false }
+        var rows: [String: Row] = [:]  // key: "month|categoryID"
+        try db.each("""
+            SELECT b.month, cm.transferId, IFNULL(b.amount,0), IFNULL(b.carryover,0)
+            FROM zero_budgets b LEFT JOIN category_mapping cm ON cm.id = b.category
+            WHERE IFNULL(b.amount,0) != 0 OR IFNULL(b.carryover,0) != 0
+            """) { r in
+            guard categories[r.text(1)] != nil else { return }
+            let key = "\(r.int(0))|\(r.text(1))"
+            rows[key, default: Row()].amount += r.int(2)
+            if r.int(3) != 0 { rows[key, default: Row()].carryover = true }
+        }
+        for (key, row) in rows {
+            let parts = key.split(separator: "|", maxSplits: 1)
+            context.insert(BudgetAmount(month: Int(parts[0])!, amount: row.amount,
+                                        category: categories[String(parts[1])], carryover: row.carryover))
+        }
+        return rows.count
     }
 
     static func date(yyyymmdd v: Int) -> Date? {

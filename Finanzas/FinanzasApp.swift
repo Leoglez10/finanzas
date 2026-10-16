@@ -64,7 +64,7 @@ struct RootView: View {
                     EntriesView(account: account).id(id)
                 }
             case .budget:
-                ContentUnavailableView("Presupuesto", systemImage: "envelope")  // T4
+                BudgetView()
             case .upcoming:
                 ContentUnavailableView("Próximos pagos", systemImage: "calendar")  // T5
             }

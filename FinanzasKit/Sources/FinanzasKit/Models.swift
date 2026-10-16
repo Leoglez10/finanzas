@@ -43,6 +43,7 @@ import SwiftData
     public var group: CategoryGroup?
     @Relationship(deleteRule: .nullify, inverse: \LedgerEntry.category) public var entries: [LedgerEntry]? = []
     @Relationship(deleteRule: .nullify, inverse: \Schedule.category) public var schedules: [Schedule]? = []
+    @Relationship(deleteRule: .cascade, inverse: \BudgetAmount.category) public var budgetAmounts: [BudgetAmount]? = []
 
     public init(name: String, group: CategoryGroup? = nil, hidden: Bool = false, sortOrder: Double = 0) {
         self.name = name
@@ -112,9 +113,24 @@ import SwiftData
     }
 }
 
+/// Amount assigned to a category for one month (`yyyymm`). `carryover` keeps overspending in the category.
+@Model public final class BudgetAmount {
+    public var month: Int = 0
+    public var amount: Int = 0
+    public var carryover: Bool = false
+    public var category: Category?
+
+    public init(month: Int, amount: Int, category: Category?, carryover: Bool = false) {
+        self.month = month
+        self.amount = amount
+        self.category = category
+        self.carryover = carryover
+    }
+}
+
 public enum FinanzasStore {
     public static let models: [any PersistentModel.Type] = [
-        Account.self, CategoryGroup.self, Category.self, Payee.self, LedgerEntry.self, Schedule.self,
+        Account.self, CategoryGroup.self, Category.self, Payee.self, LedgerEntry.self, Schedule.self, BudgetAmount.self,
     ]
 
     /// `~/Library/Application Support/Finanzas/Finanzas.store` — explicit, because an unsandboxed

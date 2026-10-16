@@ -15,6 +15,7 @@ CREATE TABLE payee_mapping (id TEXT PRIMARY KEY, targetId TEXT);
 CREATE TABLE transactions (id TEXT PRIMARY KEY, isParent INTEGER DEFAULT 0, isChild INTEGER DEFAULT 0, acct TEXT, category TEXT, amount INTEGER, description TEXT, notes TEXT, date INTEGER, tombstone INTEGER DEFAULT 0, cleared INTEGER DEFAULT 1, parent_id TEXT, schedule TEXT);
 CREATE TABLE rules (id TEXT PRIMARY KEY, conditions TEXT, actions TEXT, tombstone INTEGER DEFAULT 0);
 CREATE TABLE schedules (id TEXT PRIMARY KEY, rule TEXT, completed INTEGER DEFAULT 0, posts_transaction INTEGER DEFAULT 0, tombstone INTEGER DEFAULT 0, name TEXT);
+CREATE TABLE zero_budgets (id TEXT PRIMARY KEY, month INTEGER, category TEXT, amount INTEGER DEFAULT 0, carryover INTEGER DEFAULT 0);
 
 INSERT INTO accounts VALUES ('a1','Banco',0,0,0,1), ('a2','Inversión',1,0,0,2), ('a3','Borrada',0,0,1,3);
 INSERT INTO category_groups VALUES ('g1','Gastos',0,1,0,0), ('g2','Ingresos',1,2,0,0);
@@ -35,6 +36,9 @@ INSERT INTO rules VALUES
   ('r1','[{"op":"is","field":"description","value":"p2"},{"op":"is","field":"acct","value":"a1"},{"op":"isapprox","field":"date","value":{"start":"2026-05-11","interval":1,"frequency":"monthly","patterns":[],"skipWeekend":true,"weekendSolveMode":"before","endMode":"never","endOccurrences":1,"endDate":"2026-04-12"}},{"op":"is","field":"amount","value":-2500}]','[]',0),
   ('r2','[{"op":"is","field":"acct","value":"a1"},{"op":"is","field":"date","value":{"start":"2026-01-10","interval":2,"frequency":"weekly","patterns":[],"skipWeekend":false,"weekendSolveMode":"after","endMode":"after_n_occurrences","endOccurrences":3,"endDate":"2026-01-01"}},{"op":"isbetween","field":"amount","value":{"num1":-1000,"num2":-2000}}]','[]',0),
   ('r3','[{"op":"is","field":"date","value":"2026-12-24"},{"op":"is","field":"amount","value":-80000}]','[]',0);
+INSERT INTO zero_budgets VALUES
+  ('b1',202609,'c1',30000,0), ('b2',202609,'cOld',5000,0), ('b3',202610,'c1',20000,1),
+  ('b4',202609,'c2',0,0), ('b5',202609,'cGone',100,0);
 INSERT INTO schedules VALUES ('s1','r1',0,1,0,'Gym'), ('s2','r2',1,0,0,'Quincenal'), ('s3','r3',0,0,0,'Regalo'), ('sDead','r1',0,0,1,'Viejo');
 """
 
@@ -59,7 +63,7 @@ private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
     let context = container.mainContext
     let summary = try ActualImporter.importDatabase(at: try makeFixture(), into: context)
 
-    #expect(summary == .init(accounts: 2, categories: 2, payees: 2, entries: 6, schedules: 3))
+    #expect(summary == .init(accounts: 2, categories: 2, payees: 2, entries: 6, schedules: 3, budgets: 2))
 
     let accounts = try context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortOrder)]))
     #expect(accounts.map(\.name) == ["Banco", "Inversión"])
@@ -117,6 +121,35 @@ private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
         try ActualImporter.importDatabase(at: try makeFixture(), into: context)
     }
     #expect(try context.fetchCount(FetchDescriptor<Account>()) == 1)
+}
+
+@MainActor
+@Test func importsBudgetAmountsMergingMappedCategories() throws {
+    let container = try FinanzasStore.inMemory()
+    let context = container.mainContext
+    _ = try ActualImporter.importDatabase(at: try makeFixture(), into: context)
+    let amounts = try context.fetch(FetchDescriptor<BudgetAmount>(sortBy: [SortDescriptor(\.month)]))
+    #expect(amounts.map(\.month) == [202609, 202610])
+    #expect(amounts.map(\.amount) == [35_000, 20_000])  // cOld merged into c1
+    #expect(amounts.map(\.carryover) == [false, true])
+    #expect(amounts.allSatisfy { $0.category?.name == "Comida" })
+}
+
+@MainActor
+@Test func importsBudgetsAloneIntoAnExistingStoreByCategoryName() throws {
+    let container = try FinanzasStore.inMemory()
+    let context = container.mainContext
+    let fixture = try makeFixture()
+    _ = try ActualImporter.importDatabase(at: fixture, into: context)
+    try context.delete(model: BudgetAmount.self)
+    try context.save()
+
+    #expect(try ActualImporter.importBudgets(at: fixture, into: context) == 2)
+    #expect(try context.fetch(FetchDescriptor<BudgetAmount>()).map(\.amount).sorted() == [20_000, 35_000])
+    #expect(throws: ActualImporter.ImportError.budgetsNotEmpty) {
+        try ActualImporter.importBudgets(at: fixture, into: context)
+    }
+    #expect(try context.fetchCount(FetchDescriptor<BudgetAmount>()) == 2)
 }
 
 /// Opt-in check against a real Actual export: `ACTUAL_DB=/path/db.sqlite swift test`.

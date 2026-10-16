@@ -272,8 +272,9 @@ public enum FinanzasTools {
 
         func int(_ key: String, default value: Int, in range: ClosedRange<Int>) throws -> Int {
             guard let raw = present(key) else { return value }
+            // Bounds are checked on the Double: Int(d) traps when d is outside Int's range.
             guard !Self.isBoolean(raw), let d = (raw as? NSNumber)?.doubleValue, d == d.rounded(),
-                  range.contains(Int(d)) else {
+                  Double(range.lowerBound)...Double(range.upperBound) ~= d else {
                 throw ToolError("\(key): expected an integer from \(range.lowerBound) to \(range.upperBound)")
             }
             return Int(d)

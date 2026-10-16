@@ -281,3 +281,13 @@ private func list(_ v: Any) -> [[String: Any]] { v as! [[String: Any]] }
     let t = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(bank)","date":"2026-10-14","amount":5,"cleared":false}"#))
     #expect(t["cleared"] as? Bool == false)
 }
+
+@MainActor @Test func hugeIntegersAreRejectedWithoutCrashing() throws {
+    let s = try Seed()
+    #expect(throws: FinanzasTools.ToolError("limit: expected an integer from 1 to 1000")) {
+        try callJSON(s, "get_transactions", #"{"startDate":"2026-09-01","endDate":"2026-09-30","limit":1e300}"#)
+    }
+    #expect(throws: FinanzasTools.ToolError("days: expected an integer from 0 to 365")) {
+        try callJSON(s, "get_upcoming", #"{"days":-1e300}"#)
+    }
+}

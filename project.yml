@@ -1,5 +1,6 @@
 name: Finanzas
 options:
+  developmentLanguage: es
   bundleIdPrefix: com.leoglez
   deploymentTarget:
     macOS: "15.0"

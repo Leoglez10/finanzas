@@ -11,6 +11,7 @@ Delivery: exception-ok (local repo, no remote/PRs yet). Test runner: `swift test
 - S6 Automations: "automatizaciones". Auto-post due scheduled payments when enabled, notification N days before a payment, payee → category rule.
 - S7 UI: "una interfaz mas nativa de ios y rapida y facil". SwiftUI, NavigationSplitView, keyboard shortcuts, quick add.
 - S8 Platform: "arranca solo con la Mac". Assumption: data model stays CloudKit-compatible ("si hay sinc con icloud podria ser buenisimo") so iCloud + iPhone can be enabled later with a paid developer account: no unique constraints, all attributes defaulted or optional, optional relationships.
+- S10 Language: "toda la app en español". All user-facing UI text in Spanish; development region `es`. Code identifiers stay English.
 - S9 Assumption (proposed in plan, not objected): one-shot importer from Actual's exported `db.sqlite` (amounts are integer cents, dates are yyyymmdd integers).
 
 ## Tasks
@@ -28,3 +29,5 @@ Delivery: exception-ok (local repo, no remote/PRs yet). Test runner: `swift test
 - L3 (2026-10-15) "no tengo cuenta, arranca solo con la Mac"
 - L4 REA evidence (ev_d62f79b2…): Actual budget uses 4 open accounts (3 on-budget, 1 off), 92 txns, no splits/transfers, 26 categories / 9 groups, envelope budgets, 4 monthly schedules (not auto-posting), 0 custom rules, dateFormat dd/MM/yyyy.
 - L5 Routes: all inline — no parallel units, no writer trigger reason.
+- L6 T1 committed as ddc85f9.
+- L7 (2026-10-15) "toda la app en español" → added S10; T1 shell labels translated and development region set to es.

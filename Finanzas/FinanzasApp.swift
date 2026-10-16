@@ -8,7 +8,7 @@ struct FinanzasApp: App {
 
     init() {
         do { container = try FinanzasStore.onDisk() }
-        catch { fatalError("Could not open the data store: \(error)") }
+        catch { fatalError("No se pudo abrir la base de datos: \(error)") }
     }
 
     var body: some Scene {
@@ -20,7 +20,7 @@ struct FinanzasApp: App {
 }
 
 enum Section: String, CaseIterable, Identifiable {
-    case accounts = "Accounts", budget = "Budget", upcoming = "Upcoming"
+    case accounts = "Cuentas", budget = "Presupuesto", upcoming = "Próximos pagos"
     var id: Self { self }
     var icon: String {
         switch self {

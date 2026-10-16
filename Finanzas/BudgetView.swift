@@ -11,6 +11,7 @@ struct BudgetView: View {
     @State private var month = MonthKey.of(.now)
     @State private var nameEdit: NameEdit?
     @State private var nameText = ""
+    @State private var showHidden = false
 
     private enum NameEdit {
         case newGroup, renameGroup(CategoryGroup), newCategory(CategoryGroup), renameCategory(Category)
@@ -43,6 +44,7 @@ struct BudgetView: View {
                             context.saveOrAlert()
                         }
                         .id("\(month)-\(category.persistentModelID.hashValue)")
+                        .opacity(category.hidden ? 0.5 : 1)
                         .contextMenu { categoryMenu(category) }
                     }
                 } header: {
@@ -57,6 +59,7 @@ struct BudgetView: View {
                                 Text(Money.format(budget?.rows[category.persistentModelID]?.activity ?? 0))
                                     .monospacedDigit().foregroundStyle(FinanceTheme.emerald)
                         }
+                        .opacity(category.hidden ? 0.5 : 1)
                         .contextMenu { categoryMenu(category) }
                     }
                 } header: {
@@ -84,6 +87,10 @@ struct BudgetView: View {
             ToolbarItem {
                 Button("Nuevo grupo", systemImage: "folder.badge.plus") { edit(.newGroup) }
             }
+            ToolbarItem {
+                Toggle("Mostrar ocultas", systemImage: "eye", isOn: $showHidden)
+                    .help("Muestra las categorías ocultas; clic derecho ▸ Mostrar para recuperarlas")
+            }
             ToolbarItemGroup {
                 Button("Mes anterior", systemImage: "chevron.left") { month = MonthKey.previous(month) }
                     .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -96,8 +103,8 @@ struct BudgetView: View {
 
     @ViewBuilder private func categoryMenu(_ category: Category) -> some View {
         Button("Renombrar") { edit(.renameCategory(category), name: category.name) }
-        // ponytail: hide instead of delete, so past transactions keep their category; no unhide UI yet.
-        Button("Ocultar") { category.hidden = true; context.saveOrAlert() }
+        // Hide instead of delete, so past transactions keep their category.
+        Button(category.hidden ? "Mostrar" : "Ocultar") { category.hidden.toggle(); context.saveOrAlert() }
     }
 
     private func edit(_ target: NameEdit, name: String = "") {
@@ -134,7 +141,7 @@ struct BudgetView: View {
     }
 
     private func visibleCategories(_ group: CategoryGroup) -> [Category] {
-        (group.categories ?? []).filter { !$0.hidden }.sorted { $0.sortOrder < $1.sortOrder }
+        (group.categories ?? []).filter { showHidden || !$0.hidden }.sorted { $0.sortOrder < $1.sortOrder }
     }
 }
 

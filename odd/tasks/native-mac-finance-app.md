@@ -16,7 +16,7 @@ Delivery: exception-ok (local repo, no remote/PRs yet). Test runner: `swift test
 
 ## Tasks
 - [x] T1 S1,S5,S8 — FinanzasKit package: integer-cent amounts, recurrence next-date logic, SwiftData models; xcodegen app shell builds. Route: inline. Evidence: RED (missing types) → GREEN 7/7 swift test; app BUILD SUCCEEDED, launches, store at ~/Library/Application Support/Finanzas. Commit: see Log L6.
-- [ ] T2 S9 — Actual db.sqlite importer. Route: inline.
+- [x] T2 S9 — Actual db.sqlite importer + menu "Importar desde Actual…" (sqlite or zip/blob). Route: inline. Evidence: RED (missing ActualImporter) → GREEN 11/11; real db import 4 accounts/15 categories/5 payees/92 entries/4 schedules = Actual view counts; app BUILD SUCCEEDED. Budget amounts (zero_budgets) deferred to T4.
 - [ ] T3 S1,S7 — Accounts + transactions UI with quick add. Route: inline.
 - [ ] T4 S2 — Monthly envelope budget calc + view. Route: inline.
 - [ ] T5 S5 — Upcoming payments: 30-day projection, skip/post. Route: inline.

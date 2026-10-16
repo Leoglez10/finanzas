@@ -16,6 +16,7 @@ struct FinanzasApp: App {
             RootView()
         }
         .modelContainer(container)
+        .commands { ImportFromActualCommand(container: container) }
     }
 }
 

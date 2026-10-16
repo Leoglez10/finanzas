@@ -27,7 +27,7 @@ struct UpcomingView: View {
                         Text(s.name)
                         Text(s.completed ? "Terminado" : describe(s)).foregroundStyle(.secondary)
                     }
-                    .contextMenu { Button("Eliminar", role: .destructive) { context.delete(s) } }
+                    .contextMenu { Button("Eliminar", role: .destructive) { context.delete(s); persist() } }
                 }
             }
         }
@@ -60,13 +60,16 @@ struct UpcomingView: View {
             // Only the pending occurrence can be acted on; later ones follow after it moves.
             HStack {
                 if item.date == item.schedule.effectiveNextDate {
-                    Button("Registrar") { item.schedule.post(in: context) }
-                    Button("Saltar") { item.schedule.skip() }
+                    Button("Registrar") { item.schedule.post(in: context); persist() }
+                    Button("Saltar") { item.schedule.skip(); persist() }
                 }
             }
             .frame(width: 170, alignment: .trailing)
         }
     }
+
+    // Saved right away so a posted payment survives a quit before autosave runs.
+    private func persist() { try? context.save() }
 
     private func describe(_ s: Schedule) -> String {
         guard let r = s.recurrence else { return "" }
@@ -158,6 +161,7 @@ struct NewScheduleSheet: View {
         context.insert(Schedule(name: name.trimmingCharacters(in: .whitespaces), amount: isExpense ? -cents : cents,
                                 recurrence: rule, account: account, category: category, payee: payee ?? nil,
                                 autoPost: autoPost))
+        try? context.save()
         dismiss()
     }
 }

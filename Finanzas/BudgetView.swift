@@ -27,6 +27,7 @@ struct BudgetView: View {
                         let row = budget?.rows[category.persistentModelID]
                         BudgetRow(name: category.name, row: row) { cents in
                             try? BudgetAmount.set(cents, for: category, month: month, in: context)
+                            try? context.save()
                         }
                         .id("\(month)-\(category.persistentModelID.hashValue)")
                     }

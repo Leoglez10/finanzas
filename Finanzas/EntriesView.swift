@@ -74,6 +74,7 @@ struct EntriesView: View {
     private func delete(_ ids: Set<PersistentIdentifier>) {
         for id in ids { if let entry = context.model(for: id) as? LedgerEntry { context.delete(entry) } }
         selection.subtract(ids)
+        try? context.save()
     }
 }
 
@@ -137,6 +138,7 @@ struct NewEntrySheet: View {
         let payee = try? Payee.findOrCreate(named: payeeName, in: context)
         context.insert(LedgerEntry(date: Calendar.current.startOfDay(for: date), amount: isExpense ? -cents : cents,
                                    account: account, category: category, payee: payee ?? nil, notes: notes))
+        try? context.save()
         dismiss()
     }
 }

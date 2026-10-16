@@ -126,6 +126,7 @@ struct NewEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \CategoryGroup.sortOrder) private var groups: [CategoryGroup]
+    @Query(sort: \Payee.name) private var payees: [Payee]
 
     @State private var isExpense = true
     @State private var amountText = ""
@@ -160,6 +161,15 @@ struct NewEntrySheet: View {
                 ForEach(accounts.filter { !$0.closed }) { Text($0.name).tag(Optional($0)) }
             }
             TextField("Comercio", text: $payeeName)
+                .textInputSuggestions {
+                    ForEach(payeeSuggestions, id: \.self) { Text($0).textInputCompletion($0) }
+                }
+                // Show the payee's usual category before saving; a category already picked is kept.
+                .onChange(of: payeeName) {
+                    if editing == nil, category == nil, let usual = try? Payee.named(payeeName, in: context)?.suggestedCategory {
+                        category = usual
+                    }
+                }
             Picker("Categoría", selection: $category) {
                 Text("Sin categoría").tag(Category?.none)
                 ForEach(groups) { group in
@@ -200,6 +210,14 @@ struct NewEntrySheet: View {
             }
             amountFocused = true
         }
+    }
+
+    private var payeeSuggestions: [String] {
+        let typed = payeeName.trimmingCharacters(in: .whitespaces)
+        guard !typed.isEmpty else { return [] }
+        return payees.map(\.name)
+            .filter { $0.range(of: typed, options: [.caseInsensitive, .diacriticInsensitive]) != nil && $0 != typed }
+            .prefix(8).map { $0 }
     }
 
     private var canSave: Bool { Money.cents(from: amountText) != nil && account != nil }

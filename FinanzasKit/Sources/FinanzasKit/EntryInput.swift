@@ -36,13 +36,19 @@ extension Payee {
     public static func findOrCreate(named rawName: String, in context: ModelContext) throws -> Payee? {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return nil }
-        // ponytail: in-memory scan; personal payee lists are small. Add a normalized-name field if it grows.
-        if let existing = try context.fetch(FetchDescriptor<Payee>())
-            .first(where: { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) {
-            return existing
-        }
+        if let existing = try named(name, in: context) { return existing }
         let payee = Payee(name: name)
         context.insert(payee)
         return payee
+    }
+
+    /// Same case- and accent-insensitive match as `findOrCreate`, without inserting anything.
+    @MainActor
+    public static func named(_ rawName: String, in context: ModelContext) throws -> Payee? {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        // ponytail: in-memory scan; personal payee lists are small. Add a normalized-name field if it grows.
+        return try context.fetch(FetchDescriptor<Payee>())
+            .first { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
     }
 }

@@ -29,6 +29,19 @@ func rejectsInvalidAmounts(input: String) {
     #expect(try context.fetchCount(FetchDescriptor<Payee>()) == 2)
 }
 
+@MainActor
+@Test func payeeNamedFindsExistingWithoutCreating() throws {
+    let container = try FinanzasStore.inMemory()
+    let context = container.mainContext
+    let oxxo = Payee(name: "Oxxo")
+    context.insert(oxxo)
+
+    #expect(try Payee.named(" oxxo ", in: context) === oxxo)
+    #expect(try Payee.named("Uber", in: context) == nil)
+    #expect(try Payee.named("  ", in: context) == nil)
+    #expect(try context.fetchCount(FetchDescriptor<Payee>()) == 1)
+}
+
 @Test(arguments: [
     ("500", 20_000, 50_000), ("+100", 20_000, 30_000), ("-50", 20_000, 15_000), ("- 300", 20_000, 0), ("+$1,000.50", 0, 100_050),
 ])

@@ -20,30 +20,72 @@ struct FinanzasApp: App {
     }
 }
 
-enum Section: String, CaseIterable, Identifiable {
-    case accounts = "Cuentas", budget = "Presupuesto", upcoming = "Próximos pagos"
-    var id: Self { self }
-    var icon: String {
-        switch self {
-        case .accounts: "creditcard"
-        case .budget: "envelope"
-        case .upcoming: "calendar"
-        }
-    }
+enum SidebarItem: Hashable {
+    case budget, upcoming, allAccounts
+    case account(PersistentIdentifier)
 }
 
 struct RootView: View {
-    @State private var section: Section? = .accounts
+    @Environment(\.modelContext) private var context
+    @Query(sort: \Account.sortOrder) private var accounts: [Account]
+    @State private var selection: SidebarItem? = .allAccounts
 
     var body: some View {
         NavigationSplitView {
-            List(Section.allCases, selection: $section) { item in
-                Label(item.rawValue, systemImage: item.icon)
+            List(selection: $selection) {
+                Label("Presupuesto", systemImage: "envelope").tag(SidebarItem.budget)
+                Label("Próximos pagos", systemImage: "calendar").tag(SidebarItem.upcoming)
+
+                Section("Cuentas") {
+                    AccountRow(name: "Todas", icon: "tray.full", balance: openAccounts.reduce(0) { $0 + $1.balance })
+                        .tag(SidebarItem.allAccounts)
+                    ForEach(openAccounts) { account in
+                        AccountRow(name: account.name, icon: account.offBudget ? "chart.line.uptrend.xyaxis" : "creditcard",
+                                   balance: account.balance)
+                            .tag(SidebarItem.account(account.persistentModelID))
+                    }
+                }
+                if !closedAccounts.isEmpty {
+                    Section("Cerradas") {
+                        ForEach(closedAccounts) { account in
+                            AccountRow(name: account.name, icon: "archivebox", balance: account.balance)
+                                .tag(SidebarItem.account(account.persistentModelID))
+                        }
+                    }
+                }
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
-            // Screens land in T3–T5.
-            ContentUnavailableView(section?.rawValue ?? "", systemImage: section?.icon ?? "questionmark")
+            switch selection {
+            case .allAccounts, nil:
+                EntriesView(account: nil)
+            case .account(let id):
+                if let account = context.model(for: id) as? Account {
+                    EntriesView(account: account).id(id)
+                }
+            case .budget:
+                ContentUnavailableView("Presupuesto", systemImage: "envelope")  // T4
+            case .upcoming:
+                ContentUnavailableView("Próximos pagos", systemImage: "calendar")  // T5
+            }
+        }
+    }
+
+    private var openAccounts: [Account] { accounts.filter { !$0.closed } }
+    private var closedAccounts: [Account] { accounts.filter(\.closed) }
+}
+
+struct AccountRow: View {
+    let name: String
+    let icon: String
+    let balance: Int
+
+    var body: some View {
+        LabeledContent {
+            Text(Money.format(balance)).monospacedDigit()
+                .foregroundStyle(balance < 0 ? .red : .secondary)
+        } label: {
+            Label(name, systemImage: icon)
         }
     }
 }

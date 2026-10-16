@@ -1,0 +1,24 @@
+name: Finanzas
+options:
+  bundleIdPrefix: com.leoglez
+  deploymentTarget:
+    macOS: "15.0"
+packages:
+  FinanzasKit:
+    path: FinanzasKit
+targets:
+  Finanzas:
+    type: application
+    platform: macOS
+    sources: [Finanzas]
+    dependencies:
+      - package: FinanzasKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leoglez.finanzas
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Finanzas
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES

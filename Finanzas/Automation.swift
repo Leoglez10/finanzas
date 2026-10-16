@@ -48,7 +48,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FinanceHeading(title: "Ajustes", subtitle: "Tus recordatorios, a tu ritmo", icon: "slider.horizontal.3")
+            FinanceHeading(title: "Ajustes", subtitle: "Tus recordatorios, a tu ritmo")
                 .padding(24)
             Form {
                 Section {

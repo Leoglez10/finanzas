@@ -14,7 +14,7 @@ struct UpcomingView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 20) {
                 FinanceHeading(
-                    title: "Tus próximos compromisos", subtitle: "Anticipa tus pagos y cuida tu saldo", icon: "calendar"
+                    title: "Tus próximos compromisos", subtitle: "Anticipa tus pagos y cuida tu saldo"
                 )
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 16)], spacing: 16) {
                     FinanceMetric(
@@ -139,8 +139,7 @@ struct NewScheduleSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             FinanceHeading(
-                title: "Nuevo pago programado", subtitle: "Organiza los pagos que se repiten",
-                icon: "calendar.badge.plus"
+                title: "Nuevo pago programado", subtitle: "Organiza los pagos que se repiten"
             )
             .padding(24)
             Form {

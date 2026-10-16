@@ -38,22 +38,13 @@ extension View {
 struct FinanceHeading: View {
     let title: String
     let subtitle: String
-    let icon: String
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-                Text(subtitle).font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(FinanceTheme.petroleum)
-                .padding(12)
-                .background(FinanceTheme.petroleum.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.title.bold()).accessibilityAddTraits(.isHeader)
+            Text(subtitle).font(.callout).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

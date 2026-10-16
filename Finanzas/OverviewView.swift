@@ -32,19 +32,7 @@ struct OverviewView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Tu panorama financiero").font(.largeTitle.bold())
-                        Text(monthTitle(month)).font(.title3).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.title2)
-                        .foregroundStyle(FinanceTheme.petroleum)
-                        .padding(12)
-                        .background(FinanceTheme.petroleum.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                        .accessibilityHidden(true)
-                }
+                FinanceHeading(title: "Tu panorama financiero", subtitle: monthTitle(month))
                 if !setupSteps.allSatisfy(\.done) { gettingStarted }
                 cards(current, previous)
                 HStack(alignment: .top, spacing: 16) {
@@ -117,7 +105,7 @@ struct OverviewView: View {
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
             StatCard(title: "Saldo total", icon: "building.columns",
                      value: Money.format(accounts.filter { !$0.closed }.reduce(0) { $0 + $1.balance }),
-                     note: "\(accounts.filter { !$0.closed }.count) cuentas abiertas",
+                     note: openAccountsNote,
                      accent: FinanceTheme.petroleum, prominent: true)
             StatCard(title: "Ingresos del mes", icon: "arrow.down.circle", value: Money.format(income),
                      change: relativeChange(income, from: previous?.income ?? 0), higherIsGood: true,
@@ -130,6 +118,11 @@ struct OverviewView: View {
                      note: current?.savingsRate == nil ? "Sin ingresos este mes" : "\(Money.format(income - expenses)) ahorrados",
                      accent: FinanceTheme.emerald)
         }
+    }
+
+    private var openAccountsNote: String {
+        let count = accounts.filter { !$0.closed }.count
+        return count == 1 ? "1 cuenta abierta" : "\(count) cuentas abiertas"
     }
 
     // MARK: Cash flow
@@ -201,11 +194,11 @@ struct OverviewView: View {
                     let share = total > 0 ? Double(cents) / Double(total) : 0
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(name(of: id))
+                            Text(name(of: id)).lineLimit(1).truncationMode(.tail).help(name(of: id))
                             Spacer()
                             Text(Money.format(cents)).monospacedDigit().bold()
-                            Text(share, format: .percent.precision(.fractionLength(1)))
-                                .monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
+                            Text(share, format: .percent.precision(.fractionLength(0)))
+                                .monospacedDigit().foregroundStyle(.secondary).fixedSize()
                         }
                         ProgressView(value: min(max(share, 0), 1))
                             .tint(FinanceTheme.petroleum)
@@ -276,7 +269,7 @@ struct OverviewView: View {
                     Divider()
                     ForEach(top, id: \.key) { id, row in
                         HStack {
-                            Text(name(of: id))
+                            Text(name(of: id)).lineLimit(1).help(name(of: id))
                             Spacer()
                             Text("\(Money.format(-row.activity)) / \(Money.format(row.budgeted))")
                                 .monospacedDigit().foregroundStyle(row.available < 0 ? FinanceTheme.coral : Color.secondary)

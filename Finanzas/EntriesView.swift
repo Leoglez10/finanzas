@@ -31,7 +31,7 @@ struct EntriesView: View {
         VStack(alignment: .leading, spacing: 20) {
             FinanceHeading(
                 title: account?.name ?? "Todas las cuentas",
-                subtitle: "Tu historial de movimientos", icon: "creditcard")
+                subtitle: "Tu historial de movimientos")
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(search.isEmpty ? "Saldo de los movimientos" : "Total de la búsqueda")
@@ -149,7 +149,7 @@ struct NewEntrySheet: View {
         VStack(alignment: .leading, spacing: 0) {
             FinanceHeading(
                 title: editing == nil ? "Nuevo movimiento" : "Editar movimiento",
-                subtitle: "Registra los detalles de tu ingreso o gasto", icon: "square.and.pencil"
+                subtitle: "Registra los detalles de tu ingreso o gasto"
             )
             .padding(24)
             Form {

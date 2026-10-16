@@ -21,7 +21,7 @@ struct BudgetView: View {
         let budget = (try? EnvelopeBudget.load(from: context))?.month(month)
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 20) {
-                FinanceHeading(title: "Dale un destino a tu dinero", subtitle: monthTitle(month), icon: "envelope")
+                FinanceHeading(title: "Dale un destino a tu dinero", subtitle: monthTitle(month))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 16)], spacing: 16) {
                     FinanceMetric(
                         title: "Disponible para asignar", value: Money.format(budget?.toBudget ?? 0),

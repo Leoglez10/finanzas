@@ -1,3 +1,4 @@
+import AppKit
 import Charts
 import FinanzasKit
 import SwiftData
@@ -30,7 +31,20 @@ struct OverviewView: View {
         let previous = budget.map { MonthSummary($0, month: MonthKey.previous(month)) }
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tu panorama financiero").font(.largeTitle.bold())
+                        Text(monthTitle(month)).font(.title3).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.title2)
+                        .foregroundStyle(FinanceTheme.petroleum)
+                        .padding(12)
+                        .background(FinanceTheme.petroleum.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityHidden(true)
+                }
                 cards(current, previous)
                 HStack(alignment: .top, spacing: 16) {
                     if let budget { cashFlow(budget) }
@@ -42,8 +56,13 @@ struct OverviewView: View {
                     budgetProgress(current, rows: budget?.month(month).rows ?? [:]).frame(width: 320)
                 }
             }
-            .padding(20)
+            .padding(28)
+            .frame(maxWidth: 1500)
+            .frame(maxWidth: .infinity)
         }
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
+        .groupBoxStyle(FinancePanelStyle())
         .navigationTitle("Resumen")
         .navigationSubtitle(monthTitle(month))
         .toolbar {
@@ -64,14 +83,18 @@ struct OverviewView: View {
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
             StatCard(title: "Saldo total", icon: "building.columns",
                      value: Money.format(accounts.filter { !$0.closed }.reduce(0) { $0 + $1.balance }),
-                     note: "\(accounts.filter { !$0.closed }.count) cuentas abiertas")
+                     note: "\(accounts.filter { !$0.closed }.count) cuentas abiertas",
+                     accent: FinanceTheme.petroleum, prominent: true)
             StatCard(title: "Ingresos del mes", icon: "arrow.down.circle", value: Money.format(income),
-                     change: relativeChange(income, from: previous?.income ?? 0), higherIsGood: true)
+                     change: relativeChange(income, from: previous?.income ?? 0), higherIsGood: true,
+                     accent: FinanceTheme.emerald)
             StatCard(title: "Gastos del mes", icon: "arrow.up.circle", value: Money.format(expenses),
-                     change: relativeChange(expenses, from: previous?.expenses ?? 0), higherIsGood: false)
+                     change: relativeChange(expenses, from: previous?.expenses ?? 0), higherIsGood: false,
+                     accent: FinanceTheme.coral)
             StatCard(title: "Tasa de ahorro", icon: "leaf",
                      value: current?.savingsRate.map { $0.formatted(.percent.precision(.fractionLength(1))) } ?? "—",
-                     note: current?.savingsRate == nil ? "Sin ingresos este mes" : "\(Money.format(income - expenses)) ahorrados")
+                     note: current?.savingsRate == nil ? "Sin ingresos este mes" : "\(Money.format(income - expenses)) ahorrados",
+                     accent: FinanceTheme.emerald)
         }
     }
 
@@ -100,7 +123,7 @@ struct OverviewView: View {
                     .position(by: .value("Tipo", point.kind))
                     .cornerRadius(3)
             }
-            .chartForegroundStyleScale(["Ingresos": Color.green, "Gastos": Color.red])
+            .chartForegroundStyleScale(["Ingresos": FinanceTheme.emerald, "Gastos": FinanceTheme.coral])
             .chartYAxis {
                 AxisMarks { value in
                     AxisGridLine()
@@ -151,6 +174,7 @@ struct OverviewView: View {
                                 .monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
                         }
                         ProgressView(value: min(max(share, 0), 1))
+                            .tint(FinanceTheme.petroleum)
                     }
                 }
             }
@@ -178,7 +202,7 @@ struct OverviewView: View {
                         Text(entry.account?.name ?? "").foregroundStyle(.secondary).lineLimit(1)
                         Text(entry.date, format: dayFormat).monospacedDigit().foregroundStyle(.secondary)
                         Text(Money.format(entry.amount)).monospacedDigit()
-                            .foregroundStyle(entry.amount < 0 ? Color.primary : Color.green)
+                            .foregroundStyle(entry.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
                     }
                 }
             }
@@ -202,14 +226,15 @@ struct OverviewView: View {
                     Spacer()
                     Text("de \(Money.format(assigned))").foregroundStyle(.secondary)
                 }
-                ProgressView(value: min(ratio, 1)).tint(ratio > 1 ? .red : .accentColor)
+                ProgressView(value: min(ratio, 1))
+                    .tint(ratio > 1 ? FinanceTheme.coral : ratio >= 0.9 ? FinanceTheme.amber : FinanceTheme.petroleum)
                 HStack {
                     Text(assigned > 0 ? ratio.formatted(.percent.precision(.fractionLength(0))) + " usado" : "Sin asignar")
                         .foregroundStyle(.secondary)
                     Spacer()
                     if assigned > 0 {
                         Text(spent > assigned ? "\(Money.format(spent - assigned)) excedido" : "\(Money.format(assigned - spent)) restante")
-                            .foregroundStyle(spent > assigned ? .red : .green)
+                            .foregroundStyle(spent > assigned ? FinanceTheme.coral : FinanceTheme.emerald)
                     }
                 }
                 .font(.callout)
@@ -220,7 +245,7 @@ struct OverviewView: View {
                             Text(name(of: id))
                             Spacer()
                             Text("\(Money.format(-row.activity)) / \(Money.format(row.budgeted))")
-                                .monospacedDigit().foregroundStyle(row.available < 0 ? .red : .secondary)
+                                .monospacedDigit().foregroundStyle(row.available < 0 ? FinanceTheme.coral : Color.secondary)
                         }
                     }
                 }
@@ -243,25 +268,50 @@ private struct StatCard: View {
     var change: Double? = nil
     var higherIsGood = true
     var note: String? = nil
+    var accent: Color = FinanceTheme.petroleum
+    var prominent = false
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(value).font(.title.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                if let change {
-                    let good = (change >= 0) == higherIsGood
-                    Label(change.formatted(.percent.precision(.fractionLength(1)).sign(strategy: .always())) + " vs mes anterior",
-                          systemImage: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.callout)
-                        .foregroundStyle(good ? .green : .red)
-                } else {
-                    Text(note ?? "Sin datos del mes anterior").font(.callout).foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(title).font(.subheadline.weight(.medium))
+                Spacer(minLength: 4)
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(prominent ? .white : accent)
+                    .padding(8)
+                    .background((prominent ? Color.white : accent).opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
-        } label: {
-            Label(title, systemImage: icon).foregroundStyle(.secondary)
+            .foregroundStyle(prominent ? Color.white.opacity(0.85) : .secondary)
+
+            Text(value)
+                .font(.system(size: prominent ? 34 : 28, weight: .bold, design: .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                .foregroundStyle(prominent ? .white : .primary)
+
+            if let change {
+                let good = (change >= 0) == higherIsGood
+                Label(change.formatted(.percent.precision(.fractionLength(1)).sign(strategy: .always())) + " vs mes anterior",
+                      systemImage: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(good ? FinanceTheme.emerald : FinanceTheme.coral)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background((good ? FinanceTheme.emerald : FinanceTheme.coral).opacity(0.1), in: Capsule())
+            } else {
+                Text(note ?? "Sin datos del mes anterior")
+                    .font(.callout)
+                    .foregroundStyle(prominent ? Color.white.opacity(0.85) : .secondary)
+                    .padding(.vertical, 5)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+        .background(prominent ? FinanceTheme.hero : FinanceTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(prominent ? Color.clear : FinanceTheme.border, lineWidth: 1)
         }
     }
 }

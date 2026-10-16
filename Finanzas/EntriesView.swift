@@ -28,6 +28,39 @@ struct EntriesView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            FinanceHeading(
+                title: account?.name ?? "Todas las cuentas",
+                subtitle: "Tu historial de movimientos", icon: "creditcard")
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Saldo de los movimientos").font(.subheadline).foregroundStyle(.secondary)
+                    Text(Money.format(entries.reduce(0) { $0 + $1.amount }))
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
+                }
+                Spacer()
+                Text("\(entries.count) movimientos")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            .padding(20)
+            .financeCard()
+            ledger
+        }
+        .padding(24)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
+        .searchable(text: $search, prompt: "Buscar comercio, categoría o nota")
+        .navigationTitle(account?.name ?? "Todas las cuentas")
+        .navigationSubtitle(Money.format(entries.reduce(0) { $0 + $1.amount }))
+        .toolbar {
+            Button("Nuevo movimiento", systemImage: "plus") { showingNewEntry = true }
+                .keyboardShortcut("n")
+        }
+        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account) }
+        .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
+    }
+
+    private var ledger: some View {
         Table(filtered, selection: $selection) {
             TableColumn("Fecha") { Text($0.date, format: dayFormat).monospacedDigit() }
                 .width(min: 80, ideal: 90, max: 100)
@@ -39,7 +72,7 @@ struct EntriesView: View {
             TableColumn("Notas") { Text($0.notes).foregroundStyle(.secondary) }
             TableColumn("Monto") { entry in
                 Text(Money.format(entry.amount)).monospacedDigit()
-                    .foregroundStyle(entry.amount < 0 ? Color.primary : Color.green)
+                    .foregroundStyle(entry.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 90, ideal: 110)
@@ -51,15 +84,11 @@ struct EntriesView: View {
             edit(ids)
         }
         .onDeleteCommand { delete(selection) }
-        .searchable(text: $search, prompt: "Buscar comercio, categoría o nota")
-        .navigationTitle(account?.name ?? "Todas las cuentas")
-        .navigationSubtitle(Money.format(entries.reduce(0) { $0 + $1.amount }))
-        .toolbar {
-            Button("Nuevo movimiento", systemImage: "plus") { showingNewEntry = true }
-                .keyboardShortcut("n")
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14).strokeBorder(FinanceTheme.border, lineWidth: 1)
+                .allowsHitTesting(false)
         }
-        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account) }
-        .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
         .overlay {
             if entries.isEmpty {
                 ContentUnavailableView("Sin movimientos", systemImage: "tray",
@@ -107,13 +136,25 @@ struct NewEntrySheet: View {
     @FocusState private var amountFocused: Bool
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 0) {
+            FinanceHeading(
+                title: editing == nil ? "Nuevo movimiento" : "Editar movimiento",
+                subtitle: "Registra los detalles de tu ingreso o gasto", icon: "square.and.pencil"
+            )
+            .padding(24)
+            Form {
+                Section("Monto y tipo") {
             Picker("Tipo", selection: $isExpense) {
                 Text("Gasto").tag(true)
                 Text("Ingreso").tag(false)
             }
             .pickerStyle(.segmented)
-            TextField("Monto", text: $amountText, prompt: Text("0.00")).focused($amountFocused)
+                    TextField("Monto", text: $amountText, prompt: Text("0.00"))
+                        .font(.title2.monospacedDigit())
+                        .foregroundStyle(isExpense ? FinanceTheme.coral : FinanceTheme.emerald)
+                        .focused($amountFocused)
+                }
+                Section("Cuenta y categoría") {
             Picker("Cuenta", selection: $account) {
                 ForEach(accounts.filter { !$0.closed }) { Text($0.name).tag(Optional($0)) }
             }
@@ -128,11 +169,18 @@ struct NewEntrySheet: View {
                     }
                 }
             }
-            DatePicker("Fecha", selection: $date, displayedComponents: .date)
-            TextField("Notas", text: $notes)
+                }
+                Section("Fecha y notas") {
+                    DatePicker("Fecha", selection: $date, displayedComponents: .date)
+                    TextField("Notas", text: $notes)
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
-        .frame(width: 380)
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 570)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Guardar", action: save).disabled(!canSave) }

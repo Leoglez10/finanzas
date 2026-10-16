@@ -47,20 +47,31 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
 
     var body: some View {
-        Form {
-            Section("Avisos de pagos") {
+        VStack(alignment: .leading, spacing: 0) {
+            FinanceHeading(title: "Ajustes", subtitle: "Tus recordatorios, a tu ritmo", icon: "slider.horizontal.3")
+                .padding(24)
+            Form {
+                Section {
+                    Label("Avisos de pagos", systemImage: "bell.badge")
+                        .font(.headline).foregroundStyle(FinanceTheme.petroleum)
                 Toggle("Avisarme antes de cada pago", isOn: $remindersEnabled)
                 Stepper("Avisar \(daysBefore) \(daysBefore == 1 ? "día" : "días") antes, a las 9:00",
                         value: $daysBefore, in: 0...14)
                     .disabled(!remindersEnabled)
             }
             Section {
+                    Label("Automatización", systemImage: "bolt.circle")
+                        .font(.headline).foregroundStyle(FinanceTheme.petroleum)
                 Text("Los pagos marcados como \"Registrar automáticamente\" se registran solos en su fecha al abrir la app y cada hora. Si un movimiento no tiene categoría, se usa la última categoría usada con ese comercio.")
                     .foregroundStyle(.secondary)
             }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(minWidth: 500, idealWidth: 540, minHeight: 400)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .onChange(of: remindersEnabled) { Task { await AutomationRunner.run(context) } }
         .onChange(of: daysBefore) { Task { await AutomationRunner.run(context) } }
     }

@@ -18,6 +18,19 @@ upcoming scheduled payments and a bundled MCP server for AI assistants. UI in Sp
 
 Everything stays local: no account, no cloud, no telemetry.
 
+## Interface
+
+All screens share a light/dark adaptive palette: petroleum for navigation and primary accents,
+white or dark slate cards, emerald for income, coral for expenses, and amber for payment warnings.
+The budget highlights amounts available to assign; the ledger keeps native table selection and search;
+upcoming payments show date badges and separate post/skip actions. Entry and schedule sheets group
+related fields while retaining native controls and keyboard behavior. Import and error dialogs remain native.
+
+After a Debug build, `bash scripts/check-design.sh` renders the real views with synthetic in-memory data
+into `build/design-check/` in light and dark mode. It does not construct `FinanzasApp`, open the real
+store, or start launch-time payment automation. These renders support manual visual review; they are
+not automated assertions for clipping, contrast, or keyboard interaction.
+
 ## Requirements
 
 - macOS 15 or later, Xcode 16+

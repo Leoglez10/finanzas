@@ -18,15 +18,22 @@ struct BudgetView: View {
 
     var body: some View {
         let budget = (try? EnvelopeBudget.load(from: context))?.month(month)
-        List {
-            Section {
-                LabeledContent("Disponible para asignar") {
-                    Text(Money.format(budget?.toBudget ?? 0)).font(.title2.bold()).monospacedDigit()
-                        .foregroundStyle((budget?.toBudget ?? 0) < 0 ? .red : .green)
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 20) {
+                FinanceHeading(title: "Dale un destino a tu dinero", subtitle: monthTitle(month), icon: "envelope")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 16)], spacing: 16) {
+                    FinanceMetric(
+                        title: "Disponible para asignar", value: Money.format(budget?.toBudget ?? 0),
+                        icon: "tray.and.arrow.down",
+                        color: (budget?.toBudget ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
+                    FinanceMetric(
+                        title: "Ingresos del mes", value: Money.format(budget?.income ?? 0),
+                        icon: "arrow.down.circle", color: FinanceTheme.emerald)
+                    FinanceMetric(title: "Asignado", value: Money.format(budget?.budgeted ?? 0), icon: "envelope.badge")
                 }
-                LabeledContent("Ingresos del mes", value: Money.format(budget?.income ?? 0))
-                LabeledContent("Asignado", value: Money.format(budget?.budgeted ?? 0))
             }
+            .padding(24)
+            List {
             ForEach(groups.filter { !$0.isIncome }) { group in
                 Section {
                     ForEach(visibleCategories(group)) { category in
@@ -47,7 +54,8 @@ struct BudgetView: View {
                 Section {
                     ForEach(visibleCategories(group)) { category in
                         LabeledContent(category.name) {
-                            Text(Money.format(budget?.rows[category.persistentModelID]?.activity ?? 0)).monospacedDigit()
+                                Text(Money.format(budget?.rows[category.persistentModelID]?.activity ?? 0))
+                                    .monospacedDigit().foregroundStyle(FinanceTheme.emerald)
                         }
                         .contextMenu { categoryMenu(category) }
                     }
@@ -59,7 +67,12 @@ struct BudgetView: View {
                     .contextMenu { Button("Renombrar grupo") { edit(.renameGroup(group), name: group.name) } }
                 }
             }
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
         }
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .navigationTitle(monthTitle(month))
         .alert(nameEditTitle, isPresented: Binding(get: { nameEdit != nil }, set: { if !$0 { nameEdit = nil } })) {
             TextField("Nombre", text: $nameText)
@@ -131,7 +144,8 @@ private struct AddButton: View {
     var body: some View {
         Button(action: action) { Image(systemName: "plus.circle.fill") }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(FinanceTheme.petroleum)
+            .accessibilityLabel(help)
             .help(help)
     }
 }
@@ -141,7 +155,7 @@ private struct BudgetHeader: View {
     let onAdd: () -> Void
     var body: some View {
         HStack {
-            Text(title)
+            Text(title).font(.headline).foregroundStyle(FinanceTheme.petroleum)
             AddButton(help: "Nueva categoría", action: onAdd)
             Spacer()
             Group {
@@ -181,15 +195,16 @@ private struct BudgetRow: View {
                 .foregroundStyle(availableColor)
                 .frame(width: 110, alignment: .trailing)
         }
+        .padding(.vertical, 8)
         .onAppear { text = Money.format(row?.budgeted ?? 0) }
         .onChange(of: row?.budgeted) { text = Money.format(row?.budgeted ?? 0) }
     }
 
     private var availableColor: Color {
         switch row?.available ?? 0 {
-        case ..<0: .red
+        case ..<0: FinanceTheme.coral
         case 0: .secondary
-        default: .green
+        default: FinanceTheme.emerald
         }
     }
 }

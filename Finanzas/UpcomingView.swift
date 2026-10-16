@@ -11,7 +11,21 @@ struct UpcomingView: View {
     var body: some View {
         let items = Upcoming.items(schedules: schedules)
         let overdue = items.filter(\.overdue), coming = items.filter { !$0.overdue }
-        List {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 20) {
+                FinanceHeading(
+                    title: "Tus próximos compromisos", subtitle: "Anticipa tus pagos y cuida tu saldo", icon: "calendar"
+                )
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 16)], spacing: 16) {
+                    FinanceMetric(
+                        title: "Vencidos", value: "\(overdue.count)", icon: "clock.badge.exclamationmark",
+                        color: overdue.isEmpty ? FinanceTheme.emerald : FinanceTheme.amber)
+                    FinanceMetric(title: "Próximos 30 días", value: "\(coming.count)", icon: "calendar.badge.clock")
+                    FinanceMetric(title: "Pagos programados", value: "\(schedules.count)", icon: "repeat")
+                }
+            }
+            .padding(24)
+            List {
             if !overdue.isEmpty {
                 Section("Vencidos") { ForEach(overdue, id: \.id) { row($0) } }
             }
@@ -23,6 +37,7 @@ struct UpcomingView: View {
                 ForEach(schedules) { s in
                     LabeledContent {
                         Text(Money.format(s.amount)).monospacedDigit()
+                                .foregroundStyle(s.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
                     } label: {
                         Text(s.name)
                         Text(s.completed ? "Terminado" : describe(s)).foregroundStyle(.secondary)
@@ -30,7 +45,12 @@ struct UpcomingView: View {
                     .contextMenu { Button("Eliminar", role: .destructive) { context.delete(s); persist() } }
                 }
             }
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
         }
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .navigationTitle("Próximos pagos")
         .toolbar {
             Button("Nuevo pago programado", systemImage: "plus") { showingNewSchedule = true }
@@ -40,10 +60,17 @@ struct UpcomingView: View {
     }
 
     private func row(_ item: Upcoming.Item) -> some View {
-        HStack {
-            Text(item.date, format: dayFormat).monospacedDigit()
-                .foregroundStyle(item.overdue ? .red : .secondary)
-                .frame(width: 90, alignment: .leading)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.date, format: dayFormat).monospacedDigit()
+                    if item.overdue { Label("Vencido", systemImage: "clock.badge.exclamationmark").font(.caption) }
+                }
+                .foregroundStyle(item.overdue ? FinanceTheme.amber : Color.secondary)
+                .padding(10)
+                .background(
+                    (item.overdue ? FinanceTheme.amber : FinanceTheme.petroleum).opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading) {
                 Text(item.schedule.name)
                 Text([item.schedule.payee?.name, item.schedule.account?.name].compactMap { $0 }.joined(separator: " · "))
@@ -51,21 +78,24 @@ struct UpcomingView: View {
             }
             Spacer()
             VStack(alignment: .trailing) {
-                Text(Money.format(item.schedule.amount)).monospacedDigit()
+                    Text(Money.format(item.schedule.amount)).monospacedDigit().font(.headline)
+                        .foregroundStyle(item.schedule.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
                 if let balance = item.projectedBalance {
                     Text("Saldo: \(Money.format(balance))").font(.caption).monospacedDigit()
-                        .foregroundStyle(balance < 0 ? .red : .secondary)
+                            .foregroundStyle(balance < 0 ? FinanceTheme.coral : Color.secondary)
                 }
+            }
             }
             // Only the pending occurrence can be acted on; later ones follow after it moves.
             HStack {
+                Spacer()
                 if item.date == item.schedule.effectiveNextDate {
                     Button("Registrar") { item.schedule.post(in: context); persist() }
                     Button("Saltar") { item.schedule.skip(); persist() }
                 }
             }
-            .frame(width: 170, alignment: .trailing)
         }
+        .padding(.vertical, 10)
     }
 
     // Saved right away so a posted payment survives a quit before autosave runs.
@@ -107,7 +137,14 @@ struct NewScheduleSheet: View {
     @State private var autoPost = false
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 0) {
+            FinanceHeading(
+                title: "Nuevo pago programado", subtitle: "Organiza los pagos que se repiten",
+                icon: "calendar.badge.plus"
+            )
+            .padding(24)
+            Form {
+                Section("Pago") {
             TextField("Nombre", text: $name)
             Picker("Tipo", selection: $isExpense) {
                 Text("Gasto").tag(true)
@@ -115,6 +152,8 @@ struct NewScheduleSheet: View {
             }
             .pickerStyle(.segmented)
             TextField("Monto", text: $amountText, prompt: Text("0.00"))
+                        .font(.title2.monospacedDigit())
+                        .foregroundStyle(isExpense ? FinanceTheme.coral : FinanceTheme.emerald)
             Picker("Cuenta", selection: $account) {
                 ForEach(accounts.filter { !$0.closed }) { Text($0.name).tag(Optional($0)) }
             }
@@ -129,6 +168,8 @@ struct NewScheduleSheet: View {
                     }
                 }
             }
+                }
+                Section("Repetición") {
             Picker("Se repite", selection: $frequency) {
                 Text("Diario").tag(Recurrence.Frequency.daily)
                 Text("Semanal").tag(Recurrence.Frequency.weekly)
@@ -138,10 +179,21 @@ struct NewScheduleSheet: View {
             Stepper("Cada \(interval)", value: $interval, in: 1...52)
             DatePicker("Primera fecha", selection: $start, displayedComponents: .date)
             Toggle("Si cae en fin de semana, pasar al lunes", isOn: $skipWeekend)
-            Toggle("Registrar automáticamente", isOn: $autoPost)
+                }
+                Section {
+                    Toggle("Registrar automáticamente", isOn: $autoPost)
+                } header: {
+                    Text("Automatización")
+                } footer: {
+                    Text("Los pagos automáticos se registran al abrir la app y cada hora, sin confirmación adicional.")
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
-        .frame(width: 400)
+        .frame(minWidth: 500, idealWidth: 540, minHeight: 680)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Guardar", action: save).disabled(!canSave) }

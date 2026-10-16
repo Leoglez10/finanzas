@@ -64,7 +64,20 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.title2).foregroundStyle(.white)
+                        .padding(10)
+                        .background(FinanceTheme.hero, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Finanzas").font(.title2.bold())
+                        Text("Tu dinero, en orden").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(20)
+                List(selection: $selection) {
                 Label("Resumen", systemImage: "square.grid.2x2").tag(SidebarItem.overview)
                 Label("Presupuesto", systemImage: "envelope").tag(SidebarItem.budget)
                 Label("Próximos pagos", systemImage: "calendar").tag(SidebarItem.upcoming)
@@ -81,7 +94,7 @@ struct RootView: View {
                         Label("Nueva cuenta", systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderless)
-                    .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(FinanceTheme.petroleum)
                 } header: {
                     Text("Cuentas")
                 }
@@ -93,8 +106,12 @@ struct RootView: View {
                         }
                     }
                 }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            .background(FinanceTheme.card)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 270)
             .alert("Nueva cuenta", isPresented: $addingAccount) {
                 TextField("Nombre", text: $newAccountName)
                 Button("Crear", action: addAccount)
@@ -119,6 +136,7 @@ struct RootView: View {
                 UpcomingView()
             }
         }
+        .tint(FinanceTheme.petroleum)
     }
 
     private var scheduleSignature: [String] {
@@ -146,7 +164,7 @@ struct AccountRow: View {
     var body: some View {
         LabeledContent {
             Text(Money.format(balance)).monospacedDigit()
-                .foregroundStyle(balance < 0 ? .red : .secondary)
+                .foregroundStyle(balance < 0 ? FinanceTheme.coral : Color.secondary)
         } label: {
             Label(name, systemImage: icon)
         }

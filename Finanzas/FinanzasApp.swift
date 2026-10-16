@@ -66,7 +66,7 @@ struct RootView: View {
             case .budget:
                 BudgetView()
             case .upcoming:
-                ContentUnavailableView("Próximos pagos", systemImage: "calendar")  // T5
+                UpcomingView()
             }
         }
     }

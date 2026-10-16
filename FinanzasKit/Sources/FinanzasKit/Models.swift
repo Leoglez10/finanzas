@@ -89,6 +89,8 @@ import SwiftData
     public var amount: Int = 0
     public var autoPost: Bool = false
     public var completed: Bool = false
+    /// Next unpaid occurrence; posting or skipping moves it forward. Nil = recurrence's first date.
+    public var nextDate: Date?
     public var recurrenceData: Data = Data()
     public var account: Account?
     public var category: Category?

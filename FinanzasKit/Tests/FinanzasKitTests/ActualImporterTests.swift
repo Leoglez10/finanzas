@@ -15,6 +15,7 @@ CREATE TABLE payee_mapping (id TEXT PRIMARY KEY, targetId TEXT);
 CREATE TABLE transactions (id TEXT PRIMARY KEY, isParent INTEGER DEFAULT 0, isChild INTEGER DEFAULT 0, acct TEXT, category TEXT, amount INTEGER, description TEXT, notes TEXT, date INTEGER, tombstone INTEGER DEFAULT 0, cleared INTEGER DEFAULT 1, parent_id TEXT, schedule TEXT);
 CREATE TABLE rules (id TEXT PRIMARY KEY, conditions TEXT, actions TEXT, tombstone INTEGER DEFAULT 0);
 CREATE TABLE schedules (id TEXT PRIMARY KEY, rule TEXT, completed INTEGER DEFAULT 0, posts_transaction INTEGER DEFAULT 0, tombstone INTEGER DEFAULT 0, name TEXT);
+CREATE TABLE schedules_next_date (id TEXT PRIMARY KEY, schedule_id TEXT, local_next_date INTEGER, local_next_date_ts INTEGER, base_next_date INTEGER, base_next_date_ts INTEGER, tombstone INTEGER DEFAULT 0);
 CREATE TABLE zero_budgets (id TEXT PRIMARY KEY, month INTEGER, category TEXT, amount INTEGER DEFAULT 0, carryover INTEGER DEFAULT 0);
 
 INSERT INTO accounts VALUES ('a1','Banco',0,0,0,1), ('a2','Inversión',1,0,0,2), ('a3','Borrada',0,0,1,3);
@@ -36,6 +37,9 @@ INSERT INTO rules VALUES
   ('r1','[{"op":"is","field":"description","value":"p2"},{"op":"is","field":"acct","value":"a1"},{"op":"isapprox","field":"date","value":{"start":"2026-05-11","interval":1,"frequency":"monthly","patterns":[],"skipWeekend":true,"weekendSolveMode":"before","endMode":"never","endOccurrences":1,"endDate":"2026-04-12"}},{"op":"is","field":"amount","value":-2500}]','[]',0),
   ('r2','[{"op":"is","field":"acct","value":"a1"},{"op":"is","field":"date","value":{"start":"2026-01-10","interval":2,"frequency":"weekly","patterns":[],"skipWeekend":false,"weekendSolveMode":"after","endMode":"after_n_occurrences","endOccurrences":3,"endDate":"2026-01-01"}},{"op":"isbetween","field":"amount","value":{"num1":-1000,"num2":-2000}}]','[]',0),
   ('r3','[{"op":"is","field":"date","value":"2026-12-24"},{"op":"is","field":"amount","value":-80000}]','[]',0);
+INSERT INTO schedules_next_date VALUES
+  ('n1','s1',20261011,5,20261011,5,0),
+  ('n2','s2',20260101,1,20260207,2,0);
 INSERT INTO zero_budgets VALUES
   ('b1',202609,'c1',30000,0), ('b2',202609,'cOld',5000,0), ('b3',202610,'c1',20000,1),
   ('b4',202609,'c2',0,0), ('b5',202609,'cGone',100,0);
@@ -101,7 +105,9 @@ private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
     #expect(gym.recurrence == Recurrence(start: day(2026, 5, 11), frequency: .monthly,
                                          skipWeekend: true, weekendMode: .before))
 
+    #expect(gym.nextDate == day(2026, 10, 11))           // local == base timestamp → local
     let biweekly = try #require(schedules["Quincenal"])
+    #expect(biweekly.nextDate == day(2026, 2, 7))        // timestamps differ → base
     #expect(biweekly.amount == -1_500)  // isbetween → midpoint
     #expect(biweekly.completed)
     #expect(biweekly.recurrence?.endDate == day(2026, 2, 7))  // 3rd occurrence: Jan 10, 24, Feb 7
@@ -150,6 +156,24 @@ private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
         try ActualImporter.importBudgets(at: fixture, into: context)
     }
     #expect(try context.fetchCount(FetchDescriptor<BudgetAmount>()) == 2)
+}
+
+@MainActor
+@Test func importsScheduleDatesIntoAnExistingStoreByName() throws {
+    let container = try FinanzasStore.inMemory()
+    let context = container.mainContext
+    let fixture = try makeFixture()
+    _ = try ActualImporter.importDatabase(at: fixture, into: context)
+    for s in try context.fetch(FetchDescriptor<Schedule>()) { s.nextDate = nil }
+    let extra = Schedule(name: "Solo aquí", amount: -1, recurrence: .init(start: day(2026, 1, 1), frequency: .monthly))
+    context.insert(extra)
+    try context.save()
+
+    #expect(try ActualImporter.importScheduleDates(at: fixture, into: context) == 2)
+    let byName = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<Schedule>()).map { ($0.name, $0) })
+    #expect(byName["Gym"]?.nextDate == day(2026, 10, 11))
+    #expect(byName["Quincenal"]?.nextDate == day(2026, 2, 7))
+    #expect(byName["Solo aquí"]?.nextDate == nil)
 }
 
 /// Opt-in check against a real Actual export: `ACTUAL_DB=/path/db.sqlite swift test`.

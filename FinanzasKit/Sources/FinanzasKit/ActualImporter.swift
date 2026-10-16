@@ -58,8 +58,9 @@ public enum ActualImporter {
 
             var schedules: [String: Schedule] = [:]
             try db.each("""
-                SELECT s.id, s.name, s.completed, s.posts_transaction, r.conditions
+                SELECT s.id, s.name, s.completed, s.posts_transaction, r.conditions, \(nextDateSQL)
                 FROM schedules s JOIN rules r ON r.id = s.rule
+                LEFT JOIN schedules_next_date nd ON nd.schedule_id = s.id AND IFNULL(nd.tombstone,0)=0
                 WHERE IFNULL(s.tombstone,0)=0
                 """) { r in
                 let rule = ScheduleRule(conditionsJSON: r.text(4))
@@ -70,6 +71,7 @@ public enum ActualImporter {
                                  account: rule.accountID.flatMap { accounts[$0] }, payee: payee,
                                  autoPost: r.int(3) != 0)
                 s.completed = r.int(2) != 0
+                s.nextDate = r.isNull(5) ? nil : Self.date(yyyymmdd: r.int(5))
                 context.insert(s)
                 schedules[r.text(0)] = s
             }
@@ -127,6 +129,31 @@ public enum ActualImporter {
             context.rollback()
             throw error
         }
+    }
+
+    /// Same choice as Actual's `v_schedules.next_date`.
+    private static let nextDateSQL =
+        "CASE WHEN nd.local_next_date_ts = nd.base_next_date_ts THEN nd.local_next_date ELSE nd.base_next_date END"
+
+    /// Copies each schedule's next date from Actual into an existing store, matched by schedule name.
+    /// Returns how many schedules were updated.
+    @MainActor
+    public static func importScheduleDates(at url: URL, into context: ModelContext) throws -> Int {
+        let db = try SQLiteReader(url: url)
+        let byName = Dictionary(try context.fetch(FetchDescriptor<Schedule>()).map { ($0.name, $0) },
+                                uniquingKeysWith: { first, _ in first })
+        var updated = 0
+        try db.each("""
+            SELECT s.name, \(nextDateSQL) FROM schedules s
+            JOIN schedules_next_date nd ON nd.schedule_id = s.id AND IFNULL(nd.tombstone,0)=0
+            WHERE IFNULL(s.tombstone,0)=0 AND s.name IS NOT NULL
+            """) { r in
+            guard let schedule = byName[r.text(0)], let date = Self.date(yyyymmdd: r.int(1)) else { return }
+            schedule.nextDate = date
+            updated += 1
+        }
+        try context.save()
+        return updated
     }
 
     /// Merged categories resolve through `category_mapping`, so several Actual rows can sum into one.

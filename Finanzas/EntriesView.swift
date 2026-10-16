@@ -12,6 +12,7 @@ struct EntriesView: View {
     let account: Account?
     @Environment(\.modelContext) private var context
     @Query private var entries: [LedgerEntry]
+    @Query(filter: #Predicate<Account> { !$0.closed }) private var openAccounts: [Account]
     @State private var selection = Set<PersistentIdentifier>()
     @State private var search = ""
     @State private var showingNewEntry = false
@@ -65,10 +66,12 @@ struct EntriesView: View {
         Table(filtered, selection: $selection) {
             TableColumn("Fecha") { Text($0.date, format: dayFormat).monospacedDigit() }
                 .width(min: 80, ideal: 90, max: 100)
-            if account == nil {
+            // With one open account the column would repeat the same name on every row.
+            if account == nil, openAccounts.count > 1 {
                 TableColumn("Cuenta") { Text($0.account?.name ?? "") }
             }
             TableColumn("Comercio") { Text($0.payee?.name ?? "") }
+                .width(min: 100, ideal: 160)
             TableColumn("Categoría") { entry in
                 if let name = entry.category?.name {
                     Text(name).foregroundStyle(.secondary)
@@ -79,6 +82,7 @@ struct EntriesView: View {
                 }
             }
             TableColumn("Notas") { Text($0.notes).foregroundStyle(.secondary) }
+                .width(min: 60, ideal: 100)
             TableColumn("Monto") { entry in
                 Text(Money.format(entry.amount)).monospacedDigit()
                     .foregroundStyle(entry.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
@@ -93,6 +97,8 @@ struct EntriesView: View {
             edit(ids)
         }
         .onDeleteCommand { delete(selection) }
+        // Empty striped rows below the last entry read as content still loading.
+        .alternatingRowBackgrounds(.disabled)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14).strokeBorder(FinanceTheme.border, lineWidth: 1)

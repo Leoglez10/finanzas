@@ -50,7 +50,7 @@ struct FinanzasApp: App {
 }
 
 enum SidebarItem: Hashable {
-    case budget, upcoming, allAccounts
+    case overview, budget, upcoming, allAccounts
     case account(PersistentIdentifier)
 }
 
@@ -58,15 +58,18 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var schedules: [Schedule]
-    @State private var selection: SidebarItem? = .allAccounts
+    @State private var selection: SidebarItem? = .overview
+    @State private var addingAccount = false
+    @State private var newAccountName = ""
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
+                Label("Resumen", systemImage: "square.grid.2x2").tag(SidebarItem.overview)
                 Label("Presupuesto", systemImage: "envelope").tag(SidebarItem.budget)
                 Label("Próximos pagos", systemImage: "calendar").tag(SidebarItem.upcoming)
 
-                Section("Cuentas") {
+                Section {
                     AccountRow(name: "Todas", icon: "tray.full", balance: openAccounts.reduce(0) { $0 + $1.balance })
                         .tag(SidebarItem.allAccounts)
                     ForEach(openAccounts) { account in
@@ -74,6 +77,13 @@ struct RootView: View {
                                    balance: account.balance)
                             .tag(SidebarItem.account(account.persistentModelID))
                     }
+                    Button { newAccountName = ""; addingAccount = true } label: {
+                        Label("Nueva cuenta", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.accentColor)
+                } header: {
+                    Text("Cuentas")
                 }
                 if !closedAccounts.isEmpty {
                     Section("Cerradas") {
@@ -85,6 +95,12 @@ struct RootView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            .alert("Nueva cuenta", isPresented: $addingAccount) {
+                TextField("Nombre", text: $newAccountName)
+                Button("Crear", action: addAccount)
+                    .disabled(newAccountName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Cancelar", role: .cancel) {}
+            }
             // Posting, skipping or editing a schedule changes what is due and what to remind about.
             .onChange(of: scheduleSignature) { Task { await AutomationRunner.run(context) } }
         } detail: {
@@ -95,6 +111,8 @@ struct RootView: View {
                 if let account = context.model(for: id) as? Account {
                     EntriesView(account: account).id(id)
                 }
+            case .overview:
+                OverviewView()
             case .budget:
                 BudgetView()
             case .upcoming:
@@ -105,6 +123,15 @@ struct RootView: View {
 
     private var scheduleSignature: [String] {
         schedules.map { "\($0.persistentModelID.hashValue)|\($0.effectiveNextDate?.timeIntervalSince1970 ?? 0)|\($0.autoPost)|\($0.amount)|\($0.name)" }
+    }
+
+    private func addAccount() {
+        let name = newAccountName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let account = Account(name: name, sortOrder: (accounts.map(\.sortOrder).max() ?? 0) + 1)
+        context.insert(account)
+        context.saveOrAlert()
+        selection = .account(account.persistentModelID)
     }
 
     private var openAccounts: [Account] { accounts.filter { !$0.closed } }

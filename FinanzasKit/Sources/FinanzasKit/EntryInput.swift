@@ -14,6 +14,17 @@ public enum Money {
         return NSDecimalNumber(decimal: rounded).intValue
     }
 
+    /// Budget cell input: "500" sets the assigned amount, "+100" / "-50" adjust it; never below zero.
+    public static func budgeted(from text: String, current: Int) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard let cents = cents(from: trimmed.filter { $0 != "+" }) else { return nil }
+        switch trimmed.first {
+        case "+": return current + cents
+        case "-": return max(0, current - cents)
+        default: return cents
+        }
+    }
+
     public static func format(_ cents: Int, currency: String = "MXN") -> String {
         (Decimal(cents) / 100).formatted(.currency(code: currency).locale(Locale(identifier: "es_MX")))
     }

@@ -28,3 +28,14 @@ func rejectsInvalidAmounts(input: String) {
     #expect(try Payee.findOrCreate(named: "   ", in: context) == nil)
     #expect(try context.fetchCount(FetchDescriptor<Payee>()) == 2)
 }
+
+@Test(arguments: [
+    ("500", 20_000, 50_000), ("+100", 20_000, 30_000), ("-50", 20_000, 15_000), ("- 300", 20_000, 0), ("+$1,000.50", 0, 100_050),
+])
+func budgetInputSetsOrAdjustsTheAssignedAmount(input: String, current: Int, result: Int) {
+    #expect(Money.budgeted(from: input, current: current) == result)
+}
+
+@Test func budgetInputRejectsInvalidText() {
+    #expect(Money.budgeted(from: "+abc", current: 20_000) == nil)
+}

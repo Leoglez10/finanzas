@@ -25,7 +25,7 @@ public struct EnvelopeBudget<ID: Hashable & Sendable>: Sendable {
     public struct Row: Equatable, Sendable { public var budgeted: Int; public var activity: Int; public var available: Int }
     public struct Month: Sendable { public var income: Int; public var budgeted: Int; public var toBudget: Int; public var rows: [ID: Row] }
 
-    let categories: [CategoryInfo]
+    public let categories: [CategoryInfo]
     let budgeted: [Key: Int]
     let carryover: Set<Key>
     let activity: [Key: Int]

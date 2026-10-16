@@ -15,6 +15,7 @@ struct EntriesView: View {
     @State private var selection = Set<PersistentIdentifier>()
     @State private var search = ""
     @State private var showingNewEntry = false
+    @State private var editingEntry: LedgerEntry?
 
     init(account: Account?) {
         self.account = account
@@ -44,7 +45,10 @@ struct EntriesView: View {
             .width(min: 90, ideal: 110)
         }
         .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+            if ids.count == 1 { Button("Editar") { edit(ids) } }
             Button("Eliminar", role: .destructive) { delete(ids) }
+        } primaryAction: { ids in
+            edit(ids)
         }
         .onDeleteCommand { delete(selection) }
         .searchable(text: $search, prompt: "Buscar comercio, categoría o nota")
@@ -55,6 +59,7 @@ struct EntriesView: View {
                 .keyboardShortcut("n")
         }
         .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account) }
+        .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
         .overlay {
             if entries.isEmpty {
                 ContentUnavailableView("Sin movimientos", systemImage: "tray",
@@ -71,6 +76,12 @@ struct EntriesView: View {
         }
     }
 
+    /// Double-click opens the whole entry in the editor; every column is editable there.
+    private func edit(_ ids: Set<PersistentIdentifier>) {
+        guard ids.count == 1, let id = ids.first else { return }
+        editingEntry = context.model(for: id) as? LedgerEntry
+    }
+
     private func delete(_ ids: Set<PersistentIdentifier>) {
         for id in ids { if let entry = context.model(for: id) as? LedgerEntry { context.delete(entry) } }
         selection.subtract(ids)
@@ -80,6 +91,7 @@ struct EntriesView: View {
 
 struct NewEntrySheet: View {
     let defaultAccount: Account?
+    var editing: LedgerEntry? = nil
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
@@ -125,8 +137,18 @@ struct NewEntrySheet: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Guardar", action: save).disabled(!canSave) }
         }
+        .navigationTitle(editing == nil ? "Nuevo movimiento" : "Editar movimiento")
         .onAppear {
             account = defaultAccount ?? accounts.first { !$0.closed }
+            if let editing {
+                isExpense = editing.amount <= 0
+                amountText = Money.format(abs(editing.amount))
+                account = editing.account
+                payeeName = editing.payee?.name ?? ""
+                category = editing.category
+                date = editing.date
+                notes = editing.notes
+            }
             amountFocused = true
         }
     }
@@ -136,6 +158,17 @@ struct NewEntrySheet: View {
     private func save() {
         guard let cents = Money.cents(from: amountText), let account else { return }
         let payee = try? Payee.findOrCreate(named: payeeName, in: context)
+        if let editing {
+            editing.date = Calendar.current.startOfDay(for: date)
+            editing.amount = isExpense ? -cents : cents
+            editing.account = account
+            editing.payee = payee ?? nil
+            editing.category = category
+            editing.notes = notes
+            context.saveOrAlert()
+            dismiss()
+            return
+        }
         let entry = LedgerEntry(date: Calendar.current.startOfDay(for: date), amount: isExpense ? -cents : cents,
                                 account: account, category: category, payee: payee ?? nil, notes: notes)
         context.insert(entry)

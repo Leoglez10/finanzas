@@ -37,3 +37,13 @@ private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
     #expect(r.occurrences(from: day(2026, 10, 1), through: day(2027, 1, 31)) == [day(2026, 10, 5), day(2026, 11, 5)])
     #expect(r.next(onOrAfter: day(2026, 11, 6)) == nil)
 }
+
+@Test func weekendShiftNeverRepeatsADate() {
+    // 2026-10-17/18 are Sat/Sun: both shift onto Monday 19 (after) or Friday 16 (before).
+    let after = Recurrence(start: day(2026, 10, 16), frequency: .daily, skipWeekend: true, weekendMode: .after)
+    #expect(after.occurrences(from: day(2026, 10, 16), through: day(2026, 10, 20))
+        == [day(2026, 10, 16), day(2026, 10, 19), day(2026, 10, 20)])
+    let before = Recurrence(start: day(2026, 10, 15), frequency: .daily, skipWeekend: true, weekendMode: .before)
+    #expect(before.occurrences(from: day(2026, 10, 15), through: day(2026, 10, 19))
+        == [day(2026, 10, 15), day(2026, 10, 16), day(2026, 10, 19)])
+}

@@ -33,7 +33,9 @@ public struct Recurrence: Codable, Hashable, Sendable {
         while let raw = rawOccurrence(n), raw <= scanLimit {
             if let endDate, raw > cal.startOfDay(for: endDate) { break }
             let date = adjusted(raw)
-            if date >= from && date <= through { result.append(date) }
+            // Weekend shifts can land several raw dates on one weekday; shifted dates stay ordered,
+            // so comparing with the last kept date removes the repeats.
+            if date >= from && date <= through && result.last != date { result.append(date) }
             n += 1
         }
         return result

@@ -86,3 +86,14 @@ private struct Fixture {
     #expect(once.completed)
     #expect(Upcoming.items(schedules: [once], today: day(2026, 12, 1), days: 60).isEmpty)
 }
+
+@MainActor
+@Test func dailyWeekendShiftedScheduleListsEachDateOnce() throws {
+    let f = try Fixture()
+    let daily = Schedule(name: "Diario", amount: -100,
+                         recurrence: .init(start: day(2026, 10, 16), frequency: .daily, skipWeekend: true), account: f.cash)
+    f.context.insert(daily)
+    let items = Upcoming.items(schedules: [daily], today: day(2026, 10, 15), days: 5)
+    #expect(items.map(\.date) == [day(2026, 10, 16), day(2026, 10, 19), day(2026, 10, 20)])
+    #expect(items.map(\.projectedBalance) == [4_900, 4_800, 4_700])
+}

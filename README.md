@@ -3,6 +3,36 @@
 Native macOS personal finance app (SwiftUI + SwiftData): accounts, monthly envelope budget,
 upcoming scheduled payments and a bundled MCP server for AI assistants. UI in Spanish.
 
+![macOS 15+](https://img.shields.io/badge/macOS-15%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange)
+
+## Features
+
+- **Resumen** — dashboard with total balance, monthly income and expenses, savings rate,
+  income vs expenses chart (Swift Charts), spending by category, recent movements and budget progress.
+- **Cuentas** — on-budget and off-budget accounts with live balances; create accounts from the sidebar.
+- **Movimientos** — searchable ledger per account or across all; quick add with ⌘N, double-click to edit any field.
+- **Presupuesto** — monthly envelope budget (assigned, spent, available, carryover). Amount cells accept
+  `500`, `+100` or `-50`; add, rename and hide categories and groups.
+- **Próximos pagos** — recurring scheduled payments, next 30 days with projected balances, post or skip.
+- **Automations** and a bundled **MCP server** (see below).
+
+Everything stays local: no account, no cloud, no telemetry.
+
+## Requirements
+
+- macOS 15 or later, Xcode 16+
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+
+## Install
+
+```sh
+xcodegen
+xcodebuild -project Finanzas.xcodeproj -scheme Finanzas -configuration Release -derivedDataPath build build
+cp -R build/Build/Products/Release/Finanzas.app /Applications/
+```
+
+The app is ad-hoc signed; on first launch use right-click › Open if Gatekeeper complains.
+
 ## Build
 
 ```sh

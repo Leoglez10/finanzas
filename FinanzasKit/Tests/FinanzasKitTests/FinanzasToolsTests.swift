@@ -291,3 +291,12 @@ private func list(_ v: Any) -> [[String: Any]] { v as! [[String: Any]] }
         try callJSON(s, "get_upcoming", #"{"days":-1e300}"#)
     }
 }
+
+@MainActor @Test func absurdAmountsAreRejected() throws {
+    let s = try Seed()
+    #expect(throws: FinanzasTools.ToolError("amount: must be between -1000000000000 and 1000000000000")) {
+        try callJSON(s, "add_transaction", #"{"accountId":"\#(s.id(s.bank))","date":"2026-10-14","amount":1e17}"#)
+    }
+    let big = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(s.id(s.bank))","date":"2026-10-14","amount":-999999999999.99}"#))
+    #expect(big["amount"] as? Double == -999_999_999_999.99)
+}

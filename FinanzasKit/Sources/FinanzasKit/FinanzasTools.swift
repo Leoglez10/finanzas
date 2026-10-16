@@ -309,6 +309,10 @@ public enum FinanzasTools {
             guard var value = Decimal(string: "\(n.doubleValue)", locale: Locale(identifier: "en_US_POSIX")) else {
                 throw ToolError("\(key): expected a number")
             }
+            // Far beyond any personal balance, and keeps cents well inside Int (intValue would wrap).
+            guard abs(value) <= 1_000_000_000_000 else {
+                throw ToolError("\(key): must be between -1000000000000 and 1000000000000")
+            }
             value *= 100
             var rounded = Decimal()
             NSDecimalRound(&rounded, &value, 0, .plain)

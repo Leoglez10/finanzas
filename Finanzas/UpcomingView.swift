@@ -69,7 +69,7 @@ struct UpcomingView: View {
     }
 
     // Saved right away so a posted payment survives a quit before autosave runs.
-    private func persist() { try? context.save() }
+    private func persist() { context.saveOrAlert() }
 
     private func describe(_ s: Schedule) -> String {
         guard let r = s.recurrence else { return "" }
@@ -161,7 +161,7 @@ struct NewScheduleSheet: View {
         context.insert(Schedule(name: name.trimmingCharacters(in: .whitespaces), amount: isExpense ? -cents : cents,
                                 recurrence: rule, account: account, category: category, payee: payee ?? nil,
                                 autoPost: autoPost))
-        try? context.save()
+        context.saveOrAlert()
         dismiss()
     }
 }

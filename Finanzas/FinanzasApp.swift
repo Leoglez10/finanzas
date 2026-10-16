@@ -1,3 +1,4 @@
+import AppKit
 import FinanzasKit
 import SwiftData
 import SwiftUI
@@ -27,8 +28,12 @@ struct FinanzasApp: App {
 
     /// The MCP helper writes from its own process; the main context would not see those rows,
     /// so a fresh container is opened when its history shows MCP-authored changes.
+    /// While a sheet is open its picked models belong to the current container, so the reload waits.
     private func reloadIfMCPWrote() {
-        guard (try? mcpChanges.poll()) == true, let fresh = try? FinanzasStore.onDisk() else { return }
+        guard !NSApp.windows.contains(where: { $0.attachedSheet != nil }),
+              (try? mcpChanges.poll()) == true else { return }
+        container.mainContext.saveOrAlert()
+        guard let fresh = try? FinanzasStore.onDisk() else { return }
         container = fresh
         mcpChanges = ExternalChanges(context: fresh.mainContext)
     }
@@ -100,6 +105,20 @@ struct AccountRow: View {
                 .foregroundStyle(balance < 0 ? .red : .secondary)
         } label: {
             Label(name, systemImage: icon)
+        }
+    }
+}
+
+extension ModelContext {
+    /// Saves now; a failure (for example a conflict with an MCP write) is shown instead of being lost silently.
+    @MainActor func saveOrAlert() {
+        do { try save() } catch {
+            rollback()
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "No se pudo guardar el cambio"
+            alert.informativeText = "Puede que la IA haya modificado los mismos datos. Revisa y vuelve a intentarlo.\n\n\(error.localizedDescription)"
+            alert.runModal()
         }
     }
 }

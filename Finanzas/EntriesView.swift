@@ -69,7 +69,15 @@ struct EntriesView: View {
                 TableColumn("Cuenta") { Text($0.account?.name ?? "") }
             }
             TableColumn("Comercio") { Text($0.payee?.name ?? "") }
-            TableColumn("Categoría") { Text($0.category?.name ?? "").foregroundStyle(.secondary) }
+            TableColumn("Categoría") { entry in
+                if let name = entry.category?.name {
+                    Text(name).foregroundStyle(.secondary)
+                } else {
+                    Label("Sin categoría", systemImage: "exclamationmark.circle")
+                        .foregroundStyle(FinanceTheme.amber)
+                        .help("Sin categoría no cuenta en el presupuesto. Doble clic para asignarle una.")
+                }
+            }
             TableColumn("Notas") { Text($0.notes).foregroundStyle(.secondary) }
             TableColumn("Monto") { entry in
                 Text(Money.format(entry.amount)).monospacedDigit()
@@ -151,6 +159,13 @@ struct NewEntrySheet: View {
                 Text("Ingreso").tag(false)
             }
             .pickerStyle(.segmented)
+            // Income only reaches the budget through an income category, so switching type picks one.
+            .onChange(of: isExpense) {
+                guard editing == nil else { return }
+                let isIncomeCategory = category?.group?.isIncome == true
+                if !isExpense, !isIncomeCategory { category = firstIncomeCategory }
+                if isExpense, isIncomeCategory { category = nil }
+            }
                     TextField("Monto", text: $amountText, prompt: Text("0.00"))
                         .font(.title2.monospacedDigit())
                         .foregroundStyle(isExpense ? FinanceTheme.coral : FinanceTheme.emerald)
@@ -210,6 +225,12 @@ struct NewEntrySheet: View {
             }
             amountFocused = true
         }
+    }
+
+    private var firstIncomeCategory: Category? {
+        groups.filter(\.isIncome).lazy
+            .compactMap { ($0.categories ?? []).filter { !$0.hidden }.min { $0.sortOrder < $1.sortOrder } }
+            .first
     }
 
     private var payeeSuggestions: [String] {

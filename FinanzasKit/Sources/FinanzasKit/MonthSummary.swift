@@ -26,3 +26,10 @@ public struct MonthSummary<ID: Hashable & Sendable>: Sendable {
 public func relativeChange(_ current: Int, from previous: Int) -> Double? {
     previous == 0 ? nil : Double(current - previous) / Double(abs(previous))
 }
+
+/// Deposits this month on budget accounts that have no category. The envelope budget only counts
+/// income categories, so this money is invisible until someone categorizes it.
+public func uncategorizedIncome(_ entries: [LedgerEntry], month: Int) -> Int {
+    entries.filter { $0.amount > 0 && $0.category == nil && $0.account?.offBudget == false && MonthKey.of($0.date) == month }
+        .reduce(0) { $0 + $1.amount }
+}

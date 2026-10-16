@@ -33,3 +33,23 @@ func changeIsRelativeToThePreviousMonth(current: Int, previous: Int, change: Dou
         activity: [.init(month: 202_609, category: "extras"): 9_800, .init(month: 202_609, category: "apps"): -4_900])
     #expect(MonthSummary(budget, month: 202_609).expenses == 4_900)
 }
+
+@MainActor
+@Test func uncategorizedIncomeCountsOnlyThisMonthsOnBudgetDepositsWithoutCategory() throws {
+    let container = try FinanzasStore.inMemory()
+    let context = container.mainContext
+    let checking = Account(name: "Nómina"), savings = Account(name: "Inversión", offBudget: true)
+    let salary = Category(name: "Sueldo")
+    [checking, savings].forEach(context.insert)
+    context.insert(salary)
+    let oct = MonthKey.firstDay(202_610), sep = MonthKey.firstDay(202_609)
+    let entries = [
+        LedgerEntry(date: oct, amount: 250_000, account: checking),                    // counted
+        LedgerEntry(date: oct, amount: 10_000, account: checking, category: salary),   // categorized
+        LedgerEntry(date: oct, amount: -5_000, account: checking),                     // expense
+        LedgerEntry(date: oct, amount: 40_000, account: savings),                      // off budget
+        LedgerEntry(date: sep, amount: 30_000, account: checking),                     // other month
+    ]
+    entries.forEach(context.insert)
+    #expect(uncategorizedIncome(entries, month: 202_610) == 250_000)
+}

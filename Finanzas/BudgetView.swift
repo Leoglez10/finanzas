@@ -32,6 +32,15 @@ struct BudgetView: View {
                         icon: "arrow.down.circle", color: FinanceTheme.emerald)
                     FinanceMetric(title: "Asignado", value: Money.format(budget?.budgeted ?? 0), icon: "envelope.badge")
                 }
+                let uncategorized = uncategorizedIncome(entries, month: month)
+                if uncategorized > 0 {
+                    Label("Tienes \(Money.format(uncategorized)) en ingresos sin categoría. Dales una categoría de ingreso en Movimientos para poder repartirlos.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(FinanceTheme.amber)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(FinanceTheme.amber.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                }
             }
             .padding(24)
             List {

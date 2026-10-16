@@ -5,15 +5,17 @@ import SwiftUI
 
 /// File › Importar desde Actual… — accepts Actual's `db.sqlite` or its export zip / server `.blob`.
 struct ImportFromActualCommand: Commands {
-    let container: ModelContainer
+    /// nil when the store failed to open; the command is then disabled.
+    let container: ModelContainer?
 
     var body: some Commands {
         CommandGroup(replacing: .importExport) {
-            Button("Importar desde Actual…") { run() }
+            Button("Importar desde Actual…") { run() }.disabled(container == nil)
         }
     }
 
     @MainActor private func run() {
+        guard let container else { return }
         let panel = NSOpenPanel()
         panel.title = "Selecciona el db.sqlite o el respaldo .zip de Actual"
         panel.allowsMultipleSelection = false

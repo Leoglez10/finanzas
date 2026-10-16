@@ -5,47 +5,79 @@ import SwiftUI
 
 @main
 struct FinanzasApp: App {
-    @State private var container: ModelContainer
-    @State private var mcpChanges: ExternalChanges
+    // nil when the store cannot be opened; the window then explains why instead of crashing.
+    @State private var container: ModelContainer?
+    @State private var mcpChanges: ExternalChanges?
+    private let openError: String?
     private let tick = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     private let hourly = Timer.publish(every: 3_600, on: .main, in: .common).autoconnect()
 
     init() {
-        let container: ModelContainer
-        do { container = try FinanzasStore.onDisk() }
-        catch { fatalError("No se pudo abrir la base de datos: \(error)") }
-        _container = State(initialValue: container)
-        _mcpChanges = State(initialValue: ExternalChanges(context: container.mainContext))
+        do {
+            let container = try FinanzasStore.onDisk()
+            _container = State(initialValue: container)
+            _mcpChanges = State(initialValue: ExternalChanges(context: container.mainContext))
+            openError = nil
+        } catch {
+            _container = State(initialValue: nil)
+            _mcpChanges = State(initialValue: nil)
+            openError = error.localizedDescription
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .onReceive(tick) { _ in reloadIfMCPWrote() }
-                .onReceive(hourly) { _ in runAutomations() }
-                .task { await AutomationRunner.run(container.mainContext) }
+            if let container {
+                RootView()
+                    .onReceive(tick) { _ in reloadIfMCPWrote() }
+                    .onReceive(hourly) { _ in runAutomations() }
+                    .task { await AutomationRunner.run(container.mainContext) }
+                    .modelContainer(container)
+            } else {
+                StoreErrorView(message: openError ?? "")
+            }
         }
-        .modelContainer(container)
         .commands { ImportFromActualCommand(container: container) }
 
         Settings {
-            SettingsView().modelContainer(container)
+            if let container { SettingsView().modelContainer(container) }
         }
     }
 
-    private func runAutomations() { Task { await AutomationRunner.run(container.mainContext) } }
+    private func runAutomations() {
+        guard let container else { return }
+        Task { await AutomationRunner.run(container.mainContext) }
+    }
 
     /// The MCP helper writes from its own process; the main context would not see those rows,
     /// so a fresh container is opened when its history shows MCP-authored changes.
     /// While a sheet is open its picked models belong to the current container, so the reload waits.
     private func reloadIfMCPWrote() {
-        guard !NSApp.windows.contains(where: { $0.attachedSheet != nil }),
-              (try? mcpChanges.poll()) == true else { return }
-        container.mainContext.saveOrAlert()
+        guard let current = container,
+              !NSApp.windows.contains(where: { $0.attachedSheet != nil }),
+              (try? mcpChanges?.poll()) == true else { return }
+        current.mainContext.saveOrAlert()
         guard let fresh = try? FinanzasStore.onDisk() else { return }
         container = fresh
         mcpChanges = ExternalChanges(context: fresh.mainContext)
         runAutomations()
+    }
+}
+
+private struct StoreErrorView: View {
+    let message: String
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("No se pudo abrir la base de datos", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text("\(message)\n\(FinanzasStore.storeURL.path)").textSelection(.enabled)
+        } actions: {
+            Button("Mostrar en Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([FinanzasStore.storeURL.deletingLastPathComponent()])
+            }
+        }
+        .frame(minWidth: 480, minHeight: 320)
     }
 }
 

@@ -136,8 +136,10 @@ struct NewEntrySheet: View {
     private func save() {
         guard let cents = Money.cents(from: amountText), let account else { return }
         let payee = try? Payee.findOrCreate(named: payeeName, in: context)
-        context.insert(LedgerEntry(date: Calendar.current.startOfDay(for: date), amount: isExpense ? -cents : cents,
-                                   account: account, category: category, payee: payee ?? nil, notes: notes))
+        let entry = LedgerEntry(date: Calendar.current.startOfDay(for: date), amount: isExpense ? -cents : cents,
+                                account: account, category: category, payee: payee ?? nil, notes: notes)
+        context.insert(entry)
+        entry.applyPayeeRule()
         context.saveOrAlert()
         dismiss()
     }

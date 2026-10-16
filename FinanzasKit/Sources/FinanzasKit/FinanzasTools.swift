@@ -48,7 +48,7 @@ public enum FinanzasTools {
                                      required: ["startDate", "endDate"]),
              readOnly: true, destructive: false),
         Spec(name: "add_transaction",
-             description: "Add a transaction to an account. The payee is given by name: an existing payee is reused (case-insensitive), otherwise it is created. Cleared by default. Returns the transaction.",
+             description: "Add a transaction to an account. The payee is given by name: an existing payee is reused (case-insensitive), otherwise it is created. Without categoryId, the category last used with that payee is applied. Cleared by default. Returns the transaction.",
              inputSchemaJSON: schema(#""accountId":{"type":"string","description":"Account id (see list_accounts)"},"date":"# + dateProp
                                      + #","amount":"# + amountProp
                                      + #","payee":{"type":"string","description":"Payee name"},"categoryId":{"type":"string","description":"Category id (see list_categories)"},"notes":{"type":"string"},"cleared":{"type":"boolean","description":"Mark as cleared (default true)"}"#,
@@ -144,6 +144,7 @@ public enum FinanzasTools {
                                     category: category, payee: payee, notes: try a.optionalString("notes") ?? "",
                                     cleared: try a.bool("cleared") ?? true)
             context.insert(entry)
+            entry.applyPayeeRule()
             try context.save()  // ids are temporary until saved
             result = json(entry)
         case "update_transaction":

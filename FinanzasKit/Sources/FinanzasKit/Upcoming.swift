@@ -17,6 +17,7 @@ extension Schedule {
         let entry = LedgerEntry(date: effectiveNextDate ?? Calendar.current.startOfDay(for: .now), amount: amount,
                                 account: account, category: category, payee: payee, schedule: self)
         context.insert(entry)
+        entry.applyPayeeRule()
         advance()
         return entry
     }

@@ -300,3 +300,12 @@ private func list(_ v: Any) -> [[String: Any]] { v as! [[String: Any]] }
     let big = dict(try callJSON(s, "add_transaction", #"{"accountId":"\#(s.id(s.bank))","date":"2026-10-14","amount":-999999999999.99}"#))
     #expect(big["amount"] as? Double == -999_999_999_999.99)
 }
+
+@MainActor @Test func addTransactionLearnsCategoryFromPayeeWhenNoneGiven() throws {
+    let s = try Seed()
+    let t = dict(try s.call("add_transaction", ["accountId": s.id(s.bank), "date": "2026-10-14", "amount": -20, "payee": "oxxo"]))
+    #expect(t["category"] as? String == "Comida")
+    let explicit = dict(try s.call("add_transaction", ["accountId": s.id(s.bank), "date": "2026-10-14", "amount": -20,
+                                                       "payee": "Oxxo", "categoryId": s.id(s.salary)]))
+    #expect(explicit["category"] as? String == "Sueldo")
+}

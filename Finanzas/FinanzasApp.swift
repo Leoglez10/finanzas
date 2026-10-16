@@ -8,6 +8,7 @@ struct FinanzasApp: App {
     @State private var container: ModelContainer
     @State private var mcpChanges: ExternalChanges
     private let tick = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    private let hourly = Timer.publish(every: 3_600, on: .main, in: .common).autoconnect()
 
     init() {
         let container: ModelContainer
@@ -21,10 +22,18 @@ struct FinanzasApp: App {
         WindowGroup {
             RootView()
                 .onReceive(tick) { _ in reloadIfMCPWrote() }
+                .onReceive(hourly) { _ in runAutomations() }
+                .task { await AutomationRunner.run(container.mainContext) }
         }
         .modelContainer(container)
         .commands { ImportFromActualCommand(container: container) }
+
+        Settings {
+            SettingsView().modelContainer(container)
+        }
     }
+
+    private func runAutomations() { Task { await AutomationRunner.run(container.mainContext) } }
 
     /// The MCP helper writes from its own process; the main context would not see those rows,
     /// so a fresh container is opened when its history shows MCP-authored changes.
@@ -36,6 +45,7 @@ struct FinanzasApp: App {
         guard let fresh = try? FinanzasStore.onDisk() else { return }
         container = fresh
         mcpChanges = ExternalChanges(context: fresh.mainContext)
+        runAutomations()
     }
 }
 
@@ -47,6 +57,7 @@ enum SidebarItem: Hashable {
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
+    @Query private var schedules: [Schedule]
     @State private var selection: SidebarItem? = .allAccounts
 
     var body: some View {
@@ -74,6 +85,8 @@ struct RootView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            // Posting, skipping or editing a schedule changes what is due and what to remind about.
+            .onChange(of: scheduleSignature) { Task { await AutomationRunner.run(context) } }
         } detail: {
             switch selection {
             case .allAccounts, nil:
@@ -88,6 +101,10 @@ struct RootView: View {
                 UpcomingView()
             }
         }
+    }
+
+    private var scheduleSignature: [String] {
+        schedules.map { "\($0.persistentModelID.hashValue)|\($0.effectiveNextDate?.timeIntervalSince1970 ?? 0)|\($0.autoPost)|\($0.amount)|\($0.name)" }
     }
 
     private var openAccounts: [Account] { accounts.filter { !$0.closed } }

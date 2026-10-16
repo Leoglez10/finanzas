@@ -19,6 +19,13 @@ Set `FINANZAS_STORE=/path/to/other.store` to point the app and the MCP server at
 *Archivo › Importar desde Actual…* accepts Actual's `db.sqlite` or its export zip / server `.blob`.
 It only imports into an empty store.
 
+## Automations
+
+- Scheduled payments marked *Registrar automáticamente* are recorded on their date, at launch and hourly.
+- A macOS notification arrives N days before each payment at 09:00 (*Finanzas › Ajustes*, default 2 days).
+- A movement saved without a category (quick add, `add_transaction`, posted schedules) takes the
+  category last used with the same payee.
+
 ## MCP server
 
 `Finanzas.app/Contents/MacOS/finanzas-mcp` is a stdio MCP server over the same store. It works

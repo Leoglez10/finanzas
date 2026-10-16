@@ -62,6 +62,7 @@ struct FinanceMetric: View {
     let value: String
     let icon: String
     var color = FinanceTheme.petroleum
+    var note: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -71,8 +72,11 @@ struct FinanceMetric: View {
                 .font(.system(.title, design: .rounded, weight: .bold))
                 .monospacedDigit().foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.6)
+            if let note {
+                Text(note).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(20)
         .financeCard()
     }

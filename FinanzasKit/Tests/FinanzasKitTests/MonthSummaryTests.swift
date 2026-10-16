@@ -53,3 +53,9 @@ func changeIsRelativeToThePreviousMonth(current: Int, previous: Int, change: Dou
     entries.forEach(context.insert)
     #expect(uncategorizedIncome(entries, month: 202_610) == 250_000)
 }
+
+@Test func toBudgetHintTellsWhatToDoNext() {
+    #expect(toBudgetHint(-50_000) == "Asignaste \(Money.format(50_000)) más de lo que tienes. Registra un ingreso o baja alguna categoría.")
+    #expect(toBudgetHint(12_000) == "Tienes \(Money.format(12_000)) sin destino. Asígnalo a alguna categoría.")
+    #expect(toBudgetHint(0) == "Todo tu dinero tiene destino.")
+}

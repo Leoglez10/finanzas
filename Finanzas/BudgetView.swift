@@ -26,7 +26,8 @@ struct BudgetView: View {
                     FinanceMetric(
                         title: "Disponible para asignar", value: Money.format(budget?.toBudget ?? 0),
                         icon: "tray.and.arrow.down",
-                        color: (budget?.toBudget ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
+                        color: (budget?.toBudget ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.emerald,
+                        note: toBudgetHint(budget?.toBudget ?? 0))
                     FinanceMetric(
                         title: "Ingresos del mes", value: Money.format(budget?.income ?? 0),
                         icon: "arrow.down.circle", color: FinanceTheme.emerald)

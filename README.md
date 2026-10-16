@@ -87,3 +87,7 @@ ids look like `Account/p3`):
 | `set_budget_amount` | Assign an amount to an expense category for a month |
 | `list_schedules` / `skip_schedule` | Scheduled payments; skip once or `through` a date |
 | `get_upcoming` | Overdue and next `days` (default 30) payments with projected balances |
+
+## License
+
+[MIT](LICENSE)

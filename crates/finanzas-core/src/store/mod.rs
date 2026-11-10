@@ -1,5 +1,10 @@
 //! SQLite storage.
 
+mod crud;
+mod records;
+mod entries;
+pub use entries::{EntryFilter, EntryRow};
+mod payees;
 mod schema;
 
 use std::collections::{HashMap, HashSet};
@@ -68,6 +73,10 @@ impl Store {
     pub fn insert_entry(&self, value: &Entry) -> Result<Id> {
         self.conn.execute("INSERT INTO entry(date, amount, notes, cleared, account_id, category_id, payee_id, schedule_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", params![value.date.to_string(), value.amount, value.notes, value.cleared, value.account_id, value.category_id, value.payee_id, value.schedule_id])?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn uncategorized_income(&self, month: MonthKey) -> Result<Cents> {
+        self.conn.query_row("SELECT COALESCE(SUM(e.amount), 0) FROM entry e JOIN account a ON a.id = e.account_id WHERE a.off_budget = 0 AND e.category_id IS NULL AND e.amount > 0 AND CAST(strftime('%Y%m', e.date) AS INTEGER) = ?1", [month], |row| row.get(0))
     }
 
     pub fn account_balances(&self) -> Result<HashMap<Id, Cents>> {

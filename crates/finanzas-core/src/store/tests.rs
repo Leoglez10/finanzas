@@ -1,5 +1,5 @@
-use super::Store;
-use crate::models::{Account, Category, CategoryGroup, Entry};
+use super::{EntryFilter, Store};
+use crate::models::{Account, BudgetAmount, Category, CategoryGroup, Entry, Frequency, Payee, Recurrence, Schedule, WeekendMode};
 use chrono::NaiveDate;
 
 #[test]
@@ -42,6 +42,164 @@ fn loads_budget_from_store_ignoring_off_budget_and_uncategorized() {
     assert_eq!(inputs.categories, vec![(category, false)]);
     assert_eq!(inputs.activity.get(&(202609, category)), Some(&-100));
     assert_eq!(inputs.budgeted.get(&(202609, category)), Some(&300));
+}
+
+#[test]
+fn uncategorized_income_counts_only_this_months_on_budget_deposits_without_category() {
+    let store = Store::open_in_memory().unwrap();
+    let account = Account { id: 0, name: "Bank".into(), off_budget: false, closed: false, sort_order: 0.0 };
+    let on = store.insert_account(&account).unwrap();
+    let off = store.insert_account(&Account { off_budget: true, ..account }).unwrap();
+    let category = store.insert_category(&Category { id: 0, name: "Income".into(), hidden: false, sort_order: 0.0, group_id: None }).unwrap();
+    let entry = Entry { id: 0, date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(), amount: 500, notes: String::new(), cleared: false, account_id: Some(on), category_id: None, payee_id: None, schedule_id: None };
+    store.insert_entry(&entry).unwrap();
+    store.insert_entry(&Entry { account_id: Some(off), ..entry.clone() }).unwrap();
+    store.insert_entry(&Entry { account_id: None, ..entry.clone() }).unwrap();
+    store.insert_entry(&Entry { category_id: Some(category), ..entry.clone() }).unwrap();
+    store.insert_entry(&Entry { amount: -100, ..entry.clone() }).unwrap();
+    store.insert_entry(&Entry { date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), ..entry }).unwrap();
+    assert_eq!(store.uncategorized_income(202609).unwrap(), 500);
+    assert_eq!(store.uncategorized_income(202608).unwrap(), 0);
+}
+
+#[test]
+fn payee_lookup_is_case_insensitive_and_creates_when_missing() {
+    let store = Store::open_in_memory().unwrap();
+    let id = store.find_or_create_payee("  Café Ñandú  ").unwrap().unwrap();
+    assert_eq!(store.find_or_create_payee("CAFE nandu").unwrap(), Some(id));
+    assert_eq!(store.find_or_create_payee("  ").unwrap(), None);
+    assert_eq!(store.payee_suggestions(" CAFÉ n", 10).unwrap(), vec![Payee { id, name: "Café Ñandú".into() }]);
+    assert!(store.payee_suggestions("cafe", 0).unwrap().is_empty());
+}
+
+macro_rules! crud_round_trip {
+    ($name:ident, $value:expr, $insert:ident, $get:ident, $list:ident, $update:ident, $delete:ident) => {
+        #[test]
+        fn $name() {
+            let store = Store::open_in_memory().unwrap();
+            let mut value = $value;
+            value.id = store.$insert(&value).unwrap();
+            assert_eq!(store.$get(value.id).unwrap(), Some(value.clone()));
+            assert_eq!(store.$list().unwrap(), vec![value.clone()]);
+            value.name = "Updated".into();
+            store.$update(&value).unwrap();
+            assert_eq!(store.$get(value.id).unwrap(), Some(value.clone()));
+            store.$delete(value.id).unwrap();
+            assert_eq!(store.$get(value.id).unwrap(), None);
+        }
+    };
+}
+crud_round_trip!(account_crud_round_trip, Account { id: 0, name: "A".into(), off_budget: true, closed: true, sort_order: 1.0 }, insert_account, get_account, list_accounts, update_account, delete_account);
+crud_round_trip!(category_group_crud_round_trip, CategoryGroup { id: 0, name: "G".into(), is_income: true, sort_order: 1.0 }, insert_category_group, get_category_group, list_category_groups, update_category_group, delete_category_group);
+crud_round_trip!(category_crud_round_trip, Category { id: 0, name: "C".into(), hidden: true, sort_order: 1.0, group_id: None }, insert_category, get_category, list_categories, update_category, delete_category);
+
+#[test]
+fn entries_filter_search_sort_and_truncate() {
+    let store = Store::open_in_memory().unwrap();
+    let account = store.insert_account(&Account { id: 0, name: "Bank".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+    let category = store.insert_category(&Category { id: 0, name: "Café".into(), hidden: false, sort_order: 0.0, group_id: None }).unwrap();
+    let payee = store.insert_payee(&Payee { id: 0, name: "Peña".into() }).unwrap();
+    let date = NaiveDate::from_ymd_opt(2026, 9, 10).unwrap();
+    let entry = Entry { id: 0, date, amount: -10, notes: "Té".into(), cleared: true, account_id: Some(account), category_id: Some(category), payee_id: Some(payee), schedule_id: None };
+    let first = store.insert_entry(&entry).unwrap();
+    let second = store.insert_entry(&entry).unwrap();
+    store.insert_entry(&Entry { date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(), ..entry }).unwrap();
+    let mut filter = EntryFilter { account_id: Some(account), category_id: Some(category), start: Some(date), end: Some(date), search: Some("CAFE".into()), limit: Some(1) };
+    let (rows, total) = store.entries(&filter).unwrap();
+    assert_eq!(total, 2);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, second);
+    assert_eq!(rows[0].account_name.as_deref(), Some("Bank"));
+    assert_eq!(rows[0].payee_name.as_deref(), Some("Peña"));
+    assert_eq!(rows[0].category_name.as_deref(), Some("Café"));
+    filter.search = Some("pena".into()); filter.limit = None;
+    assert_eq!(store.entries(&filter).unwrap().0.iter().map(|r| r.id).collect::<Vec<_>>(), vec![second, first]);
+    filter.search = Some("TE".into());
+    assert_eq!(store.entries(&filter).unwrap().1, 2);
+    filter.search = Some("absent".into());
+    assert_eq!(store.entries(&filter).unwrap().1, 0);
+    assert_eq!(store.recent_entries(1).unwrap()[0].id, second);
+}
+
+#[test]
+fn entry_crud_round_trip() {
+    let store = Store::open_in_memory().unwrap();
+    let mut value = Entry { id: 0, date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(), amount: -20, notes: "note".into(), cleared: true, account_id: None, category_id: None, payee_id: None, schedule_id: None };
+    value.id = store.insert_entry(&value).unwrap();
+    assert_eq!(store.get_entry(value.id).unwrap(), Some(value.clone()));
+    assert_eq!(store.list_entries().unwrap(), vec![value.clone()]);
+    value.amount = 30;
+    store.update_entry(&value).unwrap();
+    assert_eq!(store.get_entry(value.id).unwrap(), Some(value.clone()));
+    store.delete_entry(value.id).unwrap();
+    assert_eq!(store.get_entry(value.id).unwrap(), None);
+}
+
+#[test]
+fn schedule_round_trips_its_recurrence() {
+    let store = Store::open_in_memory().unwrap();
+    let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+    let mut value = Schedule { id: 0, name: "Rent".into(), amount: -100, auto_post: true, completed: false, next_date: Some(date), recurrence: Some(Recurrence { start: date, frequency: Frequency::Monthly, interval: 2, skip_weekend: true, weekend_mode: WeekendMode::Before, end_date: Some(date) }), account_id: None, category_id: None, payee_id: None };
+    value.id = store.insert_schedule(&value).unwrap();
+    assert_eq!(store.get_schedule(value.id).unwrap(), Some(value.clone()));
+    assert_eq!(store.list_schedules().unwrap(), vec![value.clone()]);
+    value.recurrence = None;
+    store.update_schedule(&value).unwrap();
+    assert_eq!(store.get_schedule(value.id).unwrap(), Some(value.clone()));
+    store.delete_schedule(value.id).unwrap();
+    assert_eq!(store.get_schedule(value.id).unwrap(), None);
+}
+
+#[test]
+fn budget_amount_crud_round_trip() {
+    let store = Store::open_in_memory().unwrap();
+    let mut value = BudgetAmount { id: 0, month: 202609, amount: 50, carryover: true, category_id: None };
+    value.id = store.insert_budget_amount(&value).unwrap();
+    assert_eq!(store.get_budget_amount(value.id).unwrap(), Some(value.clone()));
+    assert_eq!(store.list_budget_amounts().unwrap(), vec![value.clone()]);
+    value.amount = 70;
+    store.update_budget_amount(&value).unwrap();
+    assert_eq!(store.get_budget_amount(value.id).unwrap(), Some(value.clone()));
+    store.delete_budget_amount(value.id).unwrap();
+    assert_eq!(store.get_budget_amount(value.id).unwrap(), None);
+}
+
+#[test]
+fn payee_crud_round_trip() {
+    let store = Store::open_in_memory().unwrap();
+    let mut value = Payee { id: 0, name: "One".into() };
+    value.id = store.insert_payee(&value).unwrap();
+    assert_eq!(store.get_payee(value.id).unwrap(), Some(value.clone()));
+    assert_eq!(store.list_payees().unwrap(), vec![value.clone()]);
+    value.name = "Two".into();
+    store.update_payee(&value).unwrap();
+    assert_eq!(store.get_payee(value.id).unwrap(), Some(value.clone()));
+    store.delete_payee(value.id).unwrap();
+    assert_eq!(store.get_payee(value.id).unwrap(), None);
+}
+
+#[test]
+fn payee_named_finds_existing_without_creating() {
+    let store = Store::open_in_memory().unwrap();
+    let payee = Payee { id: 0, name: "José".into() };
+    let id = store.insert_payee(&payee).unwrap();
+    assert_eq!(store.payee_named(" JOSE ").unwrap(), Some(Payee { id, ..payee }));
+    assert_eq!(store.payee_named("missing").unwrap(), None);
+    assert_eq!(store.payee_named("").unwrap(), None);
+}
+
+#[test]
+fn payee_suggests_its_most_recent_category() {
+    let store = Store::open_in_memory().unwrap();
+    let payee = store.insert_payee(&Payee { id: 0, name: "Shop".into() }).unwrap();
+    let first = store.insert_category(&Category { id: 0, name: "First".into(), hidden: false, sort_order: 0.0, group_id: None }).unwrap();
+    let second = store.insert_category(&Category { id: 0, name: "Second".into(), hidden: false, sort_order: 0.0, group_id: None }).unwrap();
+    let entry = Entry { id: 0, date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(), amount: -1, notes: String::new(), cleared: false, account_id: None, category_id: Some(first), payee_id: Some(payee), schedule_id: None };
+    store.insert_entry(&entry).unwrap();
+    store.insert_entry(&Entry { category_id: Some(second), ..entry.clone() }).unwrap();
+    store.insert_entry(&Entry { category_id: None, date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), ..entry }).unwrap();
+    assert_eq!(store.suggested_category(payee).unwrap(), Some(second));
+    assert_eq!(store.suggested_category(payee + 100).unwrap(), None);
 }
 
 #[test]

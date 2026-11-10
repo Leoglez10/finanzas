@@ -1,0 +1,11 @@
+[package]
+name = "finanzas-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+finanzas-core = { path = "../finanzas-core" }
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
+chrono.workspace = true
+thiserror.workspace = true

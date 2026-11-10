@@ -36,7 +36,7 @@ fn joined_row(row: &rusqlite::Row<'_>) -> Result<EntryRow> {
 const FILTER: &str = " WHERE (?1 IS NULL OR e.account_id=?1) AND (?2 IS NULL OR e.category_id=?2) AND (?3 IS NULL OR e.date>=?3) AND (?4 IS NULL OR e.date<=?4)";
 impl Store {
     pub fn spending_by_category(&self, start: NaiveDate, end: NaiveDate, include_off_budget: bool) -> Result<Vec<(Option<Id>, String, Cents)>> {
-        let mut stmt = self.conn.prepare("SELECT e.category_id, COALESCE(c.name, 'Sin categoría'), -SUM(e.amount) AS spent FROM entry e LEFT JOIN account a ON a.id=e.account_id LEFT JOIN category c ON c.id=e.category_id WHERE e.date>=?1 AND e.date<=?2 AND e.amount<0 AND (?3 OR a.off_budget=0) GROUP BY e.category_id ORDER BY spent DESC, e.category_id")?;
+        let mut stmt = self.conn.prepare("SELECT e.category_id, COALESCE(c.name, 'Sin categoría'), -SUM(e.amount) AS spent FROM entry e LEFT JOIN account a ON a.id=e.account_id LEFT JOIN category c ON c.id=e.category_id WHERE e.date>=?1 AND e.date<=?2 AND e.amount<0 AND (?3 OR COALESCE(a.off_budget, 0)=0) GROUP BY e.category_id ORDER BY spent DESC, e.category_id")?;
         let rows = stmt.query_map(params![start.to_string(), end.to_string(), include_off_budget], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
         rows.collect()
     }

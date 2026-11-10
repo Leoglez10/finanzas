@@ -21,13 +21,20 @@ Parity reference: `odd/specs/rust-porting-spec.md` (§1–§8, mapped from the S
 
 ## Tasks
 
-- [ ] T0 S1 inline — workspace + models skeleton — commit pending
-- [ ] T1 S2,S4 delegated (writer A, parallel with T2) — `domain/` pure rules + ported tests
-- [ ] T2 S2,S7,S8 delegated (writer B, parallel with T1) — `store/` schema, queries, SwiftData migration, Actual import
-- [ ] T3 S2,S4 — service layer (post/skip/auto-post, budget month, summaries) used by MCP and desktop
-- [ ] T4 S6 — MCP server (parallel with T5)
-- [ ] T5 S2,S3,S5 — Tauri desktop app + Svelte UI (parallel with T4)
-- [ ] T6 S3 — README, install scripts, CI build matrix (macOS/Windows/Linux)
+- [x] T0 S1 inline — workspace + models skeleton — 723a434
+- [x] T1 S2,S4 delegated — `domain/` pure rules, 36 tests — 5342d6e (Swift wins over spec on conflicts: reminder date dd/MM/yyyy, UpcomingItem.auto_post)
+- [x] T2a S2 delegated — schema, balances (incl. empty accounts), envelope projection, default path — 238a5a0
+- [x] T2b S2,S4 delegated — CRUD for all models, entries filter/search, payee helpers, uncategorized income, 52 tests — f57ccd0 (suggested_category RED was a FK error, not an assertion; its test asserts newest-wins + missing)
+- [x] T2c S7 delegated — SwiftData import via read-only open + in-memory backup, 55 tests — 8844484. Live check (in-memory target): 4 accounts, 15 categories, 5 payees, 96 entries, 3 schedules, 17 budgets; balances match sqlite3 (BBVA Leo -49.00, others 0); source .store and -wal sha1 unchanged
+- [x] T2d S8 delegated — Actual import + budgets + schedule dates, 6 Swift tests ported, 66 core tests — 0cf282a, afc71ab (no live Actual DB tested)
+- [~] T3 S2,S4 delegated — service layer, 69 core tests — 85aaf37. Partial: only 3 combined service tests and RED was compile-only; the per-behavior parity is pinned by T4's ported FinanzasToolsTests (end-to-end through service)
+- [x] T4a S6 delegated — MCP crate: arg validation, 12 specs, 7 read-only tools, 82 workspace tests — 7d444b0 (integer error wording follows my wrong prompt, fixed in T4b to Swift's 'expected an integer from A to B')
+- [x] T4b S6 delegated — 5 write tools (9b73e24) + rmcp stdio binary + spawn-the-binary JSON-RPC test, 94 workspace tests — ec1429a
+- [x] T5a S3,S5 delegated — Tauri 2 + Svelte shell, sidebar, palette, data_version polling (own cargo workspace) — 1415fca; pnpm check/build + cargo check pass; not run by hand yet
+- [x] T5b S2,S5 delegated — Resumen + Movimientos + entry sheet, async commands, startup/hourly auto-post — c1feda3; check/build/clippy pass; not exercised in a running app
+- [x] T5c S5,S7,S8 delegated — Presupuesto, Próximos pagos, Ajustes, Nueva cuenta, in-app reminders, SwiftData/Actual import UI, 3 desktop tests — e8a03f8; not exercised in a running app
+- [x] T7 S4,S5 delegated — overview parity: first-run counts open accounts only; budget card = top 5 positive assignments with -activity — ea550e2, 98 tests
+- [x] T6 S3 delegated — README, scripts/dev.sh, scripts/build.sh, .github/workflows/rust.yml (test + macOS/Windows/Ubuntu tauri build) — 12258d9; CI not run yet (needs push)
 
 Route evidence: context backstop fired at T0 (153k tokens); T1/T2 are independent units of several files each → parallel background writers.
 
@@ -36,4 +43,8 @@ Route evidence: context backstop fired at T0 (153k tokens); T1/T2 are independen
 - L1 2026-11-10 user: "si quiero rehacer la app en rust se puede?"
 - L2 2026-11-10 user: "es que es muy lenta, aparte si la podemos hacer con mas plataformas seria increible, hazlo en un nuevo worktree, me haciendo commit"
 - L3 Data volume on the live store is tiny (96 entries, 4 accounts, 15 categories, 3 schedules, 17 budget rows): slowness comes from SwiftUI/SwiftData patterns (spec §8), not volume.
+- L5 Route correction: T1 and T2 share one crate, so T1's RED tests break T2's test build. T2 paused (schema + 3 store tests done, uncommitted) and resumes after T1 is GREEN; future parallel units must live in separate crates.
+- L6 Writers stop after a few behaviors; T2 split into T2a–T2d so each run has a bounded scope. Delivery: slice count includes the 13 Swift commits already on feat/native-mac-app; PR slicing decided when the user asks for a PR.
+- L7 T5b review found core follow-ups: `service::overview` picks budget-progress rows from spending instead of Swift's selection; `first_run_checks` counts closed accounts; entry search filters in Rust after SQL fetch (acceptable for S2, backend-side). Fix overview parity after T4 lands.
+- L8 Smoke test 2026-11-10: `tauri build --bundles app` OK (Finanzas.app 14.3 MiB, built in 1m07s). Live SwiftData store imported read-only into a scratch FINANZAS_DB (4/15/5/96/3/17; source .store/-wal sha1 unchanged before and after). Release app launched against it and stayed up (~98 MB RSS); screenshot unavailable (no screen-recording permission) so screens were NOT visually verified. Release finanzas-mcp over stdio against the same DB: list_accounts matches (BBVA Leo -49.00, others 0) and get_budget_month 2026-11 returns groups. CI workflow not run (branch not pushed). Final suite: 98 workspace tests + 3 desktop tests, clippy clean.
 - L4 Swift app stays in the repo untouched until the Rust app reaches parity; removal is a later user decision.

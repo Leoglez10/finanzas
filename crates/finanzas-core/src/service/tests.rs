@@ -5,6 +5,71 @@ use chrono::NaiveDate;
 fn day(y: i32, m: u32, d: u32) -> NaiveDate { NaiveDate::from_ymd_opt(y, m, d).unwrap() }
 
 #[test]
+fn overview_first_run_requires_an_open_account() {
+    let store = Store::open_in_memory().unwrap();
+    store.insert_account(&Account { id: 0, name: "Cerrada".into(), off_budget: false, closed: true, sort_order: 0.0 }).unwrap();
+    let view = overview(&store, 202610, 0).unwrap();
+    assert!(!view.first_run.has_account);
+}
+
+#[test]
+fn overview_budget_progress_selects_largest_positive_assignments_and_net_activity() {
+    let store = Store::open_in_memory().unwrap();
+    let account = store.insert_account(&Account { id: 0, name: "Banco".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+    let group = store.insert_category_group(&CategoryGroup { id: 0, name: "Gastos".into(), is_income: false, sort_order: 0.0 }).unwrap();
+    let mut categories = Vec::new();
+    for i in 0..7 {
+        let category = store.insert_category(&Category { id: 0, name: format!("Categoría {i}"), hidden: false, sort_order: i as f64, group_id: Some(group) }).unwrap();
+        store.set_budget(202610, category, i * 100).unwrap();
+        categories.push(category);
+    }
+    for (category, amount) in [(categories[0], -900), (categories[6], -80), (categories[6], 100)] {
+        store.insert_entry(&Entry { id: 0, date: day(2026, 10, 5), amount, notes: String::new(), cleared: false, account_id: Some(account), category_id: Some(category), payee_id: None, schedule_id: None }).unwrap();
+    }
+    let view = overview(&store, 202610, 0).unwrap();
+    assert_eq!(view.budget_progress.iter().map(|r| (r.category_id, r.spent, r.budgeted)).collect::<Vec<_>>(), vec![(categories[6], -20, 600), (categories[5], 0, 500), (categories[4], 0, 400), (categories[3], 0, 300), (categories[2], 0, 200)]);
+    assert_eq!((view.budget_spent, view.budget_assigned), (900, 2100));
+}
+
+#[test]
+fn overview_checks_and_cards_follow_open_accounts_and_all_entries() {
+    let store = Store::open_in_memory().unwrap();
+    let open = store.insert_account(&Account { id: 0, name: "Abierta".into(), off_budget: true, closed: false, sort_order: 0.0 }).unwrap();
+    let closed = store.insert_account(&Account { id: 0, name: "Cerrada".into(), off_budget: false, closed: true, sort_order: 1.0 }).unwrap();
+    let income_group = store.insert_category_group(&CategoryGroup { id: 0, name: "Ingresos".into(), is_income: true, sort_order: 0.0 }).unwrap();
+    let expense_group = store.insert_category_group(&CategoryGroup { id: 0, name: "Gastos".into(), is_income: false, sort_order: 1.0 }).unwrap();
+    let income = store.insert_category(&Category { id: 0, name: "Sueldo".into(), hidden: false, sort_order: 0.0, group_id: Some(income_group) }).unwrap();
+    let expense = store.insert_category(&Category { id: 0, name: "Comida".into(), hidden: false, sort_order: 1.0, group_id: Some(expense_group) }).unwrap();
+    for (date, account, category, amount) in [(1, open, income, -10), (2, closed, expense, 30)] {
+        store.insert_entry(&Entry { id: 0, date: day(2026, 10, date), amount, notes: String::new(), cleared: false, account_id: Some(account), category_id: Some(category), payee_id: None, schedule_id: None }).unwrap();
+    }
+    store.set_budget(202610, expense, -1).unwrap();
+    let view = overview(&store, 202610, 6).unwrap();
+    assert_eq!((view.open_account_count, view.total_balance), (1, -10));
+    assert!(view.first_run.has_account && !view.first_run.has_categorized_income && !view.first_run.has_budget);
+    store.insert_entry(&Entry { id: 0, date: day(2026, 10, 3), amount: 20, notes: String::new(), cleared: false, account_id: Some(open), category_id: Some(income), payee_id: None, schedule_id: None }).unwrap();
+    store.set_budget(202609, expense, 1).unwrap();
+    let view = overview(&store, 202610, 6).unwrap();
+    assert!(view.first_run.has_categorized_income && view.first_run.has_budget);
+    assert_eq!(view.total_balance, 10);
+}
+
+#[test]
+fn overview_recent_eight_and_spending_top_six_are_sorted() {
+    let store = Store::open_in_memory().unwrap();
+    let account = store.insert_account(&Account { id: 0, name: "Banco".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+    let group = store.insert_category_group(&CategoryGroup { id: 0, name: "Gastos".into(), is_income: false, sort_order: 0.0 }).unwrap();
+    for i in 1..=9 {
+        let category = store.insert_category(&Category { id: 0, name: format!("Categoría {i}"), hidden: false, sort_order: i as f64, group_id: Some(group) }).unwrap();
+        store.insert_entry(&Entry { id: 0, date: day(2026, 10, i), amount: -(i as i64) * 100, notes: String::new(), cleared: false, account_id: Some(account), category_id: Some(category), payee_id: None, schedule_id: None }).unwrap();
+    }
+    let view = overview(&store, 202610, 6).unwrap();
+    assert_eq!(view.spending_total, 4500);
+    assert_eq!(view.spending.iter().map(|r| r.spent).collect::<Vec<_>>(), [900, 800, 700, 600, 500, 400]);
+    assert_eq!(view.recent_entries.iter().map(|e| e.date).collect::<Vec<_>>(), (2..=9).rev().map(|d| day(2026, 10, d)).collect::<Vec<_>>());
+}
+
+#[test]
 fn posting_creates_linked_entry_and_advances_and_auto_posts_due() {
     let mut store = Store::open_in_memory().unwrap();
     let account = store.insert_account(&Account { id: 0, name: "Banco".into(), off_budget: false, closed: false, sort_order: 1.0 }).unwrap();

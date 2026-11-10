@@ -63,7 +63,7 @@ impl Store {
     }
 
     pub fn first_run_checks(&self) -> Result<(bool, bool, bool)> {
-        self.conn.query_row("SELECT EXISTS(SELECT 1 FROM account), EXISTS(SELECT 1 FROM entry e JOIN category c ON c.id=e.category_id JOIN category_group g ON g.id=c.group_id WHERE e.amount>0 AND g.is_income=1), EXISTS(SELECT 1 FROM budget_amount WHERE amount>0)", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        self.conn.query_row("SELECT EXISTS(SELECT 1 FROM account WHERE closed=0), EXISTS(SELECT 1 FROM entry e JOIN category c ON c.id=e.category_id JOIN category_group g ON g.id=c.group_id WHERE e.amount>0 AND g.is_income=1), EXISTS(SELECT 1 FROM budget_amount WHERE amount>0)", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
     }
 
     pub fn data_version(&self) -> Result<i64> {

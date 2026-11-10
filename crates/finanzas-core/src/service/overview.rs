@@ -39,7 +39,9 @@ pub fn overview(store: &Store, target: MonthKey, chart_months: u32) -> Result<Ov
     let names: HashMap<_, _> = store.list_categories()?.into_iter().map(|c| (c.id, c.name)).collect();
     let mut spending: Vec<_> = current.spending.iter().map(|(id, spent)| CategoryProgress { category_id: *id, name: names.get(id).cloned().unwrap_or_default(), spent: *spent, budgeted: current_budget.rows.iter().find(|r| r.category_id == *id).map_or(0, |r| r.budgeted) }).collect();
     spending.sort_by(|a,b| b.spent.cmp(&a.spent).then_with(|| a.name.cmp(&b.name)));
-    let budget_progress = spending.iter().take(5).map(|p| CategoryProgress { category_id: p.category_id, name: p.name.clone(), spent: p.spent, budgeted: p.budgeted }).collect();
+    let mut budget_progress: Vec<_> = current_budget.rows.iter().filter(|r| r.budgeted > 0).map(|r| CategoryProgress { category_id: r.category_id, name: names.get(&r.category_id).cloned().unwrap_or_else(|| "—".into()), spent: -r.activity, budgeted: r.budgeted }).collect();
+    budget_progress.sort_by_key(|row| std::cmp::Reverse(row.budgeted));
+    budget_progress.truncate(5);
     spending.truncate(6);
     let balances = store.account_balances()?;
     let accounts = store.list_accounts()?;

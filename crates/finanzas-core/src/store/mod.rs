@@ -12,11 +12,22 @@ pub use actual::extract_actual;
 pub use swiftdata::{ImportError, ImportSummary};
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::models::{Account, Category, CategoryGroup, Cents, Entry, Id, MonthKey};
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, OpenFlags, Result};
+
+#[derive(Debug)]
+pub struct ForeignDatabase(pub PathBuf);
+
+impl std::fmt::Display for ForeignDatabase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "not a Finanzas database: {}", self.0.display())
+    }
+}
+
+impl std::error::Error for ForeignDatabase {}
 
 pub struct Store {
     conn: Connection,
@@ -39,6 +50,22 @@ impl Store {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        }
+        match std::fs::metadata(path) {
+            Ok(metadata) if metadata.len() > 0 => {
+                let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+                let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+                let (has_tables, has_core_data): (bool, bool) = conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table'), EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND upper(name) IN ('Z_METADATA', 'Z_PRIMARYKEY'))",
+                    [], |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                if has_core_data || (version == 0 && has_tables) {
+                    return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(ForeignDatabase(path.to_owned()))));
+                }
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(error))),
         }
         Self::configure(Connection::open(path)?)
     }

@@ -2,6 +2,77 @@ use super::{EntryFilter, Store};
 use crate::models::{Account, BudgetAmount, Category, CategoryGroup, Entry, Frequency, Payee, Recurrence, Schedule, WeekendMode};
 use chrono::NaiveDate;
 
+fn unique_db_path(name: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    std::env::temp_dir().join(format!("finanzas-{name}-{}-{nanos}-{}.db", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)))
+}
+
+fn assert_foreign_database_untouched(sql: &str) {
+    let path = unique_db_path("foreign");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute_batch(sql).unwrap();
+    drop(conn);
+    let before = std::fs::read(&path).unwrap();
+    let result = Store::open(&path);
+    assert!(result.is_err(), "foreign database must be refused");
+    let error = result.err().unwrap();
+    assert!(error.to_string().contains("not a Finanzas database"), "unexpected error: {error}");
+    match error {
+        rusqlite::Error::ToSqlConversionFailure(inner) => {
+            assert_eq!(inner.downcast_ref::<super::ForeignDatabase>().unwrap().0, path);
+        }
+        other => panic!("unexpected error type: {other}"),
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_owned();
+        sidecar.push(suffix);
+        assert!(!std::path::Path::new(&sidecar).exists());
+    }
+}
+
+#[test]
+fn open_refuses_core_data_without_mutation() {
+    assert_foreign_database_untouched("CREATE TABLE Z_METADATA (id INTEGER); CREATE TABLE ZACCOUNT (id INTEGER); PRAGMA user_version = 3;");
+}
+
+#[test]
+fn open_refuses_core_data_primarykey_marker() {
+    assert_foreign_database_untouched("CREATE TABLE Z_PRIMARYKEY (id INTEGER); PRAGMA user_version = 1;");
+}
+
+#[test]
+fn open_refuses_unversioned_foreign_database_without_mutation() {
+    assert_foreign_database_untouched("CREATE TABLE unrelated (id INTEGER);");
+}
+
+#[test]
+fn open_reopens_existing_finanzas_database() {
+    let path = unique_db_path("reopen");
+    let store = Store::open(&path).unwrap();
+    let id = store.insert_account(&Account { id: 0, name: "Persisted".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+    drop(store);
+    assert_eq!(Store::open(&path).unwrap().get_account(id).unwrap().unwrap().name, "Persisted");
+}
+
+#[test]
+fn open_initializes_empty_file() {
+    let path = unique_db_path("empty");
+    std::fs::File::create(&path).unwrap();
+    assert!(Store::open(&path).unwrap().list_accounts().unwrap().is_empty());
+}
+
+#[test]
+fn open_creates_fresh_database() {
+    let path = unique_db_path("fresh");
+    assert!(!path.exists());
+    let store = Store::open(&path).unwrap();
+    assert!(path.exists());
+    assert!(store.list_accounts().unwrap().is_empty());
+}
+
 #[test]
 fn default_path_uses_environment_or_platform_data_dir() {
     let expected = std::env::var_os("FINANZAS_DB").map(std::path::PathBuf::from)

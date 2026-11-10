@@ -1,66 +1,120 @@
-use std::sync::Mutex;
-
-use finanzas_core::store::Store;
-use serde::Serialize;
+use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
+use std::time::Duration;
+use chrono::Local;
+use finanzas_core::{domain::money, service::{self, EntryChanges, NewEntry}, store::{EntryFilter, EntryRow, Store}, Category, CategoryGroup};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 struct AppState {
-    store: Option<Mutex<Store>>,
+    store: Option<Arc<Mutex<Store>>>,
+    revision: Arc<AtomicU64>,
     startup_error: Option<String>,
 }
-
+impl AppState {
+    fn with_store<T>(&self, f: impl FnOnce(&mut Store) -> Result<T, String>) -> Result<T, String> {
+        let mut store = self.store.as_ref().ok_or("La base de datos no está disponible")?.lock().map_err(|e| e.to_string())?;
+        f(&mut store)
+    }
+    fn changed(&self) { self.revision.fetch_add(1, Ordering::Relaxed); }
+}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AccountOverview {
-    id: i64,
-    name: String,
-    off_budget: bool,
-    closed: bool,
-    sort_order: f64,
-    balance: i64,
-}
+struct AccountOverview { id: i64, name: String, off_budget: bool, closed: bool, sort_order: f64, balance: i64 }
+#[derive(Serialize)]
+struct EntriesResult { rows: Vec<EntryRow>, total: usize, sum: i64 }
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Filter { account_id: Option<i64>, search: Option<String>, limit: Option<usize> }
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CategoryGroupView { id: i64, name: String, is_income: bool, categories: Vec<Category> }
 
-#[tauri::command]
-fn startup_error(state: State<'_, AppState>) -> Option<String> {
-    state.startup_error.clone()
-}
-
-#[tauri::command]
+#[tauri::command(async)]
+fn startup_error(state: State<'_, AppState>) -> Option<String> { state.startup_error.clone() }
+#[tauri::command(async)]
 fn accounts_overview(state: State<'_, AppState>) -> Result<Vec<AccountOverview>, String> {
-    let store = state.store.as_ref().ok_or("La base de datos no está disponible")?
-        .lock().map_err(|e| e.to_string())?;
-    let accounts = store.list_accounts().map_err(|e| e.to_string())?;
-    let balances = store.account_balances().map_err(|e| e.to_string())?;
-    Ok(accounts.into_iter().map(|account| AccountOverview {
-        id: account.id,
-        name: account.name,
-        off_budget: account.off_budget,
-        closed: account.closed,
-        sort_order: account.sort_order,
-        balance: balances.get(&account.id).copied().unwrap_or(0),
-    }).collect())
+    state.with_store(|store| {
+        let accounts = store.list_accounts().map_err(|e| e.to_string())?;
+        let balances = store.account_balances().map_err(|e| e.to_string())?;
+        Ok(accounts.into_iter().map(|a| AccountOverview { id: a.id, name: a.name, off_budget: a.off_budget, closed: a.closed, sort_order: a.sort_order, balance: balances.get(&a.id).copied().unwrap_or(0) }).collect())
+    })
 }
-
-#[tauri::command]
-fn data_version(state: State<'_, AppState>) -> Result<i64, String> {
-    let store = state.store.as_ref().ok_or("La base de datos no está disponible")?
-        .lock().map_err(|e| e.to_string())?;
-    store.data_version().map_err(|e| e.to_string())
+#[tauri::command(async)]
+fn data_version(state: State<'_, AppState>) -> Result<String, String> {
+    state.with_store(|s| Ok(format!("{}:{}", s.data_version().map_err(|e| e.to_string())?, state.revision.load(Ordering::Relaxed))))
 }
+#[tauri::command(async)]
+fn overview(state: State<'_, AppState>, month: i32, chart_months: u32) -> Result<service::Overview, String> {
+    state.with_store(|s| service::overview(s, month, chart_months).map_err(|e| e.to_string()))
+}
+#[tauri::command(async)]
+fn entries(state: State<'_, AppState>, filter: Filter) -> Result<EntriesResult, String> {
+    state.with_store(|s| {
+        let mut f = EntryFilter { account_id: filter.account_id, search: filter.search, limit: filter.limit, ..Default::default() };
+        let (rows, total) = s.entries(&f).map_err(|e| e.to_string())?;
+        f.limit = None;
+        // ponytail: sums in Rust; move to SQL SUM if ledgers grow past ~50k rows
+        let sum = s.entries(&f).map_err(|e| e.to_string())?.0.iter().map(|r| r.amount).sum();
+        Ok(EntriesResult { rows, total, sum })
+    })
+}
+#[tauri::command(async)]
+fn add_entry(state: State<'_, AppState>, entry: NewEntry) -> Result<EntryRow, String> {
+    let row = state.with_store(|s| service::add_entry(s, entry).map_err(|e| e.to_string()))?; state.changed(); Ok(row)
+}
+#[tauri::command(async)]
+fn update_entry(state: State<'_, AppState>, id: i64, entry: NewEntry) -> Result<EntryRow, String> {
+    let changes = EntryChanges { date: Some(entry.date), amount: Some(entry.amount), account_id: Some(entry.account_id), payee: Some(entry.payee.unwrap_or_default()), category_id: Some(entry.category_id), notes: Some(entry.notes), cleared: None };
+    let row = state.with_store(|s| service::update_entry(s, id, changes).map_err(|e| e.to_string()))?; state.changed(); Ok(row)
+}
+#[tauri::command(async)]
+fn delete_entry(state: State<'_, AppState>, id: i64) -> Result<EntryRow, String> {
+    let row = state.with_store(|s| service::delete_entry(s, id).map_err(|e| e.to_string()))?; state.changed(); Ok(row)
+}
+#[tauri::command(async)]
+fn payee_suggestions(state: State<'_, AppState>, prefix: String) -> Result<Vec<String>, String> {
+    state.with_store(|s| Ok(s.payee_suggestions(&prefix, 8).map_err(|e| e.to_string())?.into_iter().map(|p| p.name).collect()))
+}
+#[tauri::command(async)]
+fn suggested_category(state: State<'_, AppState>, payee_name: String) -> Result<Option<i64>, String> {
+    state.with_store(|s| match s.payee_named(&payee_name).map_err(|e| e.to_string())? { Some(p) => s.suggested_category(p.id).map_err(|e| e.to_string()), None => Ok(None) })
+}
+#[tauri::command(async)]
+fn categories_grouped(state: State<'_, AppState>) -> Result<Vec<CategoryGroupView>, String> {
+    state.with_store(|s| {
+        let categories = s.list_categories().map_err(|e| e.to_string())?;
+        let groups: Vec<CategoryGroup> = s.list_category_groups().map_err(|e| e.to_string())?;
+        Ok(groups.into_iter().map(|g| CategoryGroupView { id: g.id, name: g.name, is_income: g.is_income, categories: categories.iter().filter(|c| c.group_id == Some(g.id)).cloned().collect() }).collect())
+    })
+}
+#[tauri::command(async)]
+fn today() -> String { Local::now().date_naive().to_string() }
+#[tauri::command(async)]
+fn parse_amount(text: String) -> Option<i64> { money::cents_from(&text) }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let result = Store::default_path()
-        .ok_or_else(|| "No se pudo determinar la ubicación de la base de datos".to_string())
-        .and_then(|path| Store::open(&path)
-            .map_err(|e| format!("{}: {e}", path.display())));
+    let result = Store::default_path().ok_or_else(|| "No se pudo determinar la ubicación de la base de datos".to_string()).and_then(|path| Store::open(&path).map_err(|e| format!("{}: {e}", path.display())));
+    let revision = Arc::new(AtomicU64::new(0));
     let state = match result {
-        Ok(store) => AppState { store: Some(Mutex::new(store)), startup_error: None },
-        Err(error) => AppState { store: None, startup_error: Some(error) },
+        Ok(store) => {
+            let store = Arc::new(Mutex::new(store));
+            let worker = Arc::clone(&store); let worker_revision = Arc::clone(&revision);
+            std::thread::spawn(move || loop {
+                match worker.lock() {
+                    Ok(mut store) => match service::auto_post_due(&mut store, Local::now().date_naive()) {
+                        Ok(count) if count > 0 => { worker_revision.fetch_add(1, Ordering::Relaxed); },
+                        Ok(_) => {}, Err(e) => eprintln!("No se pudieron registrar pagos automáticos: {e}"),
+                    },
+                    Err(e) => eprintln!("No se pudieron registrar pagos automáticos: {e}"),
+                }
+                std::thread::sleep(Duration::from_secs(3600));
+            });
+            AppState { store: Some(store), revision: Arc::clone(&revision), startup_error: None }
+        },
+        Err(error) => AppState { store: None, revision, startup_error: Some(error) },
     };
-    tauri::Builder::default()
-        .manage(state)
-        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version])
-        .run(tauri::generate_context!())
-        .expect("error al iniciar la aplicación");
+    tauri::Builder::default().manage(state)
+        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, today, parse_amount])
+        .run(tauri::generate_context!()).expect("error al iniciar la aplicación");
 }

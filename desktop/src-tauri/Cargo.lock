@@ -802,6 +802,7 @@ dependencies = [
 name = "finanzas-desktop"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "finanzas-core",
  "serde",
  "serde_json",

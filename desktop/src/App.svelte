@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Overview from "./Overview.svelte";
+  import Entries from "./Entries.svelte";
   import { accountsOverview, dataVersion, startupError, type AccountOverview } from "./lib/api";
 
   type Route = { kind: "summary" | "budget" | "upcoming" | "all" } | { kind: "account"; id: number };
   let route = $state<Route>({ kind: "summary" });
   let accounts = $state<AccountOverview[]>([]);
   let error = $state<string | null>(null);
+  let version = $state("");
+  let forceRefresh = $state(0);
   let openAccounts = $derived(accounts.filter((account) => !account.closed));
   let closedAccounts = $derived(accounts.filter((account) => account.closed));
   let total = $derived(openAccounts.reduce((sum, account) => sum + account.balance, 0));
@@ -21,16 +25,19 @@
   onMount(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
-    let version: number | undefined;
+    let observedVersion: string | undefined;
+    let observedForce = -1;
 
     async function refresh() {
       try {
         const current = await dataVersion();
-        if (version !== current) {
+        if (observedVersion !== current || observedForce !== forceRefresh) {
           const next = await accountsOverview();
           if (stopped) return;
           accounts = next;
-          version = current;
+          observedVersion = current;
+          observedForce = forceRefresh;
+          version = `${current}:${forceRefresh}`;
         }
         error = null;
       } catch (cause) {
@@ -89,6 +96,10 @@
         <h1>No se pudo abrir o consultar la base de datos</h1>
         <p>{error}</p>
       </div>
+    {:else if route.kind === "summary"}
+      <Overview {version}/>
+    {:else if route.kind === "all" || route.kind === "account"}
+      <Entries accounts={openAccounts} accountId={route.kind === "account" ? route.id : undefined} {heading} {version} refresh={() => { forceRefresh++; }}/>
     {:else}
       <div class="card"><h1>{heading}</h1><p>Próximamente</p></div>
     {/if}

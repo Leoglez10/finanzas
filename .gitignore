@@ -6,5 +6,6 @@ xcuserdata/
 build/
 .atl/
 target/
+target-*/
 node_modules/
 desktop/dist/

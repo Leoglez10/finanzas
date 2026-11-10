@@ -1,1 +1,107 @@
-//! TODO(T2): SQLite storage. See odd/specs/rust-porting-spec.md
+//! SQLite storage.
+
+mod schema;
+
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::time::Duration;
+
+use crate::models::{Account, Category, CategoryGroup, Cents, Entry, Id, MonthKey};
+use rusqlite::{params, Connection, Result};
+
+pub struct Store {
+    conn: Connection,
+}
+
+impl Store {
+    pub fn default_path() -> Option<std::path::PathBuf> {
+        std::env::var_os("FINANZAS_DB").map(std::path::PathBuf::from)
+            .or_else(|| dirs::data_dir().map(|p| p.join("Finanzas").join("finanzas.db")))
+    }
+
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        }
+        Self::configure(Connection::open(path)?)
+    }
+
+    pub fn open_in_memory() -> Result<Self> {
+        Self::configure(Connection::open_in_memory()?)
+    }
+
+    fn configure(mut conn: Connection) -> Result<Self> {
+        conn.busy_timeout(Duration::from_secs(5))?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        schema::migrate(&mut conn)?;
+        Ok(Self { conn })
+    }
+
+    pub fn envelope_inputs(&self) -> Result<crate::domain::envelope::EnvelopeInputs> {
+        let mut stmt = self.conn.prepare("SELECT c.id, COALESCE(g.is_income, 0) FROM category c LEFT JOIN category_group g ON g.id = c.group_id ORDER BY c.sort_order, c.name, c.id")?;
+        let categories = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<Vec<_>>>()?;
+        let (budgeted, carryover) = self.budget_rows()?;
+        Ok(crate::domain::envelope::EnvelopeInputs { categories, budgeted, carryover, activity: self.activity_by_month_category()? })
+    }
+
+    pub fn data_version(&self) -> Result<i64> {
+        self.conn.pragma_query_value(None, "data_version", |row| row.get(0))
+    }
+
+    pub fn insert_account(&self, value: &Account) -> Result<Id> {
+        self.conn.execute("INSERT INTO account(name, off_budget, closed, sort_order) VALUES (?1, ?2, ?3, ?4)", params![value.name, value.off_budget, value.closed, value.sort_order])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn insert_category_group(&self, value: &CategoryGroup) -> Result<Id> {
+        self.conn.execute("INSERT INTO category_group(name, is_income, sort_order) VALUES (?1, ?2, ?3)", params![value.name, value.is_income, value.sort_order])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn insert_category(&self, value: &Category) -> Result<Id> {
+        self.conn.execute("INSERT INTO category(name, hidden, sort_order, group_id) VALUES (?1, ?2, ?3, ?4)", params![value.name, value.hidden, value.sort_order, value.group_id])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn insert_entry(&self, value: &Entry) -> Result<Id> {
+        self.conn.execute("INSERT INTO entry(date, amount, notes, cleared, account_id, category_id, payee_id, schedule_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", params![value.date.to_string(), value.amount, value.notes, value.cleared, value.account_id, value.category_id, value.payee_id, value.schedule_id])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn account_balances(&self) -> Result<HashMap<Id, Cents>> {
+        let mut stmt = self.conn.prepare("SELECT a.id, COALESCE(SUM(e.amount), 0) FROM account a LEFT JOIN entry e ON e.account_id = a.id GROUP BY a.id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect()
+    }
+
+    pub fn activity_by_month_category(&self) -> Result<HashMap<(MonthKey, Id), Cents>> {
+        let mut stmt = self.conn.prepare("SELECT CAST(strftime('%Y%m', e.date) AS INTEGER), e.category_id, SUM(e.amount) FROM entry e JOIN account a ON a.id = e.account_id WHERE e.category_id IS NOT NULL AND a.off_budget = 0 GROUP BY 1, 2")?;
+        let rows = stmt.query_map([], |r| Ok(((r.get(0)?, r.get(1)?), r.get(2)?)))?;
+        rows.collect()
+    }
+
+    pub fn set_budget(&self, month: MonthKey, category: Id, amount: Cents) -> Result<()> {
+        self.conn.execute("INSERT INTO budget_amount(month, category_id, amount, carryover) VALUES (?1, ?2, ?3, 0) ON CONFLICT(month, category_id) DO UPDATE SET amount = excluded.amount", params![month, category, amount])?;
+        Ok(())
+    }
+
+    pub fn budget_rows(&self) -> Result<BudgetRows> {
+        let mut stmt = self.conn.prepare("SELECT month, category_id, amount, carryover FROM budget_amount WHERE category_id IS NOT NULL")?;
+        let mut amounts = HashMap::new();
+        let mut carryover = HashSet::new();
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let key = (row.get(0)?, row.get(1)?);
+            amounts.insert(key, row.get(2)?);
+            if row.get(3)? { carryover.insert(key); }
+        }
+        Ok((amounts, carryover))
+    }
+}
+
+pub type BudgetRows = (HashMap<(MonthKey, Id), Cents>, HashSet<(MonthKey, Id)>);
+
+#[cfg(test)]
+mod tests;

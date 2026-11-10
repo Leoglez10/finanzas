@@ -23,6 +23,13 @@ pub struct Store {
 }
 
 impl Store {
+    pub fn transaction<T, E: From<rusqlite::Error>>(&mut self, operation: impl FnOnce(&Store) -> std::result::Result<T, E>) -> std::result::Result<T, E> {
+        self.conn.execute_batch("BEGIN IMMEDIATE")?;
+        match operation(self) {
+            Ok(value) => { self.conn.execute_batch("COMMIT")?; Ok(value) }
+            Err(error) => { self.conn.execute_batch("ROLLBACK")?; Err(error) }
+        }
+    }
     pub fn default_path() -> Option<std::path::PathBuf> {
         std::env::var_os("FINANZAS_DB").map(std::path::PathBuf::from)
             .or_else(|| dirs::data_dir().map(|p| p.join("Finanzas").join("finanzas.db")))
@@ -53,6 +60,10 @@ impl Store {
         let categories = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<Vec<_>>>()?;
         let (budgeted, carryover) = self.budget_rows()?;
         Ok(crate::domain::envelope::EnvelopeInputs { categories, budgeted, carryover, activity: self.activity_by_month_category()? })
+    }
+
+    pub fn first_run_checks(&self) -> Result<(bool, bool, bool)> {
+        self.conn.query_row("SELECT EXISTS(SELECT 1 FROM account), EXISTS(SELECT 1 FROM entry e JOIN category c ON c.id=e.category_id JOIN category_group g ON g.id=c.group_id WHERE e.amount>0 AND g.is_income=1), EXISTS(SELECT 1 FROM budget_amount WHERE amount>0)", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
     }
 
     pub fn data_version(&self) -> Result<i64> {

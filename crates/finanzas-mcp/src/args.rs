@@ -18,7 +18,7 @@ impl Args<'_> {
         if self.present(key).is_none() { return Ok(default); }
         let n = self.cents(key).ok().filter(|n| n % 100 == 0).map(|n| n / 100)
             .ok_or_else(|| ToolError(format!("{key}: expected an integer from {min} to {max}")))?;
-        if !(min..=max).contains(&n) { return Err(ToolError(format!("{key}: must be between {min} and {max}"))); }
+        if !(min..=max).contains(&n) { return Err(ToolError(format!("{key}: expected an integer from {min} to {max}"))); }
         Ok(n)
     }
     pub fn date(&self, key: &str) -> Result<NaiveDate, ToolError> {

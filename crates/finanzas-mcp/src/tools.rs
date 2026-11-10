@@ -35,6 +35,18 @@ fn err(e: impl std::fmt::Display) -> ToolError { ToolError(e.to_string()) }
 fn id(entity: &str, n: i64) -> String { format!("{entity}/p{n}") }
 fn oid(entity: &str, n: Option<i64>) -> Option<String> { n.map(|n| id(entity, n)) }
 fn dec(n: i64) -> f64 { n as f64 / 100.0 }
+fn required_id(a: &Args<'_>, key: &str, entity: &str) -> Result<i64, ToolError> {
+    a.required_string(key)?;
+    a.id(key, entity)?.ok_or_else(|| ToolError(format!("{key}: required")))
+}
+fn entry_json(r: finanzas_core::store::EntryRow) -> Value {
+    json!({"id":id("LedgerEntry",r.id),"date":r.date.to_string(),"amount":dec(r.amount),"accountId":oid("Account",r.account_id),"account":r.account_name,"payee":r.payee_name,"categoryId":oid("Category",r.category_id),"category":r.category_name,"notes":r.notes,"cleared":r.cleared,"scheduleId":oid("Schedule",r.schedule_id)})
+}
+fn category(a: &Args<'_>, store: &Store) -> Result<Option<i64>, ToolError> {
+    let category = a.id("categoryId", "Category")?;
+    if let Some(n) = category { if store.get_category(n).map_err(err)?.is_none() { return Err(ToolError("categoryId: not found".into())); } }
+    Ok(category)
+}
 pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Result<Value, ToolError> {
     let a = Args(args);
     Ok(match name {
@@ -77,7 +89,54 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             let days = a.int("days",30,0,365)?;
             json!(service::upcoming(store,today,days).map_err(err)?.into_iter().map(|v| json!({"scheduleId":id("Schedule",v.schedule_id),"name":v.name,"date":v.date.to_string(),"amount":dec(v.amount),"accountId":oid("Account",v.account_id),"account":v.account,"overdue":v.overdue,"projectedBalance":v.projected_balance.map(dec)})).collect::<Vec<_>>())
         }
-        "add_transaction"|"update_transaction"|"delete_transaction"|"set_budget_amount"|"skip_schedule" => return Err(ToolError("not implemented".into())),
+        "add_transaction" => {
+            let account = required_id(&a,"accountId","Account")?;
+            if store.get_account(account).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
+            let category_id = category(&a,store)?;
+            let payee = a.optional_string("payee")?.map(str::to_owned);
+            let date = a.date("date")?;
+            let amount = a.cents("amount")?;
+            let notes = a.optional_string("notes")?.unwrap_or("").to_owned();
+            let cleared = a.bool("cleared")?.unwrap_or(true);
+            entry_json(service::add_entry(store,service::NewEntry { date,amount,account_id:account,payee,category_id,notes,cleared }).map_err(err)?)
+        }
+        "update_transaction" => {
+            let n = required_id(&a,"id","LedgerEntry")?;
+            if store.get_entry(n).map_err(err)?.is_none() { return Err(ToolError("id: not found".into())); }
+            let fields = ["date","amount","payee","categoryId","notes","cleared"];
+            if !fields.iter().any(|k| args.get(k).is_some()) { return Err(ToolError("Provide at least one field to change (date, amount, payee, categoryId, notes, cleared)".into())); }
+            let payee = a.optional_string("payee")?.map(str::to_owned);
+            if payee.as_ref().is_some_and(|s| s.trim().is_empty()) { return Err(ToolError("Payee must not be empty".into())); }
+            let date = if args.get("date").is_some() { Some(a.date("date")?) } else { None };
+            let amount = if args.get("amount").is_some() { Some(a.cents("amount")?) } else { None };
+            let category_id = category(&a,store)?.map(Some);
+            let notes = a.optional_string("notes")?.map(str::to_owned);
+            let cleared = a.bool("cleared")?;
+            entry_json(service::update_entry(store,n,service::EntryChanges {date,amount,payee,category_id,notes,cleared,..Default::default()}).map_err(err)?)
+        }
+        "delete_transaction" => {
+            let n = required_id(&a,"id","LedgerEntry")?;
+            if store.get_entry(n).map_err(err)?.is_none() { return Err(ToolError("id: not found".into())); }
+            json!({"deleted":entry_json(service::delete_entry(store,n).map_err(err)?)})
+        }
+        "set_budget_amount" => {
+            let month = a.month("month")?;
+            let n = required_id(&a,"categoryId","Category")?;
+            let c = store.get_category(n).map_err(err)?.ok_or_else(|| ToolError("categoryId: not found".into()))?;
+            let amount = a.cents("amount")?;
+            if amount < 0 { return Err(ToolError("amount must be 0 or more".into())); }
+            let text = format!("{}.{:02}",amount / 100,amount % 100);
+            service::set_budget_from_text(store,month,n,&text).map_err(err)?;
+            json!({"month":format!("{:04}-{:02}",month/100,month%100),"categoryId":id("Category",n),"category":c.name,"budgeted":dec(amount)})
+        }
+        "skip_schedule" => {
+            let n = required_id(&a,"id","Schedule")?;
+            let s = store.get_schedule(n).map_err(err)?.ok_or_else(|| ToolError("id: not found".into()))?;
+            if finanzas_core::domain::schedule::effective_next_date(&s).is_none() { return Err(ToolError("Schedule is completed".into())); }
+            let through = if args.get("through").is_some() { Some(a.date("through")?) } else { None };
+            let r = service::skip_schedule(store,n,through).map_err(err)?;
+            json!({"id":id("Schedule",n),"name":s.name,"previousNextDate":r.previous_next_date.map(|d| d.to_string()),"nextDate":r.next_date.map(|d| d.to_string()),"completed":r.completed,"skipped":r.skipped})
+        }
         _ => return Err(ToolError(format!("Unknown tool: {name}"))),
     })
 }

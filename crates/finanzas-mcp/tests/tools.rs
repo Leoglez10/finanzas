@@ -25,6 +25,94 @@ impl Seed {
     fn call(&mut self, name: &str, args: Value) -> Value { call(&mut self.store,name,&args,day(10,15)).unwrap() }
 }
 #[test]
+fn write_tools_behavior_red() {
+    let mut s = Seed::new();
+    let bank = format!("Account/p{}", s.bank);
+    let food = format!("Category/p{}", s.food);
+    let cases = [
+        ("add_transaction", json!({"accountId":bank,"date":"2026-10-14","amount":1})),
+        ("update_transaction", json!({"id":"LedgerEntry/p1","notes":"changed"})),
+        ("delete_transaction", json!({"id":"LedgerEntry/p2"})),
+        ("set_budget_amount", json!({"month":"2026-09","categoryId":food,"amount":42})),
+        ("skip_schedule", json!({"id":"Schedule/p1"})),
+    ];
+    let failures: Vec<_> = cases.iter().filter_map(|(name,args)| call(&mut s.store,name,args,day(10,15)).err().map(|e| format!("{name}: {e}"))).collect();
+    assert!(failures.is_empty(), "{}", failures.join("; "));
+}
+#[test]
+fn set_budget_amount_validates_and_upserts() {
+    let mut s = Seed::new(); let food = format!("Category/p{}",s.food);
+    for amount in [50.0, 27.25, 0.0] {
+        let r = s.call("set_budget_amount",json!({"month":"2026-09","categoryId":food,"amount":amount}));
+        assert_eq!(r["budgeted"],amount); assert_eq!(r["category"],"Comida");
+    }
+    let salary = s.store.list_categories().unwrap().into_iter().find(|c| c.name == "Sueldo").unwrap().id;
+    for (category,amount,expected) in [(format!("Category/p{salary}"),1,"Income categories cannot be budgeted"),(food,-1,"amount must be 0 or more")] {
+        assert_eq!(call(&mut s.store,"set_budget_amount",&json!({"month":"2026-09","categoryId":category,"amount":amount}),day(10,15)).unwrap_err().to_string(),expected);
+    }
+}
+#[test]
+fn add_transaction_reuses_payee_defaults_cleared_and_learns_category() {
+    let mut s = Seed::new(); let bank = format!("Account/p{}",s.bank);
+    let r = s.call("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":-20,"payee":"oxxo"}));
+    assert_eq!(r["payee"],"Oxxo"); assert_eq!(r["category"],"Comida"); assert_eq!(r["cleared"],true);
+    assert_eq!(s.store.list_payees().unwrap().len(),1);
+    let salary = s.store.list_categories().unwrap().into_iter().find(|c| c.name == "Sueldo").unwrap().id;
+    let r = s.call("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":-20,"payee":"Oxxo","categoryId":format!("Category/p{salary}")}));
+    assert_eq!(r["category"],"Sueldo");
+}
+#[test]
+fn update_transaction_changes_only_given_fields() {
+    let mut s = Seed::new(); let bank = format!("Account/p{}",s.bank);
+    let t = s.call("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":-20,"payee":"oxxo","notes":"note"}));
+    let r = s.call("update_transaction",json!({"id":t["id"],"notes":"","cleared":false}));
+    assert_eq!(r["notes"],""); assert_eq!(r["cleared"],false); assert_eq!(r["amount"],-20.0); assert_eq!(r["payee"],"Oxxo");
+    for (args,expected) in [(json!({"id":t["id"]}),"Provide at least one field to change (date, amount, payee, categoryId, notes, cleared)"),(json!({"id":t["id"],"payee":"  "}),"Payee must not be empty")] {
+        assert_eq!(call(&mut s.store,"update_transaction",&args,day(10,15)).unwrap_err().to_string(),expected);
+    }
+}
+#[test]
+fn delete_transaction_returns_the_deleted_row() {
+    let mut s=Seed::new(); let bank=format!("Account/p{}",s.bank);
+    let t=s.call("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":42}));
+    let r=s.call("delete_transaction",json!({"id":t["id"]})); assert_eq!(r["deleted"],t);
+    assert_eq!(call(&mut s.store,"delete_transaction",&json!({"id":t["id"]}),day(10,15)).unwrap_err().to_string(),"id: not found");
+}
+#[test]
+fn schedules_skip_once_and_through() {
+    let mut s=Seed::new();
+    let r=s.call("skip_schedule",json!({"id":"Schedule/p1"})); assert_eq!(r["skipped"],1); assert_eq!(r["nextDate"],"2026-11-11");
+    let r=s.call("skip_schedule",json!({"id":"Schedule/p1","through":"2027-01-31"})); assert_eq!(r["skipped"],3); assert_eq!(r["nextDate"],"2027-02-11");
+    let mut schedule=s.store.get_schedule(1).unwrap().unwrap(); schedule.completed=true; s.store.update_schedule(&schedule).unwrap();
+    assert_eq!(call(&mut s.store,"skip_schedule",&json!({"id":"Schedule/p1"}),day(10,15)).unwrap_err().to_string(),"Schedule is completed");
+}
+#[test]
+fn write_bad_ids_and_wrong_types_are_errors() {
+    let mut s=Seed::new(); let bank=format!("Account/p{}",s.bank);
+    for (name,args,expected) in [
+        ("skip_schedule",json!({"id":bank}),"id: not found"),
+        ("add_transaction",json!({"date":"2026-10-14","amount":1}),"accountId: required"),
+        ("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":5,"cleared":1}),"cleared: expected true or false"),
+        ("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":"12.5"}),"amount: expected a number"),
+        ("skip_schedule",json!({"id":"Schedule/p1","through":12}),"through: expected YYYY-MM-DD"),
+        ("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":1e17}),"amount: must be between -1000000000000 and 1000000000000"),
+    ] { assert_eq!(call(&mut s.store,name,&args,day(10,15)).unwrap_err().to_string(),expected); }
+}
+#[test]
+fn json_zero_and_one_are_amounts_not_booleans() {
+    let mut s=Seed::new(); let bank=format!("Account/p{}",s.bank); let food=format!("Category/p{}",s.food);
+    let r=s.call("set_budget_amount",json!({"month":"2026-09","categoryId":food,"amount":0})); assert_eq!(r["budgeted"],0.0);
+    let r=s.call("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":1})); assert_eq!(r["amount"],1.0);
+    let r=s.call("update_transaction",json!({"id":r["id"],"amount":0})); assert_eq!(r["amount"],0.0);
+}
+#[test]
+fn another_store_connection_bumps_data_version() {
+    let path=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target").join(format!("data-version-{}-{:?}.db",std::process::id(),std::thread::current().id()));
+    let app=Store::open(&path).unwrap(); let before=app.data_version().unwrap(); let other=Store::open(&path).unwrap();
+    other.insert_account(&Account{id:0,name:"Desde IA".into(),off_budget:false,closed:false,sort_order:0.0}).unwrap();
+    assert_ne!(app.data_version().unwrap(),before);
+}
+#[test]
 fn amounts_accept_decimal_numbers_without_float_error() {
     for (text, expected) in [("0",0), ("1",100), ("89.9",8990), ("-999999999999.99",-99999999999999), ("1e-2",1)] {
         let value: Value = serde_json::from_str(&format!("{{\"amount\":{text}}}")).unwrap();
@@ -46,7 +134,7 @@ fn huge_and_tiny_non_integer_values_are_rejected() {
 #[test]
 fn bounded_integer_reports_its_range() {
     let mut s=Seed::new();
-    assert_eq!(call(&mut s.store,"get_upcoming",&json!({"days":366}),day(10,15)).unwrap_err().to_string(),"days: must be between 0 and 365");
+    assert_eq!(call(&mut s.store,"get_upcoming",&json!({"days":366}),day(10,15)).unwrap_err().to_string(),"days: expected an integer from 0 to 365");
 }
 #[test]
 fn every_spec_has_an_object_schema() {

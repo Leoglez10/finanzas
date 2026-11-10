@@ -21,6 +21,10 @@ pub enum ImportError {
     StoreNotEmpty,
     #[error(transparent)]
     Sql(#[from] rusqlite::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Zip(#[from] zip::result::ZipError),
 }
 
 // Core Data dates are seconds relative to 2001-01-01 UTC, including fractions.

@@ -7,6 +7,8 @@ pub use entries::{EntryFilter, EntryRow};
 mod payees;
 mod schema;
 mod swiftdata;
+mod actual;
+pub use actual::extract_actual;
 pub use swiftdata::{ImportError, ImportSummary};
 
 use std::collections::{HashMap, HashSet};

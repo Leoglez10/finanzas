@@ -113,6 +113,42 @@ fn another_store_connection_bumps_data_version() {
     assert_ne!(app.data_version().unwrap(),before);
 }
 #[test]
+fn remaining_swift_write_parity_cases() {
+    let mut s = Seed::new();
+    let bank = format!("Account/p{}", s.bank);
+    let food = format!("Category/p{}", s.food);
+    let first = s.call("set_budget_amount", json!({"month":"2026-10","categoryId":food,"amount":450.25}));
+    assert_eq!(first["budgeted"], 450.25);
+    s.call("set_budget_amount", json!({"month":"2026-10","categoryId":food,"amount":100}));
+    assert_eq!(s.store.budget_rows().unwrap().0.len(), 2);
+    let t = s.call("add_transaction", json!({"accountId":bank,"date":"2026-10-14","amount":-89.9,"payee":"OXXO","categoryId":food,"notes":"café"}));
+    assert_eq!(t["amount"], -89.9); assert_eq!(t["notes"], "café");
+    assert_eq!(s.store.account_balances().unwrap()[&s.bank], 984450 - 8990);
+    let u = s.call("update_transaction", json!({"id":t["id"],"notes":"corregido","payee":"Uber"}));
+    assert_eq!(u["notes"], "corregido"); assert_eq!(u["payee"], "Uber"); assert_eq!(u["amount"], -89.9);
+    let float = s.call("add_transaction", json!({"accountId":bank,"date":"2026-10-14","amount":1.0,"cleared":false}));
+    assert_eq!(float["amount"], 1.0); assert_eq!(float["cleared"], false);
+    let big = s.call("add_transaction", serde_json::from_str(&format!(r#"{{"accountId":"{bank}","date":"2026-10-14","amount":-999999999999.99}}"#)).unwrap());
+    assert_eq!(big["amount"].as_f64().unwrap(), -999_999_999_999.99);
+    for (name,args,expected) in [
+        ("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":1.234}),"amount: at most 2 decimals"),
+        ("add_transaction",json!({"accountId":"nope","date":"2026-10-14","amount":1}),"accountId: not found"),
+        ("add_transaction",json!({"accountId":bank,"date":"2026-10-14","amount":5,"cleared":"false"}),"cleared: expected true or false"),
+        ("get_transactions",json!({"startDate":"2026-09-01","endDate":"2026-09-30","limit":1.5}),"limit: expected an integer from 1 to 1000"),
+        ("get_transactions",json!({"startDate":"2026-09-01","endDate":"2026-09-30","limit":1e300}),"limit: expected an integer from 1 to 1000"),
+        ("get_upcoming",json!({"days":-1e300}),"days: expected an integer from 0 to 365"),
+        ("spending_by_category",json!({"startDate":"2026-09-01","endDate":"2026-09-30","includeOffBudget":"yes"}),"includeOffBudget: expected true or false"),
+    ] { assert_eq!(call(&mut s.store,name,&args,day(10,15)).unwrap_err().to_string(),expected); }
+}
+#[test]
+fn skip_schedule_caps_at_500_and_can_skip_none() {
+    let mut s=Seed::new();
+    let r=s.call("skip_schedule",json!({"id":"Schedule/p1","through":"2026-01-01"}));
+    assert_eq!(r["skipped"],0); assert_eq!(r["nextDate"],"2026-10-11");
+    let r=s.call("skip_schedule",json!({"id":"Schedule/p1","through":"2100-12-31"}));
+    assert_eq!(r["skipped"],500); assert_eq!(r["nextDate"],"2068-06-11");
+}
+#[test]
 fn amounts_accept_decimal_numbers_without_float_error() {
     for (text, expected) in [("0",0), ("1",100), ("89.9",8990), ("-999999999999.99",-99999999999999), ("1e-2",1)] {
         let value: Value = serde_json::from_str(&format!("{{\"amount\":{text}}}")).unwrap();

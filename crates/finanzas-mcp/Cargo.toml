@@ -9,3 +9,5 @@ finanzas-core = { path = "../finanzas-core" }
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
 chrono.workspace = true
 thiserror.workspace = true
+rmcp = { version = "3", features = ["server", "transport-io"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }

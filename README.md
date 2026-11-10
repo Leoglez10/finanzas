@@ -88,6 +88,9 @@ ids look like `Account/p3`):
 | `list_schedules` / `skip_schedule` | Scheduled payments; skip once or `through` a date |
 | `get_upcoming` | Overdue and next `days` (default 30) payments with projected balances |
 
+## Built with
+[![Built with Gentle-AI](https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png)](https://github.com/Gentleman-Programming/gentle-ai)
+
 ## License
 
 [MIT](LICENSE)

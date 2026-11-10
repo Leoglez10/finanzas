@@ -8,6 +8,26 @@ export interface CategoryGroup { id: number; name: string; isIncome: boolean; ca
 export interface Progress { categoryId: number; name: string; spent: number; budgeted: number }
 export interface Overview { totalBalance: number; openAccountCount: number; current: {income: number; expenses: number; budgeted: number; savingsRate: number | null}; previous: {income: number; expenses: number}; incomeChange: number | null; expensesChange: number | null; chart: {month: number; income: number; expenses: number}[]; spendingTotal: number; spending: Progress[]; recentEntries: EntryRow[]; budgetSpent: number; budgetAssigned: number; budgetProgress: Progress[]; firstRun: {hasAccount: boolean; hasCategorizedIncome: boolean; hasBudget: boolean} }
 export interface EntriesResult { rows: EntryRow[]; total: number; sum: number }
+export interface BudgetRow { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
+export interface BudgetView { toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: {id:number; name:string; isIncome:boolean; categories:BudgetRow[]}[] }
+export interface ScheduleView { schedule: {id:number; name:string; amount:number; autoPost:boolean; completed:boolean}; nextDate:string|null; label:string; payee:string|null; account:string|null }
+export interface UpcomingItem { scheduleId:number; name:string; date:string; amount:number; account:string|null; overdue:boolean; projectedBalance:number|null }
+export interface Settings { enabled:boolean; days:number }
+export interface ImportSummary { accounts:number; categories:number; payees:number; entries:number; schedules:number }
+export const budget = (month:number) => invoke<BudgetView>('budget', {month});
+export const assignBudget = (month:number, categoryId:number, text:string) => invoke<number|null>('assign_budget', {month, categoryId, text});
+export const createAccount = (name:string) => invoke<void>('create_account', {name});
+export const changeCategory = (id:number, name:string|null, hidden:boolean|null) => invoke<void>('change_category', {id, name, hidden});
+export const changeGroup = (id:number|null, name:string) => invoke<void>('change_group', {id, name});
+export const createCategory = (groupId:number, name:string) => invoke<void>('create_category', {groupId, name});
+export const upcoming = () => invoke<UpcomingItem[]>('upcoming');
+export const schedules = () => invoke<ScheduleView[]>('schedules');
+export const createSchedule = (input: unknown) => invoke<void>('create_schedule', {input});
+export const scheduleAction = (id:number, action:string) => invoke<void>('schedule_action', {id, action});
+export const getSettings = () => invoke<Settings>('get_settings');
+export const saveSettings = (enabled:boolean, days:number) => invoke<void>('save_settings', {enabled, days});
+export const importAvailability = () => invoke<[boolean, boolean]>('import_availability');
+export const importData = (source:string) => invoke<ImportSummary|null>('import_data', {source});
 export const startupError = () => invoke<string | null>("startup_error");
 export const accountsOverview = () => invoke<AccountOverview[]>("accounts_overview");
 export const dataVersion = () => invoke<string>("data_version");

@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { overview, today, formatMoney, formatDate, type Overview } from './lib/api';
-  let { version }: {version: string} = $props();
-  let month = $state(0); let currentMonth = $state(0); let range = $state(6);
+  import { overview, formatMoney, formatDate, type Overview } from './lib/api';
+  import MonthNav from './MonthNav.svelte';
+  import Imports from './Imports.svelte';
+  let { version, month = $bindable(), currentMonth, refresh }: {version: string; month: number; currentMonth: number; refresh: () => void} = $props();
+  let range = $state(6);
   let data = $state<Overview | null>(null); let error = $state(''); let request = 0;
   const percent = (v: number) => new Intl.NumberFormat('es-MX', {style:'percent', maximumFractionDigits:1}).format(v);
   const title = (m: number, short = false) => {
@@ -9,15 +11,13 @@
     const text = new Intl.DateTimeFormat('es-MX', short ? {month:'short'} : {month:'long', year:'numeric'}).format(date).replace('.', '');
     return text.charAt(0).toUpperCase() + text.slice(1);
   };
-  function step(delta: number) { const d = new Date(Math.floor(month / 100), month % 100 - 1 + delta, 1); month = d.getFullYear() * 100 + d.getMonth() + 1; }
-  function key(e: KeyboardEvent) { if (!(e.metaKey || e.ctrlKey) || e.altKey) return; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); step(e.key === 'ArrowLeft' ? -1 : 1); } }
-  $effect(() => { void today().then(d => { currentMonth = Number(d.slice(0, 7).replace('-', '')); month = currentMonth; }).catch(e => error = String(e)); });
+
   $effect(() => { const m = month, r = range; void version; if (!m) return; const id = ++request; void overview(m, r).then(v => { if (id === request) { data = v; error = ''; } }).catch(e => { if (id === request) error = String(e); }); });
 </script>
-<svelte:window onkeydown={key}/>
 <div class="screen">
-  <div class="heading"><div><h1>Tu panorama financiero</h1><p>{month ? title(month) : ''}</p></div><div class="actions"><button onclick={() => step(-1)} title="⌘/Ctrl+←">Mes anterior</button><button onclick={() => month = currentMonth}>Hoy</button><button onclick={() => step(1)} title="⌘/Ctrl+→">Mes siguiente</button></div></div>
+  <div class="heading"><div><h1>Tu panorama financiero</h1><p>{month ? title(month) : ''}</p></div><MonthNav bind:month {currentMonth}/></div>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
+  <Imports {version} firstRun {refresh}/>
   {#if data}
     {@const max = Math.max(1, ...data.chart.flatMap(p => [p.income, p.expenses]))}
     {@const ratio = data.budgetAssigned > 0 ? data.budgetSpent / data.budgetAssigned : 0}

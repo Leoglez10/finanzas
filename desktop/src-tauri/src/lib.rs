@@ -1,14 +1,21 @@
+mod features;
+mod reminder_window;
+mod settings;
+
 use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
 use std::time::Duration;
 use chrono::Local;
 use finanzas_core::{domain::money, service::{self, EntryChanges, NewEntry}, store::{EntryFilter, EntryRow, Store}, Category, CategoryGroup};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
+use tauri_plugin_notification::NotificationExt;
 
 struct AppState {
     store: Option<Arc<Mutex<Store>>>,
     revision: Arc<AtomicU64>,
     startup_error: Option<String>,
+    settings: Arc<Mutex<settings::Settings>>,
+    settings_path: Arc<Mutex<Option<std::path::PathBuf>>>,
 }
 impl AppState {
     fn with_store<T>(&self, f: impl FnOnce(&mut Store) -> Result<T, String>) -> Result<T, String> {
@@ -16,6 +23,11 @@ impl AppState {
         f(&mut store)
     }
     fn changed(&self) { self.revision.fetch_add(1, Ordering::Relaxed); }
+    fn save_settings(&self, settings: &settings::Settings) -> Result<(), String> {
+        let path = self.settings_path.lock().map_err(|e| e.to_string())?.clone().ok_or("Configuración no disponible")?;
+        std::fs::create_dir_all(path.parent().ok_or("Ruta inválida")?).map_err(|e| e.to_string())?;
+        std::fs::write(path, serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +108,8 @@ fn parse_amount(text: String) -> Option<i64> { money::cents_from(&text) }
 pub fn run() {
     let result = Store::default_path().ok_or_else(|| "No se pudo determinar la ubicación de la base de datos".to_string()).and_then(|path| Store::open(&path).map_err(|e| format!("{}: {e}", path.display())));
     let revision = Arc::new(AtomicU64::new(0));
+    let settings = Arc::new(Mutex::new(settings::Settings::default()));
+    let settings_path = Arc::new(Mutex::new(None));
     let state = match result {
         Ok(store) => {
             let store = Arc::new(Mutex::new(store));
@@ -110,11 +124,49 @@ pub fn run() {
                 }
                 std::thread::sleep(Duration::from_secs(3600));
             });
-            AppState { store: Some(store), revision: Arc::clone(&revision), startup_error: None }
+            AppState { store: Some(store), revision: Arc::clone(&revision), startup_error: None, settings: Arc::clone(&settings), settings_path: Arc::clone(&settings_path) }
         },
-        Err(error) => AppState { store: None, revision, startup_error: Some(error) },
+        Err(error) => AppState { store: None, revision, startup_error: Some(error), settings: Arc::clone(&settings), settings_path: Arc::clone(&settings_path) },
     };
-    tauri::Builder::default().manage(state)
-        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, today, parse_amount])
+    tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
+        .setup(|app| {
+            let path = app.path().app_config_dir()?.join("settings.json");
+            let state = app.state::<AppState>();
+            *state.settings_path.lock().map_err(|e| e.to_string())? = Some(path.clone());
+            match std::fs::read(&path) {
+                Ok(bytes) => match serde_json::from_slice::<settings::Settings>(&bytes) { Ok(value) => *state.settings.lock().map_err(|e| e.to_string())? = value, Err(e) => eprintln!("Ajustes inválidos: {e}") },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+                Err(e) => eprintln!("No se pudieron leer los ajustes: {e}"),
+            }
+            let app = app.handle().clone();
+            // ponytail: reminders fire only while the app runs; OS-scheduled notifications are per-platform, add if needed.
+            std::thread::spawn(move || {
+                let mut previous = Local::now().naive_local() - chrono::Duration::minutes(1);
+                loop {
+                    let now = Local::now().naive_local();
+                    let state = app.state::<AppState>();
+                    if let Ok(mut settings) = state.settings.lock() {
+                        if settings.enabled {
+                            let planned = state.with_store(|s| service::reminders(s, previous, settings.days, 9).map_err(|e| e.to_string()));
+                            match planned {
+                                Ok(reminders) => for r in reminders {
+                                    if reminder_window::due(&r.id, r.fire_at, previous, now, &settings.sent) {
+                                        match app.notification().builder().title(&r.title).body(&r.body).show() {
+                                            Ok(()) => { settings.sent.insert(r.id); if let Err(e) = state.save_settings(&settings) { eprintln!("No se pudo guardar el aviso: {e}"); } },
+                                            Err(e) => eprintln!("No se pudo enviar el aviso: {e}"),
+                                        }
+                                    }
+                                },
+                                Err(e) => eprintln!("No se pudieron calcular los avisos: {e}"),
+                            }
+                        }
+                    }
+                    previous = now;
+                    std::thread::sleep(Duration::from_secs(60));
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, today, parse_amount, features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::create_schedule, features::schedule_action, features::get_settings, features::save_settings, features::import_availability, features::import_data])
         .run(tauri::generate_context!()).expect("error al iniciar la aplicación");
 }

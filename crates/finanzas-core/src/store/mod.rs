@@ -6,6 +6,8 @@ mod entries;
 pub use entries::{EntryFilter, EntryRow};
 mod payees;
 mod schema;
+mod swiftdata;
+pub use swiftdata::{ImportError, ImportSummary};
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;

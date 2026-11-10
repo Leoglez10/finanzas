@@ -14,8 +14,12 @@ fn assert_foreign_database_untouched(sql: &str) {
     let conn = rusqlite::Connection::open(&path).unwrap();
     conn.execute_batch(sql).unwrap();
     drop(conn);
-    let before = std::fs::read(&path).unwrap();
-    let result = Store::open(&path);
+    assert_existing_foreign_database_untouched(&path);
+}
+
+fn assert_existing_foreign_database_untouched(path: &std::path::Path) {
+    let before = std::fs::read(path).unwrap();
+    let result = Store::open(path);
     assert!(result.is_err(), "foreign database must be refused");
     let error = result.err().unwrap();
     assert!(error.to_string().contains("not a Finanzas database"), "unexpected error: {error}");
@@ -25,7 +29,7 @@ fn assert_foreign_database_untouched(sql: &str) {
         }
         other => panic!("unexpected error type: {other}"),
     }
-    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert_eq!(std::fs::read(path).unwrap(), before);
     for suffix in ["-wal", "-shm"] {
         let mut sidecar = path.as_os_str().to_owned();
         sidecar.push(suffix);
@@ -46,6 +50,36 @@ fn open_refuses_core_data_primarykey_marker() {
 #[test]
 fn open_refuses_unversioned_foreign_database_without_mutation() {
     assert_foreign_database_untouched("CREATE TABLE unrelated (id INTEGER);");
+}
+
+#[test]
+fn open_refuses_versioned_foreign_database_without_mutation() {
+    assert_foreign_database_untouched("CREATE TABLE unrelated (id INTEGER); PRAGMA user_version = 1;");
+}
+
+#[test]
+fn open_refuses_future_version_without_mutation() {
+    assert_foreign_database_untouched("CREATE TABLE unrelated (id INTEGER); PRAGMA user_version = 99;");
+}
+
+#[test]
+fn open_refuses_future_version_even_with_all_finanzas_tables() {
+    let path = unique_db_path("future-version");
+    let mut conn = rusqlite::Connection::open(&path).unwrap();
+    super::schema::migrate(&mut conn).unwrap();
+    conn.pragma_update(None, "user_version", 99).unwrap();
+    drop(conn);
+    assert_existing_foreign_database_untouched(&path);
+}
+
+#[test]
+fn open_refuses_finanzas_database_missing_a_table() {
+    let path = unique_db_path("missing-table");
+    let mut conn = rusqlite::Connection::open(&path).unwrap();
+    super::schema::migrate(&mut conn).unwrap();
+    conn.execute_batch("DROP TABLE settings;").unwrap();
+    drop(conn);
+    assert_existing_foreign_database_untouched(&path);
 }
 
 #[test]

@@ -1,8 +1,10 @@
 use rusqlite::{Connection, Result};
 
+pub(super) const CURRENT_VERSION: i64 = 1;
+
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if version > 1 {
+    if version > CURRENT_VERSION {
         return Err(rusqlite::Error::InvalidQuery);
     }
     if version == 0 {
@@ -19,9 +21,10 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
              CREATE INDEX entry_account_idx ON entry(account_id);
              CREATE INDEX entry_date_idx ON entry(date);
              CREATE INDEX entry_category_date_idx ON entry(category_id, date);
-             CREATE INDEX entry_payee_date_idx ON entry(payee_id, date);
-             PRAGMA user_version = 1;",
+             CREATE INDEX entry_payee_date_idx ON entry(payee_id, date);",
+
         )?;
+        tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;
     }
     Ok(())

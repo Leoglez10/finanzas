@@ -55,11 +55,11 @@ impl Store {
             Ok(metadata) if metadata.len() > 0 => {
                 let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
                 let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-                let (has_tables, has_core_data): (bool, bool) = conn.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table'), EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND upper(name) IN ('Z_METADATA', 'Z_PRIMARYKEY'))",
+                let (table_count, has_core_data): (i64, bool) = conn.query_row(
+                    "SELECT COUNT(*) FILTER (WHERE name IN ('account', 'category_group', 'category', 'payee', 'entry', 'schedule', 'budget_amount', 'settings')), EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND upper(name) IN ('Z_METADATA', 'Z_PRIMARYKEY')) FROM sqlite_master WHERE type = 'table'",
                     [], |row| Ok((row.get(0)?, row.get(1)?)),
                 )?;
-                if has_core_data || (version == 0 && has_tables) {
+                if !(1..=schema::CURRENT_VERSION).contains(&version) || table_count != 8 || has_core_data {
                     return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(ForeignDatabase(path.to_owned()))));
                 }
             }

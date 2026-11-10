@@ -19,6 +19,8 @@ pub struct ImportSummary {
 pub enum ImportError {
     #[error("target store is not empty")]
     StoreNotEmpty,
+    #[error("target budgets are not empty")]
+    BudgetsNotEmpty,
     #[error(transparent)]
     Sql(#[from] rusqlite::Error),
     #[error(transparent)]

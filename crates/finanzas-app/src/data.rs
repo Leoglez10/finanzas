@@ -6,7 +6,7 @@ pub struct AccountBalance { pub account: Account, pub balance: i64 }
 pub struct Snapshot { pub accounts: Vec<AccountBalance>, pub overview: Overview, pub version: i64, pub groups: Vec<CategoryGroup>, pub categories: Vec<Category> }
 pub type WorkerStore = Arc<Mutex<Option<Store>>>;
 
-pub enum Mutation { Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64) }
+pub enum Mutation { Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64), Budget(i32, i64, String) }
 pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
     let guard = worker.lock().map_err(|e| e.to_string())?;
     let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
@@ -17,6 +17,10 @@ pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
             finanzas_core::service::update_entry(store, id, changes).map_err(|e| e.to_string())?;
         }
         Mutation::Delete(id) => { finanzas_core::service::delete_entry(store, id).map_err(|e| e.to_string())?; }
+        Mutation::Budget(month, category, text) => {
+            // `None` means the text is not an amount; nothing was written.
+            finanzas_core::service::set_budget_from_text(store, month, category, &text).map_err(|e| e.to_string())?.ok_or("Importe inválido")?;
+        }
     }
     Ok(())
 }
@@ -24,6 +28,11 @@ pub fn suggestions(worker: WorkerStore, text: String) -> Result<Vec<(String, Opt
     let guard = worker.lock().map_err(|e| e.to_string())?;
     let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
     store.payee_suggestions(&text, 8).map_err(|e| e.to_string())?.into_iter().map(|p| Ok((p.name, store.suggested_category(p.id).map_err(|e| e.to_string())?))).collect()
+}
+pub fn budget(worker: WorkerStore, month: i32) -> Result<finanzas_core::service::BudgetView, String> {
+    let guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    finanzas_core::service::budget_month(store, month).map_err(|e| e.to_string())
 }
 pub struct Ledger { pub rows: Vec<finanzas_core::store::EntryRow>, pub total: i64 }
 pub fn ledger(worker: WorkerStore, account: Option<i64>, search: &str) -> Result<Ledger, String> {

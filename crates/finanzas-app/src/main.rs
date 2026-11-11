@@ -1,3 +1,4 @@
+mod budget;
 mod data;
 mod entry_helpers;
 mod ledger;
@@ -18,7 +19,9 @@ type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
 type Suggestions = Vec<(String, Option<Id>)>;
 type SuggestionResult = (String, Result<Suggestions, String>);
 #[derive(Clone, Copy)]
-enum MutationTarget { Sheet, Confirmation(Id) }
+enum MutationTarget { Sheet, Confirmation(Id), Budget(Id) }
+type BudgetKey = (i32, Option<i64>, u64);
+type BudgetResult = (BudgetKey, Result<finanzas_core::service::BudgetView, String>);
 
 struct State {
     route: Route,
@@ -50,6 +53,11 @@ struct State {
     mutation_error: Option<String>,
     suggestions: Vec<(String, Option<Id>)>,
     suggestion_latest: Latest<SuggestionResult>,
+    budget: Option<finanzas_core::service::BudgetView>,
+    budget_latest: Latest<BudgetResult>,
+    budget_gen: u64,
+    budget_inputs: std::collections::HashMap<Id, (TextEdit, String)>,
+    budget_error: Option<(Option<Id>, String)>,
 }
 
 impl State {
@@ -58,7 +66,7 @@ impl State {
         Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
-            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)) }
+            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None }
     }
     fn load() -> Self { let mut state = Self::empty(); state.open_default = true; state }
     fn current_key(&self) -> Option<LedgerKey> {
@@ -100,7 +108,37 @@ impl State {
         }
     }
     fn total(&self) -> i64 { self.accounts.iter().filter(|a| !a.account.closed).map(|a| a.balance).sum() }
-    fn set_month(&mut self, month: i32) { self.month = month; self.refresh = true; }
+    fn set_month(&mut self, month: i32) { self.month = month; self.refresh = true; self.budget_error = None; }
+    fn budget_edit(&mut self, id: Id) -> &mut TextEdit {
+        if self.mutation_active() || !self.budget_inputs.contains_key(&id) { return &mut self.blocked_edit; }
+        &mut self.budget_inputs.get_mut(&id).expect("checked above").0
+    }
+    fn accept_budget(&mut self, view: finanzas_core::service::BudgetView) {
+        if self.budget.as_ref().is_none_or(|b| b.month != view.month) { self.budget_inputs.clear(); }
+        let mut visible = Vec::new();
+        for c in view.groups.iter().filter(|g| !g.is_income).flat_map(|g| &g.categories).filter(|c| !c.hidden) {
+            visible.push(c.id);
+            let text = budget::input_text(c.budgeted);
+            match self.budget_inputs.get_mut(&c.id) {
+                // Text the user typed and has not committed survives a refresh.
+                Some((edit, base)) if edit.text != *base => *base = text,
+                _ => { self.budget_inputs.insert(c.id, (TextEdit::new(text.clone()), text)); }
+            }
+        }
+        self.budget_inputs.retain(|id, _| visible.contains(id));
+        self.budget = Some(view);
+    }
+    fn commit_budget(&mut self, id: Id) {
+        if self.mutation_active() { return; }
+        let Some(month) = self.budget.as_ref().map(|b| b.month).filter(|m| *m == self.month) else { return; };
+        let Some((edit, base)) = self.budget_inputs.get(&id) else { return; };
+        self.budget_error = None;
+        if edit.text == *base { return; }
+        let text = edit.text.clone();
+        let worker = Arc::clone(&self.worker);
+        self.mutation_target = Some(MutationTarget::Budget(id));
+        self.mutation.request(data::Mutation::Budget(month, id, text), move |m| data::mutate(worker, m));
+    }
     fn accept(&mut self, snapshot: data::Snapshot) {
         self.version = Some(snapshot.version); self.accounts = snapshot.accounts; self.overview = Some(snapshot.overview); self.groups = snapshot.groups; self.categories = snapshot.categories;
     }
@@ -130,6 +168,18 @@ fn movements_scene(s: &mut State, dark: bool) {
 }
 fn movements_light(s: &mut State) { movements_scene(s, false); }
 fn movements_dark(s: &mut State) { movements_scene(s, true); }
+fn budget_scene(s: &mut State, dark: bool) {
+    scene(s, true, dark);
+    s.route = Route::Presupuesto;
+    let worker = Arc::clone(&s.worker);
+    match std::thread::spawn(move || data::budget(worker, 202611)).join() {
+        Ok(Ok(view)) => s.accept_budget(view),
+        Ok(Err(error)) => s.error = Some(error),
+        Err(_) => s.error = Some("No se pudo preparar la escena".into()),
+    }
+}
+fn budget_light(s: &mut State) { budget_scene(s, false); }
+fn budget_dark(s: &mut State) { budget_scene(s, true); }
 fn entry_scene(s: &mut State, dark: bool) {
     movements_scene(s, dark); s.open_sheet(true, None);
     if let Some(sh) = &mut s.sheet { sh.amount.replace_text("125.50"); sh.payee.replace_text("Farmacia"); sh.notes.replace_text("Compra mensual"); }
@@ -137,12 +187,12 @@ fn entry_scene(s: &mut State, dark: bool) {
 fn entry_light(s: &mut State) { entry_scene(s, false); }
 fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
         let target = s.mutation_target.take();
-        match result { Ok(()) => { match target { Some(MutationTarget::Sheet) => s.sheet = None, Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }, _ => {} } s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true; }, Err(e) => { s.mutation_error = Some(e); changed = true; } }
+        match result { Ok(()) => { match target { Some(MutationTarget::Sheet) => s.sheet = None, Some(MutationTarget::Budget(id)) => { s.budget_inputs.remove(&id); s.budget_error = None; s.budget_gen += 1; }, Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }, _ => {} } s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true; }, Err(e) => { if let Some(MutationTarget::Budget(id)) = target { s.budget_error = Some((Some(id), e)); } else { s.mutation_error = Some(e); } changed = true; } }
     }
     if let Some((query, result)) = s.suggestion_latest.take()
         && s.sheet.as_ref().is_some_and(|sh| sh.payee.text == query) {
@@ -182,6 +232,15 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         if s.ledger_key.as_ref() != Some(&key) && s.ledger.is_some() { s.ledger = None; changed = true; }
         s.ledger_latest.request_if_changed(&key, move |key| { let result = data::ledger(worker, key.0, &key.1); (key, result) });
     }
+    if let Some((key, result)) = s.budget_latest.take() && key.0 == s.month {
+        match result { Ok(view) => s.accept_budget(view), Err(error) => s.budget_error = Some((None, error)) }
+        tx.instant(); changed = true;
+    }
+    if s.route == Route::Presupuesto && s.version.is_some() {
+        let key = (s.month, s.version, s.budget_gen);
+        let worker = Arc::clone(&s.worker);
+        s.budget_latest.request_if_changed(&key, move |key| { let result = data::budget(worker, key.0); (key, result) });
+    }
     s.invalidate_selection();
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
@@ -194,7 +253,7 @@ fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
         if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_sheet(!ev.mods.shift, None); return true; }
         if matches!(ev.key, Key::Delete | Key::Backspace) && s.selected.is_some_and(|id| s.visible_entry(id).is_some()) { s.confirm = s.selected; return true; }
     }
-    if s.route != Route::Resumen || !(ev.mods.cmd || ev.mods.ctrl) || ev.mods.alt || ev.mods.shift { return false; }
+    if !matches!(s.route, Route::Resumen | Route::Presupuesto) || !(ev.mods.cmd || ev.mods.ctrl) || ev.mods.alt || ev.mods.shift { return false; }
     match ev.key {
         Key::Left => { s.set_month(month::previous(s.month)); true }
         Key::Right => { s.set_month(month::next(s.month)); true }
@@ -255,7 +314,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
-    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
+    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
         col().grow(1.0).h_full().padding(48.0).gap(12.0)
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
@@ -272,7 +331,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });
@@ -296,6 +355,97 @@ mod tests {
     fn command_n(rt: &mut Runtime<State>) {
         rt.key(KeyEvent { key: Key::Command('n'), mods: rune::Mods { cmd: true, ..Default::default() } });
         rt.frame(0.0);
+    }
+
+    fn budget_runtime() -> Runtime<State> {
+        let mut state = State::empty(); budget_light(&mut state);
+        let mut rt = Runtime::new(state, view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.on_key = Some(on_key); rt.poll = Some(poll); rt.frame(0.0); rt
+    }
+    fn settle(rt: &mut Runtime<State>) { for _ in 0..150 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); } }
+    fn category(rt: &Runtime<State>, name: &str) -> finanzas_core::service::BudgetCategory {
+        let view = rt.state.budget.as_ref().unwrap();
+        view.groups.iter().flat_map(|g| g.categories.iter()).find(|c| c.name == name).map(|c| finanzas_core::service::BudgetCategory { id: c.id, name: c.name.clone(), hidden: c.hidden, budgeted: c.budgeted, activity: c.activity, available: c.available, spent_share: c.spent_share }).unwrap()
+    }
+    fn text_of(rt: &Runtime<State>, key: &str) -> Option<String> { rt.elements().into_iter().find(|e| e.key.as_deref() == Some(key)).and_then(|e| e.text) }
+    fn type_into(rt: &mut Runtime<State>, key: &str, value: &str) {
+        let (x, y) = rt.find(key).unwrap_or_else(|| panic!("missing {key}"));
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        rt.key(KeyEvent { key: Key::Command('a'), mods: rune::Mods { cmd: true, ..Default::default() } });
+        rt.key(KeyEvent { key: Key::Text(value.into()), mods: Default::default() });
+        rt.key(KeyEvent { key: Key::Enter, mods: Default::default() });
+        rt.frame(0.0);
+    }
+    #[test]
+    fn editing_assigned_updates_the_category_and_available_to_assign() {
+        let mut rt = budget_runtime();
+        let vivienda = category(&rt, "Vivienda");
+        let before = rt.state.budget.as_ref().unwrap().to_budget;
+        assert_eq!(vivienda.budgeted, 80_000);
+        type_into(&mut rt, &format!("budget-input-{}", vivienda.id), "150");
+        settle(&mut rt);
+        let after = category(&rt, "Vivienda");
+        assert_eq!(after.budgeted, 15_000);
+        assert_eq!(rt.state.budget.as_ref().unwrap().to_budget, before + 80_000 - 15_000);
+        assert_eq!(text_of(&rt, "to-assign").unwrap(), money::format(before + 65_000));
+        assert!(rt.state.budget_error.is_none());
+    }
+    #[test]
+    fn invalid_assigned_keeps_text_and_shows_error() {
+        let mut rt = budget_runtime();
+        let vivienda = category(&rt, "Vivienda");
+        type_into(&mut rt, &format!("budget-input-{}", vivienda.id), "abc");
+        settle(&mut rt);
+        assert_eq!(rt.state.budget_inputs[&vivienda.id].0.text, "abc");
+        assert_eq!(text_of(&rt, "budget-error").as_deref(), Some("Importe inválido"));
+        assert_eq!(category(&rt, "Vivienda").budgeted, 80_000);
+    }
+    #[test]
+    fn month_navigation_changes_the_budget_month() {
+        let mut rt = budget_runtime();
+        for (key, month, title) in [("previous-month", 202610, "Octubre de 2026"), ("next-month", 202611, "Noviembre de 2026")] {
+            let (x, y) = rt.find(key).unwrap();
+            rt.pointer_down(x, y); rt.pointer_up(x, y);
+            settle(&mut rt);
+            assert_eq!(rt.state.budget.as_ref().unwrap().month, month);
+            assert_eq!(text_of(&rt, "month-title").as_deref(), Some(title));
+        }
+    }
+    #[test]
+    fn pending_mutation_blocks_budget_edits() {
+        let mut rt = budget_runtime();
+        let vivienda = category(&rt, "Vivienda");
+        let other = category(&rt, "Ocio");
+        let key = format!("budget-input-{}", vivienda.id);
+        let guard = Arc::clone(&rt.state.worker);
+        let guard = guard.lock().unwrap();
+        type_into(&mut rt, &key, "150");
+        assert!(rt.state.mutation_active());
+        let (x, y) = rt.find(&format!("budget-input-{}", other.id)).unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y);
+        rt.key(KeyEvent { key: Key::Text("999".into()), mods: Default::default() });
+        rt.key(KeyEvent { key: Key::Enter, mods: Default::default() });
+        rt.frame(0.0);
+        assert_eq!(rt.state.budget_inputs[&other.id].0.text, "560");
+        drop(guard);
+        settle(&mut rt);
+        assert_eq!(category(&rt, "Vivienda").budgeted, 15_000);
+        assert_eq!(category(&rt, "Ocio").budgeted, other.budgeted);
+    }
+    #[test]
+    fn hidden_categories_are_not_listed_and_group_totals_exclude_them() {
+        let mut rt = budget_runtime();
+        let id = { let guard = rt.state.worker.lock().unwrap(); let store = guard.as_ref().unwrap();
+            let group = store.list_category_groups().unwrap().into_iter().find(|g| !g.is_income).unwrap().id;
+            let id = store.insert_category(&finanzas_core::models::Category { id: 0, name: "Antigua".into(), hidden: true, sort_order: 99.0, group_id: Some(group) }).unwrap();
+            store.set_budget(202611, id, 50_000).unwrap(); id };
+        rt.state.refresh = true; rt.state.budget_gen += 1;
+        settle(&mut rt);
+        assert!(rt.state.budget.as_ref().unwrap().groups.iter().any(|g| g.categories.iter().any(|c| c.id == id)));
+        assert!(rt.find(&format!("budget-input-{id}")).is_none());
+        let group = rt.state.budget.as_ref().unwrap().groups.iter().find(|g| !g.is_income).unwrap();
+        let visible: i64 = group.categories.iter().filter(|c| !c.hidden).map(|c| c.budgeted).sum();
+        assert_eq!(text_of(&rt, &format!("group-budgeted-{}", group.id)).as_deref(), Some(money::format(visible).as_str()));
     }
     #[test]
     fn new_income_selects_a_visible_income_category() {

@@ -1,10 +1,10 @@
 use super::*;
 use finanzas_core::service::Overview;
 
-fn label(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.ink) }
-fn muted(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.muted) }
-fn card(p: Palette) -> El { col().grow(1.0).padding(18.0).gap(10.0).radius(18.0).fill(p.card).border(1.0, p.border) }
-fn button(name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
+pub fn label(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.ink) }
+pub fn muted(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.muted) }
+pub fn card(p: Palette) -> El { col().grow(1.0).padding(18.0).gap(10.0).radius(18.0).fill(p.card).border(1.0, p.border) }
+pub fn button(name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
     el().key(key).role("button").label(name).focusable(true).padding(8.0).radius(8.0).fill(p.card).hover(p.selected)
         .on_press(action).child(label(name, p))
 }

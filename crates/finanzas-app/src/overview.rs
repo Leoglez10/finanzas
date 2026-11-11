@@ -21,7 +21,7 @@ fn bar(value: i64, total: i64, color: Color, p: Palette) -> El {
         .child(el().grow(f).h(7.0).radius(3.5).fill(color))
         .child(el().grow(1.0 - f).h(7.0))
 }
-fn chart(o: &Overview, p: Palette) -> El {
+fn chart(o: &Overview, selected: u32, p: Palette) -> El {
     let emerald = p.emerald;
     let max = o.chart.iter().map(|v| v.income.max(v.expenses)).max().unwrap_or(0);
     let mut columns = row().w_full().h(110.0).gap(10.0).center_y();
@@ -37,8 +37,8 @@ fn chart(o: &Overview, p: Palette) -> El {
     }
     let points: Vec<_> = o.chart.iter().map(|v| (v.income, v.expenses)).collect();
     card(p).child(row().w_full().justify_between().center_y().child(label("Ingresos vs gastos", p))
-        .child(row().gap(3.0).child(button("6M", "chart-6", |s| { s.chart_months = 6; s.refresh = true; }, p))
-            .child(button("12M", "chart-12", |s| { s.chart_months = 12; s.refresh = true; }, p))))
+        .child(row().gap(3.0).child(button("6M", "chart-6", |s| { s.chart_months = 6; s.refresh = true; }, p).role("radio").checked(selected == 6).fill(if selected == 6 { p.selected } else { Color::TRANSPARENT }))
+            .child(button("12M", "chart-12", |s| { s.chart_months = 12; s.refresh = true; }, p).role("radio").checked(selected == 12).fill(if selected == 12 { p.selected } else { Color::TRANSPARENT }))))
         .child(columns).child(muted(format!("Flujo neto promedio: {}", money::format(metrics::net_average(&points))), p))
 }
 fn spending(o: &Overview, p: Palette) -> El {
@@ -100,7 +100,7 @@ pub fn render(s: &State, p: Palette) -> El {
             .child(stat("Ingresos del mes", money::format(o.current.income), metrics::change_badge(o.income_change), false, p))
             .child(stat("Gastos del mes", money::format(o.current.expenses), metrics::change_badge(o.expenses_change), false, p))
             .child(stat("Tasa de ahorro", savings, if o.current.savings_rate.is_some() { metrics::change_badge(o.savings_rate_change) } else { "Sin ingresos este mes".into() }, false, p)))
-            .child(row().w_full().gap(12.0).child(chart(o, p)).child(spending(o, p)))
+            .child(row().w_full().gap(12.0).child(chart(o, s.chart_months, p)).child(spending(o, p)))
             .child(recent(o, p)).child(budget(o, p));
     } else { content = content.child(muted("Cargando…", p)); }
     col().grow(1.0).h_full().min_h(0.0).scroll(rune::ScrollSpec { stick_bottom: false }).child(content)

@@ -1,14 +1,19 @@
 mod data;
+mod entry_helpers;
+mod ledger;
 mod metrics;
 mod overview;
 
 use std::sync::{Arc, Mutex};
 use chrono::Local;
 use finanzas_core::{domain::{money, month}, models::Id};
-use rune::{AppSpec, Color, Cx, El, Latest, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
+use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Route { Resumen, Presupuesto, Proximos, Todas, Cuenta(Id) }
+
+type LedgerKey = (Option<Id>, String, Option<i64>);
+type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
 
 struct State {
     route: Route,
@@ -24,6 +29,10 @@ struct State {
     latest: Latest<Result<Option<data::Snapshot>, String>>,
     refresh: bool,
     next_poll: f64,
+    search: TextEdit,
+    ledger: Option<data::Ledger>,
+    ledger_latest: Latest<LedgerResult>,
+    ledger_key: Option<LedgerKey>,
 }
 
 impl State {
@@ -31,7 +40,8 @@ impl State {
         let today = month::month_of(Local::now().date_naive());
         Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
-            worker: Arc::new(Mutex::new(None)), latest: Latest::default(), refresh: true, next_poll: 0.0 }
+            worker: Arc::new(Mutex::new(None)), latest: Latest::default(), refresh: true, next_poll: 0.0,
+            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None }
     }
     fn load() -> Self { Self::empty() }
     fn total(&self) -> i64 { self.accounts.iter().filter(|a| !a.account.closed).map(|a| a.balance).sum() }
@@ -53,8 +63,20 @@ fn scene(s: &mut State, seed: bool, dark: bool) {
 fn demo_light(s: &mut State) { scene(s, true, false); }
 fn demo_dark(s: &mut State) { scene(s, true, true); }
 fn empty_scene(s: &mut State) { scene(s, false, false); }
+fn movements_scene(s: &mut State, dark: bool) {
+    scene(s, true, dark);
+    s.route = Route::Todas;
+    let worker = Arc::clone(&s.worker);
+    match std::thread::spawn(move || data::ledger(worker, None, "")).join() {
+        Ok(Ok(ledger)) => { s.ledger = Some(ledger); s.ledger_key = Some((None, String::new(), s.version)); }
+        Ok(Err(error)) => s.error = Some(error),
+        Err(_) => s.error = Some("No se pudo preparar la escena".into()),
+    }
+}
+fn movements_light(s: &mut State) { movements_scene(s, false); }
+fn movements_dark(s: &mut State) { movements_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.latest.take() {
@@ -71,6 +93,16 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         let worker = Arc::clone(&s.worker);
         let input = (s.month, s.chart_months, s.version, force);
         s.latest.request(input, move |(month, chart, version, force)| data::fetch(worker, month, chart, version, force));
+    }
+    if let Some((key, result)) = s.ledger_latest.take() {
+        match result { Ok(ledger) => { s.ledger = Some(ledger); s.ledger_key = Some(key); tx.instant(); changed = true; }, Err(error) => { s.error = Some(error); changed = true; } }
+    }
+    if s.overview.is_some() && matches!(s.route, Route::Todas | Route::Cuenta(_)) {
+        let account = match s.route { Route::Cuenta(id) => Some(id), _ => None };
+        let key = (account, s.search.text.clone(), s.version);
+        let worker = Arc::clone(&s.worker);
+        if s.ledger_key.as_ref() != Some(&key) && s.ledger.is_some() { s.ledger = None; changed = true; }
+        s.ledger_latest.request_if_changed(&key, move |key| { let result = data::ledger(worker, key.0, &key.1); (key, result) });
     }
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
@@ -136,7 +168,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
-    let detail = if s.route == Route::Resumen { overview::render(s, p) } else {
+    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
         col().grow(1.0).h_full().padding(48.0).gap(12.0)
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
@@ -149,7 +181,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });
@@ -188,6 +220,29 @@ mod tests {
         rt.pointer_up(x, y);
         rt.frame(0.0);
         assert_eq!(title(&rt), "Octubre de 2026");
+    }
+    #[test]
+    fn all_accounts_shows_the_movements_screen() {
+        let mut rt = Runtime::new(State::empty(), view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.frame(0.0);
+        let (x, y) = rt.find("todas").unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        assert!(rt.find("ledger-title").is_some());
+    }
+    #[test]
+    fn chart_range_marks_the_selected_segment() {
+        let mut state = State::empty();
+        demo_light(&mut state);
+        let mut rt = Runtime::new(state, view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.frame(0.0);
+        let fill = |rt: &Runtime<State>, key: &str| rt.elements().into_iter().find(|e| e.key.as_deref() == Some(key)).unwrap().fill;
+        assert_ne!(fill(&rt, "chart-6"), fill(&rt, "chart-12"));
+        let old = fill(&rt, "chart-12");
+        let (x, y) = rt.find("chart-12").unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y);
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        assert_ne!(fill(&rt, "chart-12"), old);
+        assert_eq!(rt.state.chart_months, 12);
     }
     #[test]
     fn chart_scales_values_and_handles_empty_data() {

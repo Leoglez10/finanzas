@@ -6,6 +6,16 @@ pub struct AccountBalance { pub account: Account, pub balance: i64 }
 pub struct Snapshot { pub accounts: Vec<AccountBalance>, pub overview: Overview, pub version: i64 }
 pub type WorkerStore = Arc<Mutex<Option<Store>>>;
 
+pub struct Ledger { pub rows: Vec<finanzas_core::store::EntryRow>, pub total: i64 }
+pub fn ledger(worker: WorkerStore, account: Option<i64>, search: &str) -> Result<Ledger, String> {
+    let guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    let filter = finanzas_core::store::EntryFilter { account_id: account, search: Some(search.to_owned()), ..Default::default() };
+    let (rows, _) = store.entries(&filter).map_err(|e| e.to_string())?;
+    let total = rows.iter().map(|row| row.amount).sum();
+    Ok(Ledger { rows, total })
+}
+
 pub fn read(store: &Store, month: i32, chart_months: u32) -> Result<Snapshot, String> {
     let version = store.data_version().map_err(|e| e.to_string())?;
     let accounts = store.list_accounts().map_err(|e| e.to_string())?;
@@ -66,6 +76,19 @@ fn seed_demo(store: &Store) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ledger_filters_and_sums_the_matching_rows() {
+        let (worker, _) = scene(true).unwrap();
+        let all = ledger(Arc::clone(&worker), None, "").unwrap();
+        assert!(all.rows.len() >= 20);
+        let income = ledger(Arc::clone(&worker), None, "Ingreso mensual").unwrap();
+        assert_eq!(income.rows.len(), 7);
+        assert_eq!(income.total, income.rows.iter().map(|r| r.amount).sum::<i64>());
+        let missing = ledger(worker, None, "no-such-transaction").unwrap();
+        assert_eq!(missing.total, 0);
+        assert!(missing.rows.is_empty());
+    }
 
     #[test]
     fn external_write_refreshes_snapshot_but_unchanged_poll_does_not() {

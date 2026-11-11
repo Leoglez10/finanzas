@@ -23,7 +23,7 @@ Parity reference: `odd/specs/rust-porting-spec.md` (§1–§8, mapped from the S
 ## Tasks
 
 - [x] T8 S2,S5,S9 delegated — Rune shell/sidebar (d01b563), overview and asynchronous refresh (1965a47); writer observed 114 tests, clippy and release build pass; parent inspected light/empty overview PNGs. Tauri retained pending parity.
-- [x] T9 S2,S4,S5,S9 delegated — ledger (dc48b17) + entry sheet, create/edit/confirmed delete, pending-mutation guards, contextual selection, no implicit default-DB open — COMMIT. 25 app / 133 workspace tests + clippy under scratch FINANZAS_DB. Independent verify found 2 high issues (fixed with RED/GREEN); re-verify unavailable (quota) → parent inline: pointer tap+Delete shows identified confirmation; real startup opens only scratch DB. Gaps: failed-save error rendering not shown; release build first timed out at 120s (retried). Cross-process conflicts unchanged.
+- [x] T9 S2,S4,S5,S9 delegated — ledger (dc48b17) + entry sheet, create/edit/confirmed delete, pending-mutation guards, contextual selection, no implicit default-DB open — 8ad7954. 25 app / 133 workspace tests + clippy under scratch FINANZAS_DB. Independent verify found 2 high issues (fixed with RED/GREEN); re-verify unavailable (quota) → parent inline: pointer tap+Delete shows identified confirmation; real startup opens only scratch DB. Gaps: failed-save error rendering not shown; release build first timed out at 120s (retried). Cross-process conflicts unchanged.
 - [ ] T10 S5,S7,S8,S9 delegated — Rune budget, upcoming, settings, imports and reminders; verification pending.
 - [ ] T11 S3,S9 delegated — remove Tauri only after Rune parity; update scripts, README and CI; verification pending.
 - [x] T0 S1 inline — workspace + models skeleton — 723a434

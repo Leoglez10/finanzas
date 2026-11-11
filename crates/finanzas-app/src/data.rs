@@ -9,6 +9,53 @@ pub type WorkerStore = Arc<Mutex<Option<Store>>>;
 pub enum Mutation {
     Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64), Budget(i32, i64, String),
     PostSchedule(i64, NaiveDate), SkipSchedule(i64), SaveSchedule(Option<i64>, ScheduleDraft), DeleteSchedule(i64),
+    CreateAccount(AccountDraft),
+}
+
+/// What the "Nueva cuenta" sheet collects. `opening` is signed cents; `None` means no opening entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccountDraft { pub name: String, pub off_budget: bool, pub opening: Option<i64>, pub date: NaiveDate }
+fn create_account(store: &mut Store, draft: &AccountDraft) -> Result<(), String> {
+    let db = |e: rusqlite::Error| e.to_string();
+    store.transaction(|store| {
+        let order = store.list_accounts()?.iter().map(|a| a.sort_order).fold(0.0, f64::max) + 1.0;
+        let id = store.insert_account(&Account { id: 0, name: draft.name.trim().to_owned(), off_budget: draft.off_budget, closed: false, sort_order: order })?;
+        if let Some(amount) = draft.opening.filter(|v| *v != 0) {
+            store.insert_entry(&Entry { id: 0, date: draft.date, amount, notes: "Saldo inicial".into(), cleared: true, account_id: Some(id), category_id: None, payee_id: None, schedule_id: None })?;
+        }
+        Ok(())
+    }).map_err(db)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImportKind { SwiftData, Actual }
+/// Imports into the (empty) open store. The source is only ever read; an Actual backup `.zip` is
+/// unpacked into a scratch directory that is removed afterwards.
+pub fn import(worker: WorkerStore, kind: ImportKind, source: std::path::PathBuf) -> Result<finanzas_core::store::ImportSummary, String> {
+    use finanzas_core::store::ImportError;
+    let mut guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_mut().ok_or("No se pudo abrir la base de datos")?;
+    let explain = |e: ImportError| match e {
+        ImportError::StoreNotEmpty => "Ya tienes datos: la base de datos de destino no está vacía.".to_owned(),
+        other => format!("No se pudo importar: {other}"),
+    };
+    match kind {
+        ImportKind::SwiftData => store.import_swiftdata(&source).map_err(explain),
+        ImportKind::Actual => {
+            let scratch = std::env::temp_dir().join(format!("finanzas-import-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos())));
+            std::fs::create_dir_all(&scratch).map_err(|e| format!("No se pudo importar: {e}"))?;
+            let result = finanzas_core::store::extract_actual(&source, &scratch).and_then(|db| store.import_actual(&db)).map_err(explain);
+            let _ = std::fs::remove_dir_all(&scratch);
+            result
+        }
+    }
+}
+
+/// Reminders for payments coming up, planned on the worker. Disabled settings never reach here.
+pub fn reminders(worker: WorkerStore, now: chrono::NaiveDateTime, days: i64, hour: u32) -> Result<Vec<finanzas_core::service::ReminderView>, String> {
+    let guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    finanzas_core::service::reminders(store, now, days, hour).map_err(|e| e.to_string())
 }
 
 /// What the schedule sheet collects; the sign of `amount` already says expense or income.
@@ -38,6 +85,7 @@ pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
         Mutation::PostSchedule(id, today) => { finanzas_core::service::post_schedule(store, id, today).map_err(service_err)?; }
         Mutation::SkipSchedule(id) => { finanzas_core::service::skip_schedule(store, id, None).map_err(service_err)?; }
         Mutation::DeleteSchedule(id) => { finanzas_core::service::delete_schedule(store, id).map_err(service_err)?; }
+        Mutation::CreateAccount(draft) => create_account(store, &draft)?,
         Mutation::SaveSchedule(id, draft) => {
             let payee_id = store.find_or_create_payee(&draft.payee).map_err(|e| e.to_string())?;
             let existing = match id { Some(id) => Some(store.get_schedule(id).map_err(|e| e.to_string())?.ok_or("El pago programado ya no existe")?), None => None };

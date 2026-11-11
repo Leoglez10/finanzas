@@ -77,6 +77,25 @@ fn recent(o: &Overview, p: Palette) -> El {
     }
     c
 }
+/// Payment reminders planned by the worker; each one can be dismissed for this session.
+pub const BANNER_ROWS: usize = 3;
+fn reminders_banner(s: &State, p: Palette) -> Option<El> {
+    if !s.settings.enabled { return None; }
+    let pending: Vec<_> = s.reminders.iter().filter(|r| !s.dismissed.contains(&r.id)).collect();
+    if pending.is_empty() { return None; }
+    let mut banner = card(p).key("reminders-banner").fill(p.amber.alpha(0.12)).border(1.0, p.amber)
+        .child(row().w_full().center_y().justify_between().child(text("Recordatorios de pagos").font(type_::BODY).color(p.ink))
+            .child(button("Descartar todos", "dismiss-all", |s| { let ids: Vec<_> = s.reminders.iter().map(|r| r.id.clone()).collect(); s.dismissed.extend(ids); }, p)));
+    for r in pending.iter().take(BANNER_ROWS) {
+        let id = r.id.clone();
+        banner = banner.child(row().w_full().center_y().justify_between().gap(12.0).key(format!("reminder-{}", r.id))
+            .child(col().gap(2.0).child(label(r.title.clone(), p)).child(muted(r.body.clone(), p)).child(muted(format!("Aviso: {}", r.fire_at.format("%d/%m/%Y %H:%M")), p)))
+            .child(el().key(format!("dismiss-{}", r.id)).role("button").label("Descartar").focusable(true).padding(8.0).radius(8.0).fill(p.card).hover(p.selected)
+                .on_press(move |s: &mut State| { s.dismissed.insert(id.clone()); }).child(label("Descartar", p))));
+    }
+    if pending.len() > BANNER_ROWS { banner = banner.child(muted(format!("y {} más", pending.len() - BANNER_ROWS), p)); }
+    Some(banner)
+}
 pub fn render(s: &State, p: Palette) -> El {
     let mut content = col().w_full().padding(32.0).gap(16.0)
         .child(row().w_full().center_y().justify_between()
@@ -85,6 +104,7 @@ pub fn render(s: &State, p: Palette) -> El {
             .child(row().gap(6.0).child(button("Mes anterior", "previous-month", |s| s.set_month(month::previous(s.month)), p))
                 .child(button("Hoy", "today", |s| s.set_month(s.today), p))
                 .child(button("Mes siguiente", "next-month", |s| s.set_month(month::next(s.month)), p))));
+    if let Some(banner) = reminders_banner(s, p) { content = content.child(banner); }
     if let Some(o) = &s.overview {
         let first = &o.first_run;
         if !(first.has_account && first.has_categorized_income && first.has_budget) {

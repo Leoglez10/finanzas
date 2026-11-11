@@ -54,7 +54,7 @@ fn edit_target(s: &mut State, pick: fn(&mut ScheduleSheet) -> &mut TextEdit) -> 
     if s.mutation_active() || s.schedule_sheet.is_none() { return &mut s.blocked_edit; }
     pick(s.schedule_sheet.as_mut().expect("checked above"))
 }
-fn toggle(label: &str, key: &str, on: bool, p: Palette) -> El {
+pub fn toggle(label: &str, key: &str, on: bool, p: Palette) -> El {
     let mark = el().size(18.0, 18.0).radius(5.0).border(1.0, if on { p.petroleum } else { p.muted }).fill(if on { p.petroleum } else { Color::TRANSPARENT }).center()
         .child(text(if on { "✓" } else { "" }.to_owned()).font(type_::BODY).color(p.canvas));
     row().key(key).role("checkbox").label(label).checked(on).focusable(true).gap(10.0).center_y().padding(8.0).radius(8.0).hover(p.selected)

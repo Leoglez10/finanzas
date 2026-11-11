@@ -1,3 +1,5 @@
+mod account_sheet;
+mod ajustes;
 mod budget;
 mod data;
 mod entry_helpers;
@@ -6,7 +8,10 @@ mod metrics;
 mod overview;
 mod proximos;
 mod schedule_sheet;
+mod settings;
 mod sheet;
+#[cfg(test)]
+mod t10c_tests;
 
 use std::sync::{Arc, Mutex};
 use chrono::{Local, NaiveDate};
@@ -14,18 +19,20 @@ use finanzas_core::{domain::{money, month}, models::Id};
 use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Route { Resumen, Presupuesto, Proximos, Todas, Cuenta(Id) }
+enum Route { Resumen, Presupuesto, Proximos, Ajustes, Todas, Cuenta(Id) }
 
 type LedgerKey = (Option<Id>, String, Option<i64>);
 type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
 type Suggestions = Vec<(String, Option<Id>)>;
 type SuggestionResult = (String, Result<Suggestions, String>);
 #[derive(Clone, Copy)]
-enum MutationTarget { Sheet, Confirmation(Id), Budget(Id), ScheduleSheet, ScheduleConfirm(Id), ScheduleRow }
+enum MutationTarget { Account, Sheet, Confirmation(Id), Budget(Id), ScheduleSheet, ScheduleConfirm(Id), ScheduleRow }
 type ProximosKey = (Option<i64>, u64, NaiveDate);
 type ProximosResult = (ProximosKey, Result<data::Proximos, String>);
 type BudgetKey = (i32, Option<i64>, u64);
 type BudgetResult = (BudgetKey, Result<finanzas_core::service::BudgetView, String>);
+type RemindersKey = (Option<i64>, u64, bool, i64, u32, NaiveDate);
+type RemindersResult = (RemindersKey, Result<Vec<finanzas_core::service::ReminderView>, String>);
 
 struct State {
     route: Route,
@@ -74,6 +81,21 @@ struct State {
     auto_post: bool,
     auto_latest: Latest<Result<usize, String>>,
     next_auto: f64,
+    settings: settings::Settings,
+    settings_path: Option<std::path::PathBuf>,
+    settings_error: Option<String>,
+    hourly: bool,
+    reminders: Vec<finanzas_core::service::ReminderView>,
+    reminders_gen: u64,
+    account_sheet: Option<account_sheet::AccountSheet>,
+    import_confirm: Option<ajustes::ImportRequest>,
+    import_latest: Latest<Result<finanzas_core::store::ImportSummary, String>>,
+    importing: bool,
+    import_outcome: Option<ajustes::ImportOutcome>,
+    reminders_latest: Latest<RemindersResult>,
+    next_reminders: f64,
+    dismissed: std::collections::HashSet<String>,
+    db_label: String,
 }
 
 impl State {
@@ -83,9 +105,48 @@ impl State {
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
-            today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0 }
+            today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0,
+            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into() }
     }
-    fn load() -> Self { let mut state = Self::empty(); state.open_default = true; state.auto_post = true; state }
+    fn load() -> Self { Self::load_from(finanzas_core::store::Store::default_path()) }
+    /// The real app: opens the default store, runs automatic payments and the hourly reminder check.
+    /// Settings live next to the database file. Nothing else enables timers.
+    fn load_from(db: Option<std::path::PathBuf>) -> Self {
+        let mut state = Self::empty();
+        state.open_default = true; state.auto_post = true; state.hourly = true;
+        state.db_label = db.as_ref().map_or_else(|| "Base de datos predeterminada".into(), |p| p.display().to_string());
+        state.settings_path = db.as_ref().and_then(|p| p.parent()).map(|dir| dir.join("settings.json"));
+        if let Some(path) = &state.settings_path {
+            match settings::load(path) { Ok(value) => state.settings = value, Err(e) => state.settings_error = Some(format!("Ajustes inválidos: {e}")) }
+        }
+        state
+    }
+    /// The clock reminders are planned against; scenes and tests keep theirs fixed.
+    fn now(&self) -> chrono::NaiveDateTime { if self.open_default { Local::now().naive_local() } else { self.today_date.and_hms_opt(8, 0, 0).expect("valid time") } }
+    fn reminders_key(&self) -> RemindersKey { (self.version, self.reminders_gen, self.settings.enabled, self.settings.days, self.settings.hour, self.today_date) }
+    fn change_settings(&mut self, change: impl FnOnce(&mut settings::Settings)) {
+        change(&mut self.settings);
+        self.settings_error = None;
+        if let Some(path) = &self.settings_path && let Err(e) = settings::save(path, &self.settings) { self.settings_error = Some(format!("No se pudo guardar los ajustes: {e}")); }
+    }
+    fn open_account_sheet(&mut self) {
+        if self.mutation_active() { return; }
+        self.account_sheet = Some(account_sheet::AccountSheet::new()); self.mutation_error = None;
+    }
+    fn submit_account(&mut self) {
+        if self.mutation_active() { return; }
+        let Some(draft) = self.account_sheet.as_ref().and_then(|sh| sh.draft(self.today_date)) else { return };
+        let worker = Arc::clone(&self.worker);
+        self.mutation_target = Some(MutationTarget::Account);
+        self.mutation.request(data::Mutation::CreateAccount(draft), move |m| data::mutate(worker, m));
+    }
+    fn run_import(&mut self) {
+        if self.mutation_active() { return; }
+        let Some(request) = self.import_confirm.take() else { return };
+        let worker = Arc::clone(&self.worker);
+        self.importing = true; self.import_outcome = None;
+        self.import_latest.request((request.kind, request.source), move |(kind, source)| data::import(worker, kind, source));
+    }
     fn current_key(&self) -> Option<LedgerKey> {
         let account = match self.route { Route::Todas => None, Route::Cuenta(id) => Some(id), _ => return None };
         Some((account, self.search.text.clone(), self.version))
@@ -144,7 +205,7 @@ impl State {
         if self.selected.is_some_and(|id| self.visible_entry(id).is_none()) { self.selected = None; }
         if self.confirm.is_some_and(|id| self.visible_entry(id).is_none()) { self.confirm = None; }
     }
-    fn mutation_active(&self) -> bool { self.mutation_target.is_some() }
+    fn mutation_active(&self) -> bool { self.mutation_target.is_some() || self.importing }
     fn open_sheet(&mut self, expense: bool, id: Option<Id>) {
         if self.mutation_active() { return; }
         if id.is_some_and(|id| self.visible_entry(id).is_none()) { return; }
@@ -263,10 +324,27 @@ fn schedule_sheet_scene(s: &mut State) {
     proximos_scene(s, false); s.open_schedule_sheet(None);
     if let Some(sh) = &mut s.schedule_sheet { sh.name.replace_text("Gimnasio"); sh.amount.replace_text("350"); sh.payee.replace_text("Smart Fit"); sh.start.replace_text("15/11/2026"); }
 }
+fn ajustes_scene(s: &mut State, dark: bool) { scene(s, true, dark); s.route = Route::Ajustes; }
+fn ajustes_light(s: &mut State) { ajustes_scene(s, false); }
+fn ajustes_dark(s: &mut State) { ajustes_scene(s, true); }
+fn nueva_cuenta_scene(s: &mut State) {
+    scene(s, true, false); s.open_account_sheet();
+    if let Some(sh) = &mut s.account_sheet { sh.name.replace_text("Ahorros"); sh.opening.replace_text("1500"); }
+}
+/// Resumen with the payment reminders already planned (the real app plans them on the worker).
+fn reminders_scene(s: &mut State) {
+    scene(s, true, false);
+    let (worker, now, settings) = (Arc::clone(&s.worker), s.now(), s.settings.clone());
+    match std::thread::spawn(move || data::seed_schedules(&worker).and_then(|()| data::reminders(worker, now, settings.days, settings.hour))).join() {
+        Ok(Ok(list)) => s.reminders = list,
+        Ok(Err(error)) => s.error = Some(error),
+        Err(_) => s.error = Some("No se pudo preparar la escena".into()),
+    }
+}
 fn entry_light(s: &mut State) { entry_scene(s, false); }
 fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
@@ -275,6 +353,7 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
             Ok(()) => {
                 match target {
                     Some(MutationTarget::Sheet) => s.sheet = None,
+                    Some(MutationTarget::Account) => s.account_sheet = None,
                     Some(MutationTarget::Budget(id)) => { s.budget_inputs.remove(&id); s.budget_error = None; s.budget_gen += 1; }
                     Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }
                     Some(MutationTarget::ScheduleSheet) => s.schedule_sheet = None,
@@ -361,6 +440,27 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         let (worker, today) = (Arc::clone(&s.worker), s.today_date);
         s.auto_latest.request((), move |()| data::auto_post(worker, today));
     }
+    if let Some(result) = s.import_latest.take() {
+        s.importing = false;
+        if result.is_ok() {
+            // Everything the screens show may have changed.
+            s.proximos_gen += 1; s.budget_gen += 1; s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel();
+        }
+        s.import_outcome = Some(result); tx.instant(); changed = true;
+    }
+    // Reminders are planned on the worker: at startup, then hourly (real app only), and whenever data or settings move.
+    if s.hourly && now >= s.next_reminders { s.reminders_gen += 1; s.next_reminders = now + 3600.0; }
+    if let Some((key, result)) = s.reminders_latest.take() && key == s.reminders_key() {
+        match result { Ok(list) => s.reminders = list, Err(error) => { s.reminders.clear(); s.settings_error = Some(format!("No se pudieron calcular los recordatorios: {error}")); } }
+        tx.instant(); changed = true;
+    }
+    if !s.settings.enabled {
+        if !s.reminders.is_empty() { s.reminders.clear(); changed = true; }
+        s.reminders_latest.cancel();
+    } else if s.version.is_some() {
+        let (key, worker, at) = (s.reminders_key(), Arc::clone(&s.worker), s.now());
+        s.reminders_latest.request_if_changed(&key, move |key| { let result = data::reminders(worker, at, key.3, key.4); (key, result) });
+    }
     s.invalidate_selection();
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
@@ -371,6 +471,9 @@ fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
     if s.confirm.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.confirm = None; } return true; } return false; }
     if s.schedule_sheet.is_some() { if ev.key == Key::Escape { s.schedule_sheet = None; return true; } return false; }
     if s.schedule_confirm.is_some() { if ev.key == Key::Escape { s.schedule_confirm = None; return true; } return false; }
+    if s.account_sheet.is_some() { if ev.key == Key::Escape { s.account_sheet = None; return true; } return false; }
+    if s.import_confirm.is_some() { if ev.key == Key::Escape { s.import_confirm = None; return true; } return false; }
+    if (ev.mods.cmd || ev.mods.ctrl) && !ev.mods.shift && !ev.mods.alt && matches!(ev.key, Key::Command(',')) { s.route = Route::Ajustes; return true; }
     if s.route == Route::Proximos {
         if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_schedule_sheet(None); return true; }
         if matches!(ev.key, Key::Delete | Key::Backspace) && let Some(id) = s.schedule_selected { s.request_schedule_delete(id); return true; }
@@ -431,21 +534,24 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         let route = Route::Cuenta(a.account.id);
         sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), p));
     }
+    sidebar = sidebar.child(row().w_full().h(38.0).px(12.0).center_y().gap(8.0).key("new-account").role("button").label("Nueva cuenta").focusable(true).radius(8.0).hover(p.selected)
+        .on_press(|s: &mut State| s.open_account_sheet()).child(text("+  Nueva cuenta").font(type_::BODY).color(p.petroleum)));
     sidebar = sidebar.child(text("CERRADAS").font(type_::SECTION).color(p.muted).pt(24.0).pb(7.0).px(12.0));
     for a in s.accounts.iter().filter(|a| a.account.closed) {
         let route = Route::Cuenta(a.account.id);
         sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), p));
     }
+    sidebar = sidebar.child(el().grow(1.0)).child(nav("Ajustes", "ajustes".into(), Route::Ajustes, s.route == Route::Ajustes, None, p));
     let title = match s.route {
-        Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Todas => "Todas las cuentas",
+        Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Ajustes => "Ajustes", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
-    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if s.route == Route::Proximos { proximos::render(s, p, dark) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
+    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if s.route == Route::Proximos { proximos::render(s, p, dark) } else if s.route == Route::Ajustes { ajustes::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
         col().grow(1.0).h_full().padding(48.0).gap(12.0)
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
     };
-    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some();
+    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some() || s.account_sheet.is_some() || s.import_confirm.is_some();
     let sidebar = if modal_open { sidebar.inert() } else { sidebar };
     let detail = if modal_open { detail.inert() } else { detail };
     let mut root = row().w_full().h_full().fill(p.canvas)
@@ -454,12 +560,14 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     if s.confirm.is_some() { root = root.child(sheet::confirm(s, p)); }
     if s.schedule_sheet.is_some() { root = root.child(schedule_sheet::render(s, p, dark)); }
     if s.schedule_confirm.is_some() { root = root.child(schedule_sheet::confirm(s, p)); }
+    if s.account_sheet.is_some() { root = root.child(account_sheet::render(s, p, dark)); }
+    if s.import_confirm.is_some() { root = root.child(ajustes::confirm(s, p)); }
     root
 }
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });

@@ -5,10 +5,9 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      FINANZAS_DB: ${{ runner.temp }}/finanzas-ci.db
     steps:
       - uses: actions/checkout@v4
+      - run: echo "FINANZAS_DB=$RUNNER_TEMP/finanzas-ci.db" >> "$GITHUB_ENV"
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace

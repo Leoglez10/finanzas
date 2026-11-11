@@ -118,6 +118,9 @@ swift test --package-path FinanzasKit
 Its store is `~/Library/Application Support/Finanzas/Finanzas.store`; `FINANZAS_STORE` overrides it.
 The ad-hoc signed app may require right-click › Open on first launch.
 
+## Built with
+[![Built with Gentle-AI](https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png)](https://github.com/Gentleman-Programming/gentle-ai)
+
 ## License
 
 [MIT](LICENSE)

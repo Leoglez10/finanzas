@@ -12,3 +12,4 @@ path = "src/main.rs"
 finanzas-core = { path = "../finanzas-core" }
 rune = { git = "https://github.com/anomalyco/rune", rev = "38e75af6c22915c01d5e219f53d5f0af6edf9a11" }
 chrono.workspace = true
+rusqlite.workspace = true

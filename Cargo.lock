@@ -987,6 +987,7 @@ dependencies = [
  "chrono",
  "finanzas-core",
  "rune",
+ "rusqlite",
 ]
 
 [[package]]

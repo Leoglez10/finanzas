@@ -1,71 +1,98 @@
-use chrono::NaiveDate;
-use finanzas_core::{domain::money, models::{Account, Entry, Id}, store::Store};
-use rune::{AppSpec, Color, Cx, El, col, el, row, text, tok::type_};
+mod data;
+mod metrics;
+mod overview;
+
+use std::sync::{Arc, Mutex};
+use chrono::Local;
+use finanzas_core::{domain::{money, month}, models::Id};
+use rune::{AppSpec, Color, Cx, El, Latest, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Route { Resumen, Presupuesto, Proximos, Todas, Cuenta(Id) }
 
-struct AccountBalance { account: Account, balance: i64 }
-
 struct State {
     route: Route,
-    accounts: Vec<AccountBalance>,
+    accounts: Vec<data::AccountBalance>,
     dark: Option<bool>,
     error: Option<String>,
+    month: i32,
+    today: i32,
+    chart_months: u32,
+    overview: Option<finanzas_core::service::Overview>,
+    version: Option<i64>,
+    worker: data::WorkerStore,
+    latest: Latest<Result<Option<data::Snapshot>, String>>,
+    refresh: bool,
+    next_poll: f64,
 }
 
 impl State {
-    fn empty() -> Self { Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None } }
-
-    fn load() -> Self {
-        // Rune constructs the initial state before applying a scene. Avoid opening a real
-        // database for deterministic headless scenes.
-        if std::env::args_os().any(|arg| arg == "--scene") { return Self::empty(); }
-        let result = Store::default_path().ok_or_else(|| "No se pudo determinar la ruta de la base de datos".to_owned())
-            .and_then(|path| Store::open(path).map_err(|e| e.to_string()))
-            .and_then(|store| Self::from_store(&store));
-        result.unwrap_or_else(|error| Self { error: Some(error), ..Self::empty() })
+    fn empty() -> Self {
+        let today = month::month_of(Local::now().date_naive());
+        Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
+            month: today, today, chart_months: 6, overview: None, version: None,
+            worker: Arc::new(Mutex::new(None)), latest: Latest::default(), refresh: true, next_poll: 0.0 }
     }
-
-    fn from_store(store: &Store) -> Result<Self, String> {
-        let accounts = store.list_accounts().map_err(|e| e.to_string())?;
-        let balances = store.account_balances().map_err(|e| e.to_string())?;
-        Ok(Self { accounts: accounts.into_iter().map(|account| {
-            let balance = balances.get(&account.id).copied().unwrap_or(0);
-            AccountBalance { account, balance }
-        }).collect(), ..Self::empty() })
-    }
-
+    fn load() -> Self { Self::empty() }
     fn total(&self) -> i64 { self.accounts.iter().filter(|a| !a.account.closed).map(|a| a.balance).sum() }
+    fn set_month(&mut self, month: i32) { self.month = month; self.refresh = true; }
+    fn accept(&mut self, snapshot: data::Snapshot) {
+        self.version = Some(snapshot.version); self.accounts = snapshot.accounts; self.overview = Some(snapshot.overview);
+    }
 }
 
-fn demo(dark: bool) -> State {
-    let result = (|| -> Result<State, String> {
-        let store = Store::open_in_memory().map_err(|e| e.to_string())?;
-        let date = NaiveDate::from_ymd_opt(2026, 11, 10).ok_or("Fecha inválida")?;
-        for (name, amount, closed, order) in [("Cuenta principal", 257_450, false, 0.0), ("Tarjeta", -49_000, false, 1.0), ("Ahorros", 880_000, false, 2.0), ("Cuenta anterior", 12_500, true, 3.0)] {
-            let id = store.insert_account(&Account { id: 0, name: name.into(), off_budget: false, closed, sort_order: order }).map_err(|e| e.to_string())?;
-            store.insert_entry(&Entry { id: 0, date, amount, notes: String::new(), cleared: true, account_id: Some(id), category_id: None, payee_id: None, schedule_id: None }).map_err(|e| e.to_string())?;
-        }
-        let mut state = State::from_store(&store)?;
-        state.dark = Some(dark);
-        Ok(state)
-    })();
-    result.unwrap_or_else(|error| State { dark: Some(dark), error: Some(error), ..State::empty() })
+fn scene(s: &mut State, seed: bool, dark: bool) {
+    let result = std::thread::spawn(move || data::scene(seed)).join();
+    *s = State::empty(); s.month = 202611; s.today = 202611; s.dark = Some(dark); s.refresh = false;
+    match result {
+        Ok(Ok((worker, snapshot))) => { s.worker = worker; s.accept(snapshot); },
+        Ok(Err(error)) => s.error = Some(error),
+        Err(_) => s.error = Some("No se pudo preparar la escena".into()),
+    }
 }
-fn demo_light(s: &mut State) { *s = demo(false); }
-fn demo_dark(s: &mut State) { *s = demo(true); }
-fn empty_scene(s: &mut State) { *s = State::empty(); s.dark = Some(false); }
+fn demo_light(s: &mut State) { scene(s, true, false); }
+fn demo_dark(s: &mut State) { scene(s, true, true); }
+fn empty_scene(s: &mut State) { scene(s, false, false); }
+
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker); }
+fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
+    let mut changed = false;
+    if let Some(result) = s.latest.take() {
+        match result {
+            Ok(Some(snapshot)) => { s.accept(snapshot); s.error = None; tx.instant(); changed = true; }
+            Ok(None) => {}
+            Err(error) => { s.error = Some(error); tx.instant(); changed = true; }
+        }
+    }
+    if s.refresh || (now >= s.next_poll && !s.latest.is_pending()) {
+        let force = s.refresh;
+        s.refresh = false;
+        s.next_poll = now + 2.0;
+        let worker = Arc::clone(&s.worker);
+        let input = (s.month, s.chart_months, s.version, force);
+        s.latest.request(input, move |(month, chart, version, force)| data::fetch(worker, month, chart, version, force));
+    }
+    tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
+    changed
+}
+fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
+    if s.route != Route::Resumen || !(ev.mods.cmd || ev.mods.ctrl) || ev.mods.alt || ev.mods.shift { return false; }
+    match ev.key {
+        Key::Left => { s.set_month(month::previous(s.month)); true }
+        Key::Right => { s.set_month(month::next(s.month)); true }
+        _ => false,
+    }
+}
 
 // These are the adaptive colors in the original app's FinanceTheme.
 #[derive(Clone, Copy)]
-struct Palette { canvas: Color, card: Color, border: Color, petroleum: Color, coral: Color, ink: Color, muted: Color, selected: Color }
+struct Palette { canvas: Color, card: Color, border: Color, petroleum: Color, emerald: Color, coral: Color, amber: Color, ink: Color, muted: Color, selected: Color }
 fn color(hex: &str) -> Color { rune::color::hex(hex).unwrap_or(Color::BLACK) }
 fn palette(dark: bool) -> Palette {
     if dark {
-        Palette { canvas: color("#151D27"), card: color("#1E2936"), border: color("#354453"), petroleum: color("#67C6DF"), coral: color("#FF9A8F"), ink: color("#F3F7F9"), muted: color("#A9BAC6"), selected: color("#304657") }
+        Palette { canvas: color("#151D27"), card: color("#1E2936"), border: color("#354453"), petroleum: color("#67C6DF"), emerald: color("#6DDBAD"), coral: color("#FF9A8F"), amber: color("#F5C46B"), ink: color("#F3F7F9"), muted: color("#A9BAC6"), selected: color("#304657") }
     } else {
-        Palette { canvas: color("#F4F7FA"), card: color("#FFFFFF"), border: color("#DEE7ED"), petroleum: color("#155E75"), coral: color("#BE493D"), ink: color("#202F3A"), muted: color("#6C7E8A"), selected: color("#E2F0F4") }
+        Palette { canvas: color("#F4F7FA"), card: color("#FFFFFF"), border: color("#DEE7ED"), petroleum: color("#155E75"), emerald: color("#147D59"), coral: color("#BE493D"), amber: color("#986000"), ink: color("#202F3A"), muted: color("#6C7E8A"), selected: color("#E2F0F4") }
     }
 }
 
@@ -109,22 +136,25 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
+    let detail = if s.route == Route::Resumen { overview::render(s, p) } else {
+        col().grow(1.0).h_full().padding(48.0).gap(12.0)
+            .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
+            .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
+    };
     row().w_full().h_full().fill(p.canvas)
         .child(sidebar)
         .child(el().w(1.0).h_full().fill(p.border))
-        .child(col().grow(1.0).h_full().padding(48.0).gap(12.0)
-            .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
-            .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted)))
+        .child(detail)
 }
 
 fn main() {
     rune::run(AppSpec::<State> {
         scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene)],
+        setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });
 }
 
-#[cfg(test)]
 fn chart_fraction(value: i64, maximum: i64) -> f32 {
     if maximum <= 0 { return 0.0; }
     (value as f32 / maximum as f32).clamp(0.0, 1.0)
@@ -144,6 +174,20 @@ mod tests {
         rt.pointer_up(x, y);
         rt.frame(0.0);
         assert_eq!(rt.state.route, Route::Presupuesto);
+    }
+    #[test]
+    fn previous_month_changes_the_displayed_header() {
+        let mut state = State::empty();
+        state.month = 202611;
+        let mut rt = Runtime::new(state, view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.frame(0.0);
+        let title = |rt: &Runtime<State>| rt.elements().into_iter().find(|e| e.key.as_deref() == Some("month-title")).and_then(|e| e.text).unwrap();
+        assert_eq!(title(&rt), "Noviembre de 2026");
+        let (x, y) = rt.find("previous-month").unwrap();
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(0.0);
+        assert_eq!(title(&rt), "Octubre de 2026");
     }
     #[test]
     fn chart_scales_values_and_handles_empty_data() {

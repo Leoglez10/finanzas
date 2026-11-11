@@ -1,6 +1,6 @@
 # Finanzas
 
-Local personal finance app for macOS, Windows and Linux, built with Rust and Tauri 2.
+Local personal finance app for macOS, Windows and Linux, built in Rust with the [Rune](https://github.com/anomalyco/rune) GPU UI framework.
 Manage accounts, envelope budgets and scheduled payments, and connect AI assistants through MCP.
 The interface is in Spanish.
 
@@ -23,22 +23,23 @@ budget and upcoming payments.
 
 ## Requirements
 
-- Rust stable, Node.js 20.19+ and pnpm.
-- Platform dependencies ([Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/)):
+- Rust stable (edition 2024).
+- Platform dependencies:
 
 | Platform | Dependencies |
 |---|---|
 | macOS | Xcode Command Line Tools (`xcode-select --install`) |
-| Windows | Microsoft C++ Build Tools with Desktop development with C++, and WebView2 |
-| Debian/Ubuntu | `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `build-essential`, `curl`, `wget`, `file`, `libxdo-dev`, `libssl-dev` |
+| Windows | Microsoft C++ Build Tools with Desktop development with C++ |
+| Debian/Ubuntu | Build: `libxkbcommon-dev`, `libwayland-dev`. Run: `libxkbcommon-x11-0` and a Vulkan driver (`mesa-vulkan-drivers` without a GPU) |
+
+The file dialogs used by import go through the XDG desktop portal on Linux.
 
 ## Install
 
-Install dependencies and start the app in development mode from the repository root:
+Start the app from the repository root:
 
 ```sh
-pnpm --dir desktop install
-pnpm --dir desktop tauri dev
+cargo run --release -p finanzas-app
 ```
 
 Alternatively, run `bash scripts/dev.sh`.
@@ -46,13 +47,14 @@ Alternatively, run `bash scripts/dev.sh`.
 ## Build
 
 ```sh
-pnpm --dir desktop install
-pnpm --dir desktop tauri build
+cargo build --release -p finanzas-app -p finanzas-mcp
 cargo test --workspace
 ```
 
-Tauri writes platform bundles under `desktop/src-tauri/target/release/bundle/`.
-`bash scripts/build.sh` also builds the release MCP server.
+The app binary is `target/release/finanzas` (`finanzas.exe` on Windows); `bash scripts/build.sh`
+builds it together with the MCP server. The app also renders headless for checks without a window,
+for example `target/release/finanzas --scene demo-light --size 1200x800 --snap resumen.png`;
+the `--scene` demos use in-memory data. Run tests with `FINANZAS_DB` pointing at a scratch file.
 
 ## Data location
 
@@ -96,9 +98,10 @@ Amounts are decimal currency units (negative for outflows); dates use `YYYY-MM-D
 
 ## Import
 
-On first run, **Importar mis datos de la app anterior** imports the old SwiftData store
-read-only, without modifying it. Actual Budget data can also be imported into an empty store
-from `db.sqlite`, an export zip or a server `.blob`.
+**Ajustes › Importar datos** copies data into an empty database. **Importar desde Finanzas
+(SwiftData)** reads the old app's store (`~/Library/Application Support/Finanzas/Finanzas.store`)
+read-only, without modifying it. **Importar desde Actual** accepts `db.sqlite`, an export zip or a
+server `.blob`. A confirmation names the source file and the destination database first.
 
 ## Legacy Swift app
 

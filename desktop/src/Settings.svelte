@@ -1,8 +1,0 @@
-<script lang="ts">
- import {onMount} from 'svelte'; import {getSettings,saveSettings} from './lib/api'; import Imports from './Imports.svelte';
- let {version,refresh}:{version:string;refresh:()=>void}=$props(); let enabled=$state(true),days=$state(2),error=$state('');
- onMount(()=>{void getSettings().then(s=>{enabled=s.enabled;days=s.days;}).catch(e=>error=String(e));});
- async function save(){try{await saveSettings(enabled,days);error='';}catch(e){error=String(e);}}
-</script>
-<div class="screen"><h1>Ajustes</h1><p>Tus recordatorios, a tu ritmo</p>{#if error}<p role="alert" class="error">{error}</p>{/if}<section><h2>Avisos de pagos</h2><label><input type="checkbox" bind:checked={enabled} onchange={()=>void save()}/> Avisarme antes de cada pago</label><label>Avisar {days} {days===1?'día':'días'} antes, a las 9:00 <input type="number" min="0" max="14" disabled={!enabled} bind:value={days} onchange={()=>void save()}/></label></section><section><h2>Automatización</h2><p>Los pagos marcados como "Registrar automáticamente" se registran solos en su fecha al abrir la app y cada hora. Si un movimiento no tiene categoría, se usa la última categoría usada con ese comercio.</p></section><section><Imports {version} {refresh}/></section></div>
-<style>.screen{display:grid;gap:15px;max-width:700px}h1,h2,p{margin:0}h2{font-size:1rem;color:var(--petroleum)}p{color:var(--muted)}section{display:grid;gap:14px;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:16px}label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}input{font:inherit}input[type=number]{width:65px}.error{color:var(--coral)}</style>

@@ -5,3 +5,5 @@ xcuserdata/
 .DS_Store
 build/
 .atl/
+target/
+target-*/

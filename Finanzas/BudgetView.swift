@@ -11,6 +11,7 @@ struct BudgetView: View {
     @State private var month = MonthKey.of(.now)
     @State private var nameEdit: NameEdit?
     @State private var nameText = ""
+    @State private var showHidden = false
 
     private enum NameEdit {
         case newGroup, renameGroup(CategoryGroup), newCategory(CategoryGroup), renameCategory(Category)
@@ -18,15 +19,35 @@ struct BudgetView: View {
 
     var body: some View {
         let budget = (try? EnvelopeBudget.load(from: context))?.month(month)
-        List {
-            Section {
-                LabeledContent("Disponible para asignar") {
-                    Text(Money.format(budget?.toBudget ?? 0)).font(.title2.bold()).monospacedDigit()
-                        .foregroundStyle((budget?.toBudget ?? 0) < 0 ? .red : .green)
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 20) {
+                FinanceHeading(title: "Dale un destino a tu dinero", subtitle: monthTitle(month))
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 16)], spacing: 16) {
+                    FinanceMetric(
+                        title: "Disponible para asignar", value: Money.format(budget?.toBudget ?? 0),
+                        icon: "tray.and.arrow.down",
+                        color: (budget?.toBudget ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.emerald,
+                        note: toBudgetHint(budget?.toBudget ?? 0))
+                    FinanceMetric(
+                        title: "Ingresos del mes", value: Money.format(budget?.income ?? 0),
+                        icon: "arrow.down.circle", color: FinanceTheme.emerald)
+                    FinanceMetric(title: "Asignado", value: Money.format(budget?.budgeted ?? 0), icon: "envelope.badge")
                 }
-                LabeledContent("Ingresos del mes", value: Money.format(budget?.income ?? 0))
-                LabeledContent("Asignado", value: Money.format(budget?.budgeted ?? 0))
+                let uncategorized = uncategorizedIncome(entries, month: month)
+                if uncategorized > 0 {
+                    Label("Tienes \(Money.format(uncategorized)) en ingresos sin categoría. Dales una categoría de ingreso en Movimientos para poder repartirlos.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(FinanceTheme.amber)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(FinanceTheme.amber.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                }
+                Label("Escribe cuánto asignas a cada categoría, o usa +100 / -50 para sumar o restar.",
+                      systemImage: "keyboard")
+                    .font(.callout).foregroundStyle(.secondary)
             }
+            .padding(24)
+            List {
             ForEach(groups.filter { !$0.isIncome }) { group in
                 Section {
                     ForEach(visibleCategories(group)) { category in
@@ -36,6 +57,7 @@ struct BudgetView: View {
                             context.saveOrAlert()
                         }
                         .id("\(month)-\(category.persistentModelID.hashValue)")
+                        .opacity(category.hidden ? 0.5 : 1)
                         .contextMenu { categoryMenu(category) }
                     }
                 } header: {
@@ -47,8 +69,10 @@ struct BudgetView: View {
                 Section {
                     ForEach(visibleCategories(group)) { category in
                         LabeledContent(category.name) {
-                            Text(Money.format(budget?.rows[category.persistentModelID]?.activity ?? 0)).monospacedDigit()
+                                Text(Money.format(budget?.rows[category.persistentModelID]?.activity ?? 0))
+                                    .monospacedDigit().foregroundStyle(FinanceTheme.emerald)
                         }
+                        .opacity(category.hidden ? 0.5 : 1)
                         .contextMenu { categoryMenu(category) }
                     }
                 } header: {
@@ -59,7 +83,12 @@ struct BudgetView: View {
                     .contextMenu { Button("Renombrar grupo") { edit(.renameGroup(group), name: group.name) } }
                 }
             }
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
         }
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .navigationTitle(monthTitle(month))
         .alert(nameEditTitle, isPresented: Binding(get: { nameEdit != nil }, set: { if !$0 { nameEdit = nil } })) {
             TextField("Nombre", text: $nameText)
@@ -70,6 +99,10 @@ struct BudgetView: View {
         .toolbar {
             ToolbarItem {
                 Button("Nuevo grupo", systemImage: "folder.badge.plus") { edit(.newGroup) }
+            }
+            ToolbarItem {
+                Toggle("Mostrar ocultas", systemImage: "eye", isOn: $showHidden)
+                    .help("Muestra las categorías ocultas; clic derecho ▸ Mostrar para recuperarlas")
             }
             ToolbarItemGroup {
                 Button("Mes anterior", systemImage: "chevron.left") { month = MonthKey.previous(month) }
@@ -83,8 +116,8 @@ struct BudgetView: View {
 
     @ViewBuilder private func categoryMenu(_ category: Category) -> some View {
         Button("Renombrar") { edit(.renameCategory(category), name: category.name) }
-        // ponytail: hide instead of delete, so past transactions keep their category; no unhide UI yet.
-        Button("Ocultar") { category.hidden = true; context.saveOrAlert() }
+        // Hide instead of delete, so past transactions keep their category.
+        Button(category.hidden ? "Mostrar" : "Ocultar") { category.hidden.toggle(); context.saveOrAlert() }
     }
 
     private func edit(_ target: NameEdit, name: String = "") {
@@ -121,7 +154,7 @@ struct BudgetView: View {
     }
 
     private func visibleCategories(_ group: CategoryGroup) -> [Category] {
-        (group.categories ?? []).filter { !$0.hidden }.sorted { $0.sortOrder < $1.sortOrder }
+        (group.categories ?? []).filter { showHidden || !$0.hidden }.sorted { $0.sortOrder < $1.sortOrder }
     }
 }
 
@@ -131,7 +164,8 @@ private struct AddButton: View {
     var body: some View {
         Button(action: action) { Image(systemName: "plus.circle.fill") }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(FinanceTheme.petroleum)
+            .accessibilityLabel(help)
             .help(help)
     }
 }
@@ -141,7 +175,7 @@ private struct BudgetHeader: View {
     let onAdd: () -> Void
     var body: some View {
         HStack {
-            Text(title)
+            Text(title).font(.headline).foregroundStyle(FinanceTheme.petroleum)
             AddButton(help: "Nueva categoría", action: onAdd)
             Spacer()
             Group {
@@ -158,10 +192,17 @@ private struct BudgetRow: View {
     let row: EnvelopeBudget<PersistentIdentifier>.Row?
     let onAssign: (Int) -> Void
     @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
-        HStack {
-            Text(name)
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(name)
+                ProgressView(value: row?.spentShare ?? 0)
+                    .tint((row?.available ?? 0) < 0 ? FinanceTheme.coral : FinanceTheme.petroleum)
+                    .frame(maxWidth: 280)
+                    .accessibilityLabel("Gastado \(Int((row?.spentShare ?? 0) * 100))%")
+            }
             Spacer()
             TextField("Asignado", text: $text)
                 .multilineTextAlignment(.trailing)
@@ -169,10 +210,10 @@ private struct BudgetRow: View {
                 .frame(width: 110)
                 .textFieldStyle(.roundedBorder)
                 .help("Escribe un monto, o +100 / -50 para sumar o restar")
-                .onSubmit {
-                    if let cents = Money.budgeted(from: text, current: row?.budgeted ?? 0) { onAssign(cents) }
-                    text = Money.format(row?.budgeted ?? 0)
-                }
+                .focused($focused)
+                .onSubmit(commit)
+                // Tab or a click elsewhere commits too, so a typed amount is never silently dropped.
+                .onChange(of: focused) { if !focused { commit() } }
             Text(Money.format(row?.activity ?? 0)).monospacedDigit().foregroundStyle(.secondary)
                 .frame(width: 110, alignment: .trailing)
             Text(Money.format(row?.available ?? 0)).monospacedDigit()
@@ -181,15 +222,23 @@ private struct BudgetRow: View {
                 .foregroundStyle(availableColor)
                 .frame(width: 110, alignment: .trailing)
         }
+        .padding(.vertical, 8)
         .onAppear { text = Money.format(row?.budgeted ?? 0) }
         .onChange(of: row?.budgeted) { text = Money.format(row?.budgeted ?? 0) }
     }
 
+    private func commit() {
+        let current = row?.budgeted ?? 0
+        guard text != Money.format(current) else { return }
+        if let cents = Money.budgeted(from: text, current: current) { onAssign(cents) }
+        text = Money.format(current)
+    }
+
     private var availableColor: Color {
         switch row?.available ?? 0 {
-        case ..<0: .red
+        case ..<0: FinanceTheme.coral
         case 0: .secondary
-        default: .green
+        default: FinanceTheme.emerald
         }
     }
 }

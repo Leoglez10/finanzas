@@ -26,3 +26,19 @@ public struct MonthSummary<ID: Hashable & Sendable>: Sendable {
 public func relativeChange(_ current: Int, from previous: Int) -> Double? {
     previous == 0 ? nil : Double(current - previous) / Double(abs(previous))
 }
+
+/// Deposits this month on budget accounts that have no category. The envelope budget only counts
+/// income categories, so this money is invisible until someone categorizes it.
+public func uncategorizedIncome(_ entries: [LedgerEntry], month: Int) -> Int {
+    entries.filter { $0.amount > 0 && $0.category == nil && $0.account?.offBudget == false && MonthKey.of($0.date) == month }
+        .reduce(0) { $0 + $1.amount }
+}
+
+/// One sentence telling the person what "Disponible para asignar" means for them right now.
+public func toBudgetHint(_ toBudget: Int) -> String {
+    switch toBudget {
+    case ..<0: "Asignaste \(Money.format(-toBudget)) más de lo que tienes. Registra un ingreso o baja alguna categoría."
+    case 0: "Todo tu dinero tiene destino."
+    default: "Tienes \(Money.format(toBudget)) sin destino. Asígnalo a alguna categoría."
+    }
+}

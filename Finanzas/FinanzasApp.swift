@@ -5,47 +5,79 @@ import SwiftUI
 
 @main
 struct FinanzasApp: App {
-    @State private var container: ModelContainer
-    @State private var mcpChanges: ExternalChanges
+    // nil when the store cannot be opened; the window then explains why instead of crashing.
+    @State private var container: ModelContainer?
+    @State private var mcpChanges: ExternalChanges?
+    private let openError: String?
     private let tick = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     private let hourly = Timer.publish(every: 3_600, on: .main, in: .common).autoconnect()
 
     init() {
-        let container: ModelContainer
-        do { container = try FinanzasStore.onDisk() }
-        catch { fatalError("No se pudo abrir la base de datos: \(error)") }
-        _container = State(initialValue: container)
-        _mcpChanges = State(initialValue: ExternalChanges(context: container.mainContext))
+        do {
+            let container = try FinanzasStore.onDisk()
+            _container = State(initialValue: container)
+            _mcpChanges = State(initialValue: ExternalChanges(context: container.mainContext))
+            openError = nil
+        } catch {
+            _container = State(initialValue: nil)
+            _mcpChanges = State(initialValue: nil)
+            openError = error.localizedDescription
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .onReceive(tick) { _ in reloadIfMCPWrote() }
-                .onReceive(hourly) { _ in runAutomations() }
-                .task { await AutomationRunner.run(container.mainContext) }
+            if let container {
+                RootView()
+                    .onReceive(tick) { _ in reloadIfMCPWrote() }
+                    .onReceive(hourly) { _ in runAutomations() }
+                    .task { await AutomationRunner.run(container.mainContext) }
+                    .modelContainer(container)
+            } else {
+                StoreErrorView(message: openError ?? "")
+            }
         }
-        .modelContainer(container)
         .commands { ImportFromActualCommand(container: container) }
 
         Settings {
-            SettingsView().modelContainer(container)
+            if let container { SettingsView().modelContainer(container) }
         }
     }
 
-    private func runAutomations() { Task { await AutomationRunner.run(container.mainContext) } }
+    private func runAutomations() {
+        guard let container else { return }
+        Task { await AutomationRunner.run(container.mainContext) }
+    }
 
     /// The MCP helper writes from its own process; the main context would not see those rows,
     /// so a fresh container is opened when its history shows MCP-authored changes.
     /// While a sheet is open its picked models belong to the current container, so the reload waits.
     private func reloadIfMCPWrote() {
-        guard !NSApp.windows.contains(where: { $0.attachedSheet != nil }),
-              (try? mcpChanges.poll()) == true else { return }
-        container.mainContext.saveOrAlert()
+        guard let current = container,
+              !NSApp.windows.contains(where: { $0.attachedSheet != nil }),
+              (try? mcpChanges?.poll()) == true else { return }
+        current.mainContext.saveOrAlert()
         guard let fresh = try? FinanzasStore.onDisk() else { return }
         container = fresh
         mcpChanges = ExternalChanges(context: fresh.mainContext)
         runAutomations()
+    }
+}
+
+private struct StoreErrorView: View {
+    let message: String
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("No se pudo abrir la base de datos", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text("\(message)\n\(FinanzasStore.storeURL.path)").textSelection(.enabled)
+        } actions: {
+            Button("Mostrar en Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([FinanzasStore.storeURL.deletingLastPathComponent()])
+            }
+        }
+        .frame(minWidth: 480, minHeight: 320)
     }
 }
 
@@ -56,6 +88,7 @@ enum SidebarItem: Hashable {
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.undoManager) private var undoManager
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var schedules: [Schedule]
     @State private var selection: SidebarItem? = .overview
@@ -64,7 +97,20 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.title2).foregroundStyle(.white)
+                        .padding(10)
+                        .background(FinanceTheme.hero, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Finanzas").font(.title2.bold())
+                        Text("Tu dinero, en orden").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(20)
+                List(selection: $selection) {
                 Label("Resumen", systemImage: "square.grid.2x2").tag(SidebarItem.overview)
                 Label("Presupuesto", systemImage: "envelope").tag(SidebarItem.budget)
                 Label("Próximos pagos", systemImage: "calendar").tag(SidebarItem.upcoming)
@@ -81,7 +127,7 @@ struct RootView: View {
                         Label("Nueva cuenta", systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderless)
-                    .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(FinanceTheme.petroleum)
                 } header: {
                     Text("Cuentas")
                 }
@@ -93,8 +139,12 @@ struct RootView: View {
                         }
                     }
                 }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            .background(FinanceTheme.card)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 270)
             .alert("Nueva cuenta", isPresented: $addingAccount) {
                 TextField("Nombre", text: $newAccountName)
                 Button("Crear", action: addAccount)
@@ -119,6 +169,9 @@ struct RootView: View {
                 UpcomingView()
             }
         }
+        .tint(FinanceTheme.petroleum)
+        // Edit ▸ Undo (⌘Z) reverts deletes and edits; re-run when an MCP reload swaps the context.
+        .task(id: ObjectIdentifier(context)) { context.undoManager = undoManager }
     }
 
     private var scheduleSignature: [String] {
@@ -146,7 +199,7 @@ struct AccountRow: View {
     var body: some View {
         LabeledContent {
             Text(Money.format(balance)).monospacedDigit()
-                .foregroundStyle(balance < 0 ? .red : .secondary)
+                .foregroundStyle(balance < 0 ? FinanceTheme.coral : Color.secondary)
         } label: {
             Label(name, systemImage: icon)
         }

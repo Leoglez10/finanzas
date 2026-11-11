@@ -68,3 +68,13 @@ public struct EnvelopeBudget<ID: Hashable & Sendable>: Sendable {
         }
     }
 }
+
+extension EnvelopeBudget.Row {
+    /// Share of this category's funds already spent, 0...1; overspending reads as full.
+    public var spentShare: Double {
+        let spent = max(-activity, 0)
+        if available < 0 { return 1 }
+        let funds = spent + available
+        return funds > 0 ? Double(spent) / Double(funds) : 0
+    }
+}

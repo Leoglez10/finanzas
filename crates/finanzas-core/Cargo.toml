@@ -1,0 +1,14 @@
+[package]
+name = "finanzas-core"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+rusqlite = { workspace = true, features = ["backup"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+dirs = "6"
+zip = { version = "8.6", default-features = false, features = ["deflate"] }

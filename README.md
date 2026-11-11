@@ -1,92 +1,122 @@
 # Finanzas
 
-Native macOS personal finance app (SwiftUI + SwiftData): accounts, monthly envelope budget,
-upcoming scheduled payments and a bundled MCP server for AI assistants. UI in Spanish.
-
-![macOS 15+](https://img.shields.io/badge/macOS-15%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange)
+Local personal finance app for macOS, Windows and Linux, built in Rust with the [Rune](https://github.com/anomalyco/rune) GPU UI framework.
+Manage accounts, envelope budgets and scheduled payments, and connect AI assistants through MCP.
+The interface is in Spanish.
 
 ## Features
 
-- **Resumen** — dashboard with total balance, monthly income and expenses, savings rate,
-  income vs expenses chart (Swift Charts), spending by category, recent movements and budget progress.
-- **Cuentas** — on-budget and off-budget accounts with live balances; create accounts from the sidebar.
-- **Movimientos** — searchable ledger per account or across all; quick add with ⌘N, double-click to edit any field.
-- **Presupuesto** — monthly envelope budget (assigned, spent, available, carryover). Amount cells accept
-  `500`, `+100` or `-50`; add, rename and hide categories and groups.
-- **Próximos pagos** — recurring scheduled payments, next 30 days with projected balances, post or skip.
-- **Automations** and a bundled **MCP server** (see below).
+- **Resumen** — balances, monthly income and expenses, spending and budget progress.
+- **Cuentas** — on-budget and off-budget accounts with balances.
+- **Movimientos** — searchable ledger and transaction editing.
+- **Presupuesto** — monthly envelope budget with assignments, activity and carryover.
+- **Próximos pagos** — scheduled payments and projected balances.
+- **Automations** and a local **MCP server** (see below).
 
-Everything stays local: no account, no cloud, no telemetry.
+Everything stays local: no account, cloud or telemetry.
+
+## Interface
+
+The Spanish interface uses a light/dark adaptive palette: petroleum navigation, emerald income,
+coral expenses and amber payment warnings. The sidebar connects the overview, accounts, ledger,
+budget and upcoming payments.
 
 ## Requirements
 
-- macOS 15 or later, Xcode 16+
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+- Rust stable (edition 2024).
+- Platform dependencies:
+
+| Platform | Dependencies |
+|---|---|
+| macOS | Xcode Command Line Tools (`xcode-select --install`) |
+| Windows | Microsoft C++ Build Tools with Desktop development with C++ |
+| Debian/Ubuntu | Build: `libxkbcommon-dev`, `libwayland-dev`. Run: `libxkbcommon-x11-0` and a Vulkan driver (`mesa-vulkan-drivers` without a GPU) |
+
+The file dialogs used by import go through the XDG desktop portal on Linux.
 
 ## Install
+
+Start the app from the repository root:
+
+```sh
+cargo run --release -p finanzas-app
+```
+
+Alternatively, run `bash scripts/dev.sh`.
+
+## Build
+
+```sh
+cargo build --release -p finanzas-app -p finanzas-mcp
+cargo test --workspace
+```
+
+The app binary is `target/release/finanzas` (`finanzas.exe` on Windows); `bash scripts/build.sh`
+builds it together with the MCP server. The app also renders headless for checks without a window,
+for example `target/release/finanzas --scene demo-light --size 1200x800 --snap resumen.png`;
+the `--scene` demos use in-memory data. Run tests with `FINANZAS_DB` pointing at a scratch file.
+
+## Data location
+
+The app and MCP server share a SQLite database. Set `FINANZAS_DB` to use a different file;
+otherwise the default is the platform data directory:
+
+| Platform | Default database |
+|---|---|
+| macOS | `~/Library/Application Support/Finanzas/finanzas.db` |
+| Windows | `%APPDATA%\Finanzas\finanzas.db` |
+| Linux | `~/.local/share/Finanzas/finanzas.db` (or `$XDG_DATA_HOME/Finanzas/finanzas.db`) |
+
+## MCP server
+
+Build the stdio server and register the resulting binary with your MCP client:
+
+```sh
+cargo build --release -p finanzas-mcp
+```
+
+Use the absolute path to `target/release/finanzas-mcp` as the client command
+(`finanzas-mcp.exe` on Windows). Optionally set `FINANZAS_DB` in the client's environment
+to use the same non-default database as the app. The server also works while the app is closed.
+
+Amounts are decimal currency units (negative for outflows); dates use `YYYY-MM-DD` and months use `YYYY-MM`.
+
+| Tool | Purpose |
+|---|---|
+| `list_accounts` | List accounts and balances |
+| `get_transactions` | Query transactions |
+| `list_categories` | List category groups and categories |
+| `get_budget_month` | Get a monthly envelope budget |
+| `spending_by_category` | Summarize outflows by category |
+| `add_transaction` | Add a transaction |
+| `update_transaction` | Update a transaction |
+| `delete_transaction` | Delete a transaction |
+| `set_budget_amount` | Assign a monthly category amount |
+| `list_schedules` | List scheduled payments |
+| `skip_schedule` | Skip a scheduled payment |
+| `get_upcoming` | Get upcoming payments and projected balances |
+
+## Import
+
+**Ajustes › Importar datos** copies data into an empty database. **Importar desde Finanzas
+(SwiftData)** reads the old app's store (`~/Library/Application Support/Finanzas/Finanzas.store`)
+read-only, without modifying it. **Importar desde Actual** accepts `db.sqlite`, an export zip or a
+server `.blob`. A confirmation names the source file and the destination database first.
+
+## Legacy Swift app
+
+The SwiftUI app under `Finanzas/`, `FinanzasKit/` and `FinanzasMCP/` still builds with the old
+macOS instructions until it is removed. It requires macOS 15+, Xcode 16+ and XcodeGen:
 
 ```sh
 xcodegen
 xcodebuild -project Finanzas.xcodeproj -scheme Finanzas -configuration Release -derivedDataPath build build
 cp -R build/Build/Products/Release/Finanzas.app /Applications/
-```
-
-The app is ad-hoc signed; on first launch use right-click › Open if Gatekeeper complains.
-
-## Build
-
-```sh
-xcodegen
-xcodebuild -project Finanzas.xcodeproj -scheme Finanzas -destination 'platform=macOS' build
 swift test --package-path FinanzasKit
 ```
 
-Data lives in `~/Library/Application Support/Finanzas/Finanzas.store`.
-Set `FINANZAS_STORE=/path/to/other.store` to point the app and the MCP server at another store.
-
-## Import from Actual Budget
-
-*Archivo › Importar desde Actual…* accepts Actual's `db.sqlite` or its export zip / server `.blob`.
-It only imports into an empty store.
-
-## Automations
-
-- Scheduled payments marked *Registrar automáticamente* are recorded on their date, at launch and hourly.
-- A macOS notification arrives N days before each payment at 09:00 (*Finanzas › Ajustes*, default 2 days).
-- A movement saved without a category (quick add, `add_transaction`, posted schedules) takes the
-  category last used with the same payee.
-
-## MCP server
-
-`Finanzas.app/Contents/MacOS/finanzas-mcp` is a stdio MCP server over the same store. It works
-while the app is closed; when the app is open it refreshes within a few seconds of an MCP write.
-
-Claude Code:
-
-```sh
-claude mcp add finanzas -- /Applications/Finanzas.app/Contents/MacOS/finanzas-mcp
-```
-
-Claude Desktop (`claude_desktop_config.json`):
-
-```json
-{ "mcpServers": { "finanzas": { "command": "/Applications/Finanzas.app/Contents/MacOS/finanzas-mcp" } } }
-```
-
-Tools (amounts in decimal currency units, negative = outflow; dates `YYYY-MM-DD`, months `YYYY-MM`;
-ids look like `Account/p3`):
-
-| Tool | Purpose |
-|---|---|
-| `list_accounts` | Accounts with balance and flags |
-| `get_transactions` | Transactions in a date range, optional account/category, `limit` (default 100) |
-| `list_categories` | Category groups and categories |
-| `get_budget_month` | Envelope budget of a month |
-| `spending_by_category` | Outflows per category in a range |
-| `add_transaction` / `update_transaction` / `delete_transaction` | Edit transactions |
-| `set_budget_amount` | Assign an amount to an expense category for a month |
-| `list_schedules` / `skip_schedule` | Scheduled payments; skip once or `through` a date |
-| `get_upcoming` | Overdue and next `days` (default 30) payments with projected balances |
+Its store is `~/Library/Application Support/Finanzas/Finanzas.store`; `FINANZAS_STORE` overrides it.
+The ad-hoc signed app may require right-click › Open on first launch.
 
 ## Built with
 [![Built with Gentle-AI](https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png)](https://github.com/Gentleman-Programming/gentle-ai)

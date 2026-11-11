@@ -12,9 +12,11 @@ struct EntriesView: View {
     let account: Account?
     @Environment(\.modelContext) private var context
     @Query private var entries: [LedgerEntry]
+    @Query(filter: #Predicate<Account> { !$0.closed }) private var openAccounts: [Account]
     @State private var selection = Set<PersistentIdentifier>()
     @State private var search = ""
     @State private var showingNewEntry = false
+    @State private var newEntryIsExpense = true
     @State private var editingEntry: LedgerEntry?
 
     init(account: Account?) {
@@ -28,18 +30,78 @@ struct EntriesView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            FinanceHeading(
+                title: account?.name ?? "Todas las cuentas",
+                subtitle: "Tu historial de movimientos")
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(search.isEmpty ? "Saldo de los movimientos" : "Total de la búsqueda")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(Money.format(filtered.reduce(0) { $0 + $1.amount }))
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 12) {
+                    Text("\(filtered.count) movimientos")
+                        .font(.callout).foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Button { newEntry(expense: true) } label: {
+                            Label("Agregar gasto", systemImage: "minus.circle.fill")
+                        }
+                        .buttonStyle(ActionButtonStyle(color: FinanceTheme.expenseFill))
+                        .help("Agregar gasto (⌘N)")
+                        Button { newEntry(expense: false) } label: {
+                            Label("Agregar ingreso", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(ActionButtonStyle(color: FinanceTheme.incomeFill))
+                        .keyboardShortcut("n", modifiers: [.command, .shift])
+                        .help("Agregar ingreso (⇧⌘N)")
+                    }
+                }
+            }
+            .padding(20)
+            .financeCard()
+            ledger
+        }
+        .padding(24)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
+        .searchable(text: $search, prompt: "Buscar comercio, categoría o nota")
+        .navigationTitle(account?.name ?? "Todas las cuentas")
+        .navigationSubtitle(Money.format(entries.reduce(0) { $0 + $1.amount }))
+        .toolbar {
+            Button("Nuevo gasto", systemImage: "plus") { newEntry(expense: true) }
+                .keyboardShortcut("n")
+        }
+        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account, startAsExpense: newEntryIsExpense) }
+        .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
+    }
+
+    private var ledger: some View {
         Table(filtered, selection: $selection) {
             TableColumn("Fecha") { Text($0.date, format: dayFormat).monospacedDigit() }
                 .width(min: 80, ideal: 90, max: 100)
-            if account == nil {
+            // With one open account the column would repeat the same name on every row.
+            if account == nil, openAccounts.count > 1 {
                 TableColumn("Cuenta") { Text($0.account?.name ?? "") }
             }
             TableColumn("Comercio") { Text($0.payee?.name ?? "") }
-            TableColumn("Categoría") { Text($0.category?.name ?? "").foregroundStyle(.secondary) }
+                .width(min: 100, ideal: 160)
+            TableColumn("Categoría") { entry in
+                if let name = entry.category?.name {
+                    Text(name).foregroundStyle(.secondary)
+                } else {
+                    Label("Sin categoría", systemImage: "exclamationmark.circle")
+                        .foregroundStyle(FinanceTheme.amber)
+                        .help("Sin categoría no cuenta en el presupuesto. Doble clic para asignarle una.")
+                }
+            }
             TableColumn("Notas") { Text($0.notes).foregroundStyle(.secondary) }
+                .width(min: 60, ideal: 100)
             TableColumn("Monto") { entry in
                 Text(Money.format(entry.amount)).monospacedDigit()
-                    .foregroundStyle(entry.amount < 0 ? Color.primary : Color.green)
+                    .foregroundStyle(entry.amount < 0 ? FinanceTheme.coral : FinanceTheme.emerald)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 90, ideal: 110)
@@ -51,15 +113,13 @@ struct EntriesView: View {
             edit(ids)
         }
         .onDeleteCommand { delete(selection) }
-        .searchable(text: $search, prompt: "Buscar comercio, categoría o nota")
-        .navigationTitle(account?.name ?? "Todas las cuentas")
-        .navigationSubtitle(Money.format(entries.reduce(0) { $0 + $1.amount }))
-        .toolbar {
-            Button("Nuevo movimiento", systemImage: "plus") { showingNewEntry = true }
-                .keyboardShortcut("n")
+        // Empty striped rows below the last entry read as content still loading.
+        .alternatingRowBackgrounds(.disabled)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14).strokeBorder(FinanceTheme.border, lineWidth: 1)
+                .allowsHitTesting(false)
         }
-        .sheet(isPresented: $showingNewEntry) { NewEntrySheet(defaultAccount: account) }
-        .sheet(item: $editingEntry) { NewEntrySheet(defaultAccount: account, editing: $0) }
         .overlay {
             if entries.isEmpty {
                 ContentUnavailableView("Sin movimientos", systemImage: "tray",
@@ -74,6 +134,11 @@ struct EntriesView: View {
         return entries.filter {
             [$0.payee?.name, $0.category?.name, $0.notes].contains { $0?.localizedStandardContains(q) == true }
         }
+    }
+
+    private func newEntry(expense: Bool) {
+        newEntryIsExpense = expense
+        showingNewEntry = true
     }
 
     /// Double-click opens the whole entry in the editor; every column is editable there.
@@ -92,10 +157,12 @@ struct EntriesView: View {
 struct NewEntrySheet: View {
     let defaultAccount: Account?
     var editing: LedgerEntry? = nil
+    var startAsExpense = true
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \CategoryGroup.sortOrder) private var groups: [CategoryGroup]
+    @Query(sort: \Payee.name) private var payees: [Payee]
 
     @State private var isExpense = true
     @State private var amountText = ""
@@ -107,17 +174,45 @@ struct NewEntrySheet: View {
     @FocusState private var amountFocused: Bool
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 0) {
+            FinanceHeading(
+                title: editing == nil ? "Nuevo movimiento" : "Editar movimiento",
+                subtitle: "Registra los detalles de tu ingreso o gasto"
+            )
+            .padding(24)
+            Form {
+                Section("Monto y tipo") {
             Picker("Tipo", selection: $isExpense) {
                 Text("Gasto").tag(true)
                 Text("Ingreso").tag(false)
             }
             .pickerStyle(.segmented)
-            TextField("Monto", text: $amountText, prompt: Text("0.00")).focused($amountFocused)
+            // Income only reaches the budget through an income category, so switching type picks one.
+            .onChange(of: isExpense) {
+                guard editing == nil else { return }
+                let isIncomeCategory = category?.group?.isIncome == true
+                if !isExpense, !isIncomeCategory { category = firstIncomeCategory }
+                if isExpense, isIncomeCategory { category = nil }
+            }
+                    TextField("Monto", text: $amountText, prompt: Text("0.00"))
+                        .font(.title2.monospacedDigit())
+                        .foregroundStyle(isExpense ? FinanceTheme.coral : FinanceTheme.emerald)
+                        .focused($amountFocused)
+                }
+                Section("Cuenta y categoría") {
             Picker("Cuenta", selection: $account) {
                 ForEach(accounts.filter { !$0.closed }) { Text($0.name).tag(Optional($0)) }
             }
             TextField("Comercio", text: $payeeName)
+                .textInputSuggestions {
+                    ForEach(payeeSuggestions, id: \.self) { Text($0).textInputCompletion($0) }
+                }
+                // Show the payee's usual category before saving; a category already picked is kept.
+                .onChange(of: payeeName) {
+                    if editing == nil, category == nil, let usual = try? Payee.named(payeeName, in: context)?.suggestedCategory {
+                        category = usual
+                    }
+                }
             Picker("Categoría", selection: $category) {
                 Text("Sin categoría").tag(Category?.none)
                 ForEach(groups) { group in
@@ -128,11 +223,18 @@ struct NewEntrySheet: View {
                     }
                 }
             }
-            DatePicker("Fecha", selection: $date, displayedComponents: .date)
-            TextField("Notas", text: $notes)
+                }
+                Section("Fecha y notas") {
+                    DatePicker("Fecha", selection: $date, displayedComponents: .date)
+                    TextField("Notas", text: $notes)
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
-        .frame(width: 380)
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 570)
+        .background(FinanceTheme.canvas)
+        .tint(FinanceTheme.petroleum)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Guardar", action: save).disabled(!canSave) }
@@ -140,6 +242,7 @@ struct NewEntrySheet: View {
         .navigationTitle(editing == nil ? "Nuevo movimiento" : "Editar movimiento")
         .onAppear {
             account = defaultAccount ?? accounts.first { !$0.closed }
+            if editing == nil { isExpense = startAsExpense }
             if let editing {
                 isExpense = editing.amount <= 0
                 amountText = Money.format(abs(editing.amount))
@@ -151,6 +254,20 @@ struct NewEntrySheet: View {
             }
             amountFocused = true
         }
+    }
+
+    private var firstIncomeCategory: Category? {
+        groups.filter(\.isIncome).lazy
+            .compactMap { ($0.categories ?? []).filter { !$0.hidden }.min { $0.sortOrder < $1.sortOrder } }
+            .first
+    }
+
+    private var payeeSuggestions: [String] {
+        let typed = payeeName.trimmingCharacters(in: .whitespaces)
+        guard !typed.isEmpty else { return [] }
+        return payees.map(\.name)
+            .filter { $0.range(of: typed, options: [.caseInsensitive, .diacriticInsensitive]) != nil && $0 != typed }
+            .prefix(8).map { $0 }
     }
 
     private var canSave: Bool { Money.cents(from: amountText) != nil && account != nil }
@@ -175,5 +292,19 @@ struct NewEntrySheet: View {
         entry.applyPayeeRule()
         context.saveOrAlert()
         dismiss()
+    }
+}
+
+/// Filled capsule that keeps its color when the window is inactive, unlike `.borderedProminent`.
+private struct ActionButtonStyle: ButtonStyle {
+    let color: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 9)
+            .background(color.opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
+            .contentShape(Capsule())
     }
 }

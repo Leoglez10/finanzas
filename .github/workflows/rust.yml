@@ -1,0 +1,37 @@
+name: Rust
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "FINANZAS_DB=$RUNNER_TEMP/finanzas-ci.db" >> "$GITHUB_ENV"
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p finanzas-app -p finanzas-mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finanzas-${{ matrix.os }}
+          path: |
+            target/release/finanzas
+            target/release/finanzas.exe
+            target/release/finanzas-mcp
+            target/release/finanzas-mcp.exe
+          if-no-files-found: error

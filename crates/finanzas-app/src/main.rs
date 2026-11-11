@@ -3,6 +3,7 @@ mod entry_helpers;
 mod ledger;
 mod metrics;
 mod overview;
+mod sheet;
 
 use std::sync::{Arc, Mutex};
 use chrono::Local;
@@ -14,6 +15,10 @@ enum Route { Resumen, Presupuesto, Proximos, Todas, Cuenta(Id) }
 
 type LedgerKey = (Option<Id>, String, Option<i64>);
 type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
+type Suggestions = Vec<(String, Option<Id>)>;
+type SuggestionResult = (String, Result<Suggestions, String>);
+#[derive(Clone, Copy)]
+enum MutationTarget { Sheet, Confirmation(Id) }
 
 struct State {
     route: Route,
@@ -26,6 +31,7 @@ struct State {
     overview: Option<finanzas_core::service::Overview>,
     version: Option<i64>,
     worker: data::WorkerStore,
+    open_default: bool,
     latest: Latest<Result<Option<data::Snapshot>, String>>,
     refresh: bool,
     next_poll: f64,
@@ -33,6 +39,17 @@ struct State {
     ledger: Option<data::Ledger>,
     ledger_latest: Latest<LedgerResult>,
     ledger_key: Option<LedgerKey>,
+    groups: Vec<finanzas_core::models::CategoryGroup>,
+    categories: Vec<finanzas_core::models::Category>,
+    sheet: Option<sheet::Sheet>,
+    blocked_edit: TextEdit,
+    selected: Option<Id>,
+    confirm: Option<Id>,
+    mutation: Latest<Result<(), String>>,
+    mutation_target: Option<MutationTarget>,
+    mutation_error: Option<String>,
+    suggestions: Vec<(String, Option<Id>)>,
+    suggestion_latest: Latest<SuggestionResult>,
 }
 
 impl State {
@@ -40,14 +57,52 @@ impl State {
         let today = month::month_of(Local::now().date_naive());
         Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
-            worker: Arc::new(Mutex::new(None)), latest: Latest::default(), refresh: true, next_poll: 0.0,
-            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None }
+            worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
+            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)) }
     }
-    fn load() -> Self { Self::empty() }
+    fn load() -> Self { let mut state = Self::empty(); state.open_default = true; state }
+    fn current_key(&self) -> Option<LedgerKey> {
+        let account = match self.route { Route::Todas => None, Route::Cuenta(id) => Some(id), _ => return None };
+        Some((account, self.search.text.clone(), self.version))
+    }
+    fn visible_entry(&self, id: Id) -> Option<&finanzas_core::store::EntryRow> {
+        if self.ledger_key.as_ref() != self.current_key().as_ref() || self.current_key().is_none() { return None; }
+        self.ledger.as_ref()?.rows.iter().find(|entry| entry.id == id)
+    }
+    fn invalidate_selection(&mut self) {
+        if self.selected.is_some_and(|id| self.visible_entry(id).is_none()) { self.selected = None; }
+        if self.confirm.is_some_and(|id| self.visible_entry(id).is_none()) { self.confirm = None; }
+    }
+    fn mutation_active(&self) -> bool { self.mutation_target.is_some() }
+    fn open_sheet(&mut self, expense: bool, id: Option<Id>) {
+        if self.mutation_active() { return; }
+        if id.is_some_and(|id| self.visible_entry(id).is_none()) { return; }
+        let entry = id.and_then(|id| self.visible_entry(id));
+        self.sheet = Some(sheet::Sheet::new(self, expense, entry)); self.mutation_error = None;
+        self.suggestions.clear(); self.suggestion_latest.cancel();
+    }
+    fn submit(&mut self) {
+        if self.mutation_active() { return; }
+        let Some(sh) = self.sheet.as_ref().filter(|sh| sh.valid()) else { return; };
+        if sh.id.is_some_and(|id| self.visible_entry(id).is_none()) { return; }
+        let (Some(date), Some(amount), Some(account)) = (entry_helpers::parse_date(&sh.date.text), money::cents_from(&sh.amount.text), sh.account) else { return; };
+        let entry = finanzas_core::service::NewEntry { date, amount: if sh.expense { -amount } else { amount }, account_id: account, payee: Some(sh.payee.text.clone()), category_id: sh.category, notes: sh.notes.text.clone(), cleared: sh.cleared };
+        let worker = Arc::clone(&self.worker);
+        self.mutation_target = Some(MutationTarget::Sheet);
+        self.mutation.request(data::Mutation::Save(sh.id, entry), move |m| data::mutate(worker, m));
+    }
+    fn delete_selected(&mut self) {
+        if self.mutation_active() { return; }
+        if let Some(id) = self.confirm.filter(|id| self.visible_entry(*id).is_some()) {
+            let worker = Arc::clone(&self.worker);
+            self.mutation_target = Some(MutationTarget::Confirmation(id));
+            self.mutation.request(data::Mutation::Delete(id), move |m| data::mutate(worker, m));
+        }
+    }
     fn total(&self) -> i64 { self.accounts.iter().filter(|a| !a.account.closed).map(|a| a.balance).sum() }
     fn set_month(&mut self, month: i32) { self.month = month; self.refresh = true; }
     fn accept(&mut self, snapshot: data::Snapshot) {
-        self.version = Some(snapshot.version); self.accounts = snapshot.accounts; self.overview = Some(snapshot.overview);
+        self.version = Some(snapshot.version); self.accounts = snapshot.accounts; self.overview = Some(snapshot.overview); self.groups = snapshot.groups; self.categories = snapshot.categories;
     }
 }
 
@@ -75,10 +130,29 @@ fn movements_scene(s: &mut State, dark: bool) {
 }
 fn movements_light(s: &mut State) { movements_scene(s, false); }
 fn movements_dark(s: &mut State) { movements_scene(s, true); }
+fn entry_scene(s: &mut State, dark: bool) {
+    movements_scene(s, dark); s.open_sheet(true, None);
+    if let Some(sh) = &mut s.sheet { sh.amount.replace_text("125.50"); sh.payee.replace_text("Farmacia"); sh.notes.replace_text("Compra mensual"); }
+}
+fn entry_light(s: &mut State) { entry_scene(s, false); }
+fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
+    if let Some(result) = s.mutation.take() {
+        let target = s.mutation_target.take();
+        match result { Ok(()) => { match target { Some(MutationTarget::Sheet) => s.sheet = None, Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }, _ => {} } s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true; }, Err(e) => { s.mutation_error = Some(e); changed = true; } }
+    }
+    if let Some((query, result)) = s.suggestion_latest.take()
+        && s.sheet.as_ref().is_some_and(|sh| sh.payee.text == query) {
+        match result { Ok(items) => s.suggestions = items, Err(error) => { s.suggestions.clear(); s.mutation_error = Some(error); } }
+        changed = true;
+    }
+    if let Some(sh) = &s.sheet {
+        let key = sh.payee.text.clone(); let worker = Arc::clone(&s.worker);
+        s.suggestion_latest.request_if_changed(&key, move |key| { let result = if key.is_empty() { Ok(Vec::new()) } else { data::suggestions(worker, key.clone()) }; (key, result) });
+    }
     if let Some(result) = s.latest.take() {
         match result {
             Ok(Some(snapshot)) => { s.accept(snapshot); s.error = None; tx.instant(); changed = true; }
@@ -92,7 +166,11 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         s.next_poll = now + 2.0;
         let worker = Arc::clone(&s.worker);
         let input = (s.month, s.chart_months, s.version, force);
-        s.latest.request(input, move |(month, chart, version, force)| data::fetch(worker, month, chart, version, force));
+        let open_default = s.open_default;
+        s.latest.request(input, move |(month, chart, version, force)| {
+            if open_default { data::open_default(&worker)?; }
+            data::fetch(worker, month, chart, version, force)
+        });
     }
     if let Some((key, result)) = s.ledger_latest.take() {
         match result { Ok(ledger) => { s.ledger = Some(ledger); s.ledger_key = Some(key); tx.instant(); changed = true; }, Err(error) => { s.error = Some(error); changed = true; } }
@@ -104,10 +182,18 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         if s.ledger_key.as_ref() != Some(&key) && s.ledger.is_some() { s.ledger = None; changed = true; }
         s.ledger_latest.request_if_changed(&key, move |key| { let result = data::ledger(worker, key.0, &key.1); (key, result) });
     }
+    s.invalidate_selection();
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
 }
 fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
+    if s.mutation_active() { return true; }
+    if s.sheet.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.sheet = None; } return true; } return false; }
+    if s.confirm.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.confirm = None; } return true; } return false; }
+    if matches!(s.route, Route::Todas | Route::Cuenta(_)) {
+        if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_sheet(!ev.mods.shift, None); return true; }
+        if matches!(ev.key, Key::Delete | Key::Backspace) && s.selected.is_some_and(|id| s.visible_entry(id).is_some()) { s.confirm = s.selected; return true; }
+    }
     if s.route != Route::Resumen || !(ev.mods.cmd || ev.mods.ctrl) || ev.mods.alt || ev.mods.shift { return false; }
     match ev.key {
         Key::Left => { s.set_month(month::previous(s.month)); true }
@@ -140,7 +226,8 @@ fn nav(label: &str, key: String, route: Route, selected: bool, balance: Option<i
 }
 
 fn view(s: &State, cx: &mut Cx<State>) -> El {
-    let p = palette(s.dark.unwrap_or_else(|| cx.system_dark()));
+    let dark = s.dark.unwrap_or_else(|| cx.system_dark());
+    let p = palette(dark);
     if let Some(error) = &s.error {
         return col().w_full().h_full().center().gap(12.0).fill(p.canvas)
             .child(text("No se pudo abrir la base de datos").font(type_::TITLE).color(p.ink))
@@ -173,15 +260,19 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
     };
-    row().w_full().h_full().fill(p.canvas)
-        .child(sidebar)
-        .child(el().w(1.0).h_full().fill(p.border))
-        .child(detail)
+    let modal_open = s.sheet.is_some() || s.confirm.is_some();
+    let sidebar = if modal_open { sidebar.inert() } else { sidebar };
+    let detail = if modal_open { detail.inert() } else { detail };
+    let mut root = row().w_full().h_full().fill(p.canvas)
+        .child(sidebar).child(el().w(1.0).h_full().fill(p.border)).child(detail);
+    if s.sheet.is_some() { root = root.child(sheet::render(s, p, dark)); }
+    if s.confirm.is_some() { root = root.child(sheet::confirm(s, p)); }
+    root
 }
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });
@@ -197,6 +288,203 @@ mod tests {
     use super::*;
     use rune::{Env, Runtime};
 
+    fn movement_runtime() -> Runtime<State> {
+        let mut state = State::empty(); movements_light(&mut state);
+        let mut rt = Runtime::new(state, view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.on_key = Some(on_key); rt.poll = Some(poll); rt.frame(0.0); rt
+    }
+    fn command_n(rt: &mut Runtime<State>) {
+        rt.key(KeyEvent { key: Key::Command('n'), mods: rune::Mods { cmd: true, ..Default::default() } });
+        rt.frame(0.0);
+    }
+    #[test]
+    fn new_income_selects_a_visible_income_category() {
+        let mut s = State::empty(); movements_light(&mut s);
+        s.open_sheet(false, None);
+        let id = s.sheet.as_ref().unwrap().category.expect("income category");
+        assert!(s.categories.iter().any(|c| c.id == id && !c.hidden && s.groups.iter().any(|g| g.is_income && Some(g.id) == c.group_id)));
+    }
+    #[test]
+    fn command_n_opens_entry_sheet() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        assert!(rt.find("entry-sheet").is_some());
+    }
+    #[test]
+    fn escape_cancels_entry_sheet() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        rt.key(KeyEvent { key: Key::Escape, mods: Default::default() }); rt.frame(0.0);
+        assert!(rt.state.sheet.is_none());
+    }
+    #[test]
+    fn sheet_field_can_be_focused_by_pointer() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        let (x, y) = rt.find("entry-notes").unwrap(); rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        assert!(rt.elements().into_iter().any(|e| e.key.as_deref() == Some("entry-notes") && e.focused));
+    }
+    #[test]
+    fn entering_amount_and_return_adds_expense() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        assert!(rt.find("entry-amount").is_some());
+        rt.key(KeyEvent { key: Key::Text("125.50".into()), mods: Default::default() });
+        rt.key(KeyEvent { key: Key::Enter, mods: Default::default() });
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        assert!(rt.state.ledger.as_ref().unwrap().rows.iter().any(|r| r.amount == -12_550), "sheet amount {:?}, pending {}, error {:?}", rt.state.sheet.as_ref().map(|s| &s.amount.text), rt.state.mutation.is_pending(), rt.state.error);
+    }
+    #[test]
+    fn failed_save_keeps_input_and_shows_error() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        rt.state.sheet.as_mut().unwrap().amount.replace_text("125.50");
+        rt.state.worker = Arc::new(Mutex::new(None));
+        rt.state.submit();
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        assert_eq!(rt.state.sheet.as_ref().map(|s| s.amount.text.as_str()), Some("125.50"));
+        assert!(rt.state.mutation_error.is_some());
+        assert!(rt.state.worker.lock().unwrap().is_none(), "failed test worker must not open the default store");
+    }
+    #[test]
+    fn stale_selection_cannot_delete_after_context_change() {
+        for mode in 0..3 {
+            let mut rt = movement_runtime();
+            let a = rt.state.accounts[0].account.id;
+            let b = rt.state.accounts[1].account.id;
+            let worker = Arc::clone(&rt.state.worker);
+            let before = data::ledger(Arc::clone(&worker), None, "").unwrap();
+            let balances = data::fetch(Arc::clone(&worker), 202611, 6, None, true).unwrap().unwrap().accounts.into_iter().map(|a| (a.account.id, a.balance)).collect::<Vec<_>>();
+            rt.state.route = Route::Cuenta(a);
+            rt.state.ledger = Some(data::ledger(Arc::clone(&worker), Some(a), "").unwrap());
+            rt.state.ledger_key = Some((Some(a), String::new(), rt.state.version));
+            let id = rt.state.ledger.as_ref().unwrap().rows[0].id;
+            rt.state.selected = Some(id);
+            if mode == 2 { rt.state.confirm = Some(id); }
+            if mode == 1 { rt.state.search.replace_text("no-such-transaction"); } else { rt.state.route = Route::Cuenta(b); }
+            if mode != 2 {
+                rt.key(KeyEvent { key: Key::Delete, mods: Default::default() });
+                assert!(rt.state.confirm.is_none(), "hidden selection requested deletion in mode {mode}");
+                rt.state.confirm = Some(id); // A delayed menu or modal must also be rejected.
+            }
+            rt.state.delete_selected();
+            for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+            let after = data::ledger(Arc::clone(&worker), None, "").unwrap();
+            assert_eq!(after.rows.len(), before.rows.len(), "mode {mode}");
+            assert!(after.rows.iter().any(|r| r.id == id), "mode {mode}");
+            let after_balances = data::fetch(worker, 202611, 6, None, true).unwrap().unwrap().accounts.into_iter().map(|a| (a.account.id, a.balance)).collect::<Vec<_>>();
+            assert_eq!(after_balances, balances, "mode {mode}");
+        }
+    }
+    #[test]
+    fn duplicate_pending_save_and_delete_mutate_once() {
+        let mut rt = movement_runtime();
+        let worker = Arc::clone(&rt.state.worker);
+        let before = data::ledger(Arc::clone(&worker), None, "").unwrap();
+        command_n(&mut rt);
+        rt.state.sheet.as_mut().unwrap().amount.replace_text("123.45");
+        let guard = worker.lock().unwrap();
+        rt.state.submit(); rt.state.submit();
+        assert!(rt.state.mutation_active());
+        drop(guard);
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        let saved = data::ledger(Arc::clone(&worker), None, "").unwrap();
+        assert_eq!(saved.rows.len(), before.rows.len() + 1);
+        assert_eq!(saved.total, before.total - 12_345);
+        let id = saved.rows.iter().find(|r| r.amount == -12_345).unwrap().id;
+        rt.state.confirm = Some(id);
+        let guard = worker.lock().unwrap();
+        rt.state.delete_selected(); rt.state.delete_selected();
+        assert!(rt.state.mutation_active());
+        drop(guard);
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        let after = data::ledger(worker, None, "").unwrap();
+        assert_eq!(after.rows.len(), before.rows.len());
+        assert_eq!(after.total, before.total);
+        assert!(!after.rows.iter().any(|r| r.id == id));
+    }
+    #[test]
+    fn pending_save_blocks_draft_input_and_type_switch() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        rt.state.sheet.as_mut().unwrap().amount.replace_text("125.50");
+        let worker = Arc::clone(&rt.state.worker);
+        let guard = worker.lock().unwrap();
+        rt.key(KeyEvent { key: Key::Enter, mods: Default::default() });
+        rt.frame(0.0);
+        assert!(rt.state.mutation_active());
+        for key in ["entry-amount", "entry-payee", "entry-date", "entry-notes", "account-picker", "category-picker", "Ingreso"] {
+            let (x, y) = rt.find(key).unwrap();
+            rt.pointer_down(x, y); rt.pointer_up(x, y);
+            rt.key(KeyEvent { key: Key::Text("9".into()), mods: Default::default() });
+            rt.frame(0.0);
+        }
+        let sh = rt.state.sheet.as_ref().unwrap();
+        assert_eq!(sh.amount.text, "125.50");
+        assert!(sh.payee.text.is_empty() && sh.notes.text.is_empty());
+        assert_eq!(sh.date.text, "10/11/2026");
+        assert_eq!(sh.category, None);
+        assert!(sh.expense);
+        drop(guard);
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        assert!(rt.state.sheet.is_none());
+        assert!(rt.state.ledger.as_ref().unwrap().rows.iter().any(|r| r.amount == -12_550 && r.notes.is_empty()));
+    }
+    #[test]
+    fn pending_save_cannot_discard_form_before_failure() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        rt.state.sheet.as_mut().unwrap().amount.replace_text("125.50");
+        let worker = Arc::clone(&rt.state.worker);
+        let guard = worker.lock().unwrap();
+        rt.state.submit();
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        let (x, y) = rt.find("entry-cancel").unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        assert_eq!(rt.state.sheet.as_ref().map(|s| s.amount.text.as_str()), Some("125.50"));
+        drop(guard);
+    }
+    #[test]
+    fn selecting_payee_suggestion_prefills_category() {
+        let mut rt = movement_runtime(); command_n(&mut rt);
+        let expected = rt.state.ledger.as_ref().unwrap().rows.iter().find(|r| r.payee_name.as_deref() == Some("Farmacia")).unwrap().category_id;
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        let (x, y) = rt.find("entry-payee").unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y);
+        rt.key(KeyEvent { key: Key::Text("Farm".into()), mods: Default::default() });
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        let (x, y) = rt.find("suggest-Farmacia").expect("payee suggestion");
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        let sh = rt.state.sheet.as_ref().unwrap();
+        assert_eq!(sh.payee.text, "Farmacia");
+        assert_eq!(sh.category, expected);
+        assert!(expected.is_some());
+    }
+    #[test]
+    fn editing_row_keeps_id_and_untouched_fields() {
+        let mut rt = movement_runtime();
+        let original = &rt.state.ledger.as_ref().unwrap().rows[0];
+        let (id, date, amount, account, category, payee, cleared) = (original.id, original.date, original.amount, original.account_id, original.category_id, original.payee_name.clone(), original.cleared);
+        let (x, y) = rt.find(&format!("entry-{id}")).unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+        assert_eq!(rt.state.sheet.as_ref().unwrap().id, Some(id));
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        let (x, y) = rt.find("entry-notes").unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y);
+        rt.key(KeyEvent { key: Key::Text("Nota nueva".into()), mods: Default::default() });
+        rt.key(KeyEvent { key: Key::Enter, mods: Default::default() });
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        let row = rt.state.ledger.as_ref().unwrap().rows.iter().find(|r| r.id == id).unwrap();
+        assert_eq!((row.date, row.amount, row.account_id, row.category_id, row.payee_name.clone(), row.cleared), (date, amount, account, category, payee, cleared));
+        assert_eq!(row.notes, "Nota nueva");
+    }
+    #[test]
+    fn delete_requires_confirmation() {
+        let mut rt = movement_runtime();
+        let id = rt.state.ledger.as_ref().unwrap().rows[0].id;
+        let (x, y) = rt.find(&format!("entry-{id}")).unwrap();
+        rt.pointer_down(x, y); rt.pointer_up(x, y);
+        rt.key(KeyEvent { key: Key::Delete, mods: Default::default() }); rt.frame(0.0);
+        assert!(rt.find("confirm-delete").is_some());
+        for _ in 0..60 { rt.frame(1.0 / 60.0); }
+        let (x, y) = rt.find("delete-confirm").unwrap(); rt.pointer_down(x, y); rt.pointer_up(x, y);
+        for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
+        assert!(!rt.state.ledger.as_ref().unwrap().rows.iter().any(|r| r.id == id));
+    }
     #[test]
     fn sidebar_navigation_changes_route() {
         let mut rt = Runtime::new(State::empty(), view, (1200.0, 800.0), Env::new(false, 1.0));

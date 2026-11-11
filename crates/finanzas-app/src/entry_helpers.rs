@@ -1,9 +1,6 @@
-#[cfg(test)]
 use chrono::NaiveDate;
-#[cfg(test)]
 use finanzas_core::models::Id;
 
-#[cfg(test)]
 pub fn parse_date(text: &str) -> Option<NaiveDate> {
     let b = text.as_bytes();
     if b.len() != 10 || b[2] != b'/' || b[5] != b'/' || !b.iter().enumerate().all(|(i, c)| i == 2 || i == 5 || c.is_ascii_digit()) { return None; }
@@ -12,7 +9,6 @@ pub fn parse_date(text: &str) -> Option<NaiveDate> {
 pub fn header_label(search: &str) -> &'static str {
     if search.trim().is_empty() { "Saldo de los movimientos" } else { "Total de la búsqueda" }
 }
-#[cfg(test)]
 pub fn valid_sheet(amount: &str, account: Option<Id>, date: &str) -> bool {
     finanzas_core::domain::money::cents_from(amount).is_some() && account.is_some() && parse_date(date).is_some()
 }

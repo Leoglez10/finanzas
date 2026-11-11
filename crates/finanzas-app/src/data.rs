@@ -6,10 +6,49 @@ pub struct AccountBalance { pub account: Account, pub balance: i64 }
 pub struct Snapshot { pub accounts: Vec<AccountBalance>, pub overview: Overview, pub version: i64, pub groups: Vec<CategoryGroup>, pub categories: Vec<Category> }
 pub type WorkerStore = Arc<Mutex<Option<Store>>>;
 
-pub enum Mutation { Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64), Budget(i32, i64, String) }
+pub enum Mutation {
+    Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64), Budget(i32, i64, String),
+    PostSchedule(i64, NaiveDate), SkipSchedule(i64), SaveSchedule(Option<i64>, ScheduleDraft), DeleteSchedule(i64),
+}
+
+/// What the schedule sheet collects; the sign of `amount` already says expense or income.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScheduleDraft {
+    pub name: String, pub amount: i64, pub account_id: i64, pub category_id: Option<i64>, pub payee: String,
+    pub frequency: Frequency, pub interval: u32, pub start: NaiveDate, pub skip_weekend: bool, pub auto_post: bool,
+}
+/// Builds the row to store. A rule that did not change keeps its progress (`next_date`, `completed`);
+/// a changed rule starts over from its first occurrence.
+pub fn apply_draft(existing: Option<Schedule>, payee_id: Option<i64>, draft: &ScheduleDraft) -> Schedule {
+    let mut schedule = existing.unwrap_or(Schedule { id: 0, name: String::new(), amount: 0, auto_post: false, completed: false, next_date: None, recurrence: None, account_id: None, category_id: None, payee_id: None });
+    let old = schedule.recurrence.take();
+    let rule = Recurrence { start: draft.start, frequency: draft.frequency, interval: draft.interval.max(1), skip_weekend: draft.skip_weekend,
+        weekend_mode: old.as_ref().map_or(WeekendMode::After, |r| r.weekend_mode), end_date: old.as_ref().and_then(|r| r.end_date) };
+    if old.as_ref() != Some(&rule) { schedule.next_date = None; schedule.completed = false; }
+    schedule.recurrence = Some(rule);
+    schedule.name = draft.name.trim().to_owned(); schedule.amount = draft.amount; schedule.auto_post = draft.auto_post;
+    schedule.account_id = Some(draft.account_id); schedule.category_id = draft.category_id; schedule.payee_id = payee_id;
+    schedule
+}
 pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
-    let guard = worker.lock().map_err(|e| e.to_string())?;
-    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    let mut guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_mut().ok_or("No se pudo abrir la base de datos")?;
+    let service_err = |e: finanzas_core::service::ServiceError| e.to_string();
+    match mutation {
+        Mutation::PostSchedule(id, today) => { finanzas_core::service::post_schedule(store, id, today).map_err(service_err)?; }
+        Mutation::SkipSchedule(id) => { finanzas_core::service::skip_schedule(store, id, None).map_err(service_err)?; }
+        Mutation::DeleteSchedule(id) => { finanzas_core::service::delete_schedule(store, id).map_err(service_err)?; }
+        Mutation::SaveSchedule(id, draft) => {
+            let payee_id = store.find_or_create_payee(&draft.payee).map_err(|e| e.to_string())?;
+            let existing = match id { Some(id) => Some(store.get_schedule(id).map_err(|e| e.to_string())?.ok_or("El pago programado ya no existe")?), None => None };
+            let schedule = apply_draft(existing, payee_id, &draft);
+            if id.is_some() { finanzas_core::service::update_schedule(store, &schedule).map_err(service_err)?; } else { finanzas_core::service::create_schedule(store, &schedule).map_err(service_err)?; }
+        }
+        _ => mutate_ledger(store, mutation)?,
+    }
+    Ok(())
+}
+fn mutate_ledger(store: &Store, mutation: Mutation) -> Result<(), String> {
     match mutation {
         Mutation::Save(None, entry) => { finanzas_core::service::add_entry(store, entry).map_err(|e| e.to_string())?; }
         Mutation::Save(Some(id), entry) => {
@@ -21,8 +60,24 @@ pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
             // `None` means the text is not an amount; nothing was written.
             finanzas_core::service::set_budget_from_text(store, month, category, &text).map_err(|e| e.to_string())?.ok_or("Importe inválido")?;
         }
+        _ => unreachable!("schedule mutations are handled by `mutate`"),
     }
     Ok(())
+}
+pub struct Proximos { pub items: Vec<finanzas_core::service::UpcomingView>, pub schedules: Vec<finanzas_core::service::ScheduleView> }
+pub fn proximos(worker: WorkerStore, today: NaiveDate) -> Result<Proximos, String> {
+    let guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    let items = finanzas_core::service::upcoming(store, today, 30).map_err(|e| e.to_string())?;
+    let mut schedules = finanzas_core::service::schedule_views(store).map_err(|e| e.to_string())?;
+    schedules.sort_by(|a, b| a.schedule.name.cmp(&b.schedule.name));
+    Ok(Proximos { items, schedules })
+}
+/// Posts every automatic payment that is due; returns how many entries it created.
+pub fn auto_post(worker: WorkerStore, today: NaiveDate) -> Result<usize, String> {
+    let mut guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_mut().ok_or("No se pudo abrir la base de datos")?;
+    finanzas_core::service::auto_post_due(store, today).map_err(|e| e.to_string())
 }
 pub fn suggestions(worker: WorkerStore, text: String) -> Result<Vec<(String, Option<i64>)>, String> {
     let guard = worker.lock().map_err(|e| e.to_string())?;
@@ -113,9 +168,51 @@ fn seed_demo(store: &Store) -> Result<(), String> {
     Ok(())
 }
 
+/// Extra scheduled payments for the Próximos pagos scenes: one overdue, one automatic, one income.
+pub fn seed_schedules(worker: &WorkerStore) -> Result<(), String> {
+    let guard = worker.lock().map_err(|e| e.to_string())?;
+    let store = guard.as_ref().ok_or("No se pudo abrir la base de datos")?;
+    let db = |e: rusqlite::Error| e.to_string();
+    let accounts = store.list_accounts().map_err(db)?;
+    let categories = store.list_categories().map_err(db)?;
+    let account = |name: &str| accounts.iter().find(|a| a.name == name).map(|a| a.id);
+    let category = |name: &str| categories.iter().find(|c| c.name == name).map(|c| c.id);
+    let d = |y, m, day| NaiveDate::from_ymd_opt(y, m, day).ok_or("Fecha inválida".to_owned());
+    let rule = |start: NaiveDate, frequency| Recurrence { start, frequency, interval: 1, skip_weekend: false, weekend_mode: WeekendMode::After, end_date: None };
+    let add = |name: &str, amount: i64, start: NaiveDate, next: Option<NaiveDate>, frequency, auto_post: bool, account_name: &str, category_name: &str, payee: &str| -> Result<(), String> {
+        let payee_id = store.find_or_create_payee(payee).map_err(db)?;
+        store.insert_schedule(&Schedule { id: 0, name: name.into(), amount, auto_post, completed: false, next_date: next, recurrence: Some(rule(start, frequency)),
+            account_id: account(account_name), category_id: category(category_name), payee_id }).map_err(db)?;
+        Ok(())
+    };
+    add("Renta", -80_000, d(2026, 10, 5)?, Some(d(2026, 11, 5)?), Frequency::Monthly, false, "Cuenta principal", "Vivienda", "Renta")?;
+    add("Netflix", -2_000, d(2026, 11, 14)?, None, Frequency::Monthly, true, "Tarjeta", "Ocio", "Netflix")?;
+    add("Nómina", 320_000, d(2026, 11, 30)?, None, Frequency::Monthly, false, "Cuenta principal", "Sueldo", "Empresa SA")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn draft() -> ScheduleDraft { ScheduleDraft { name: "  Gimnasio ".into(), amount: -35_000, account_id: 1, category_id: None, payee: String::new(), frequency: Frequency::Monthly, interval: 1, start: NaiveDate::from_ymd_opt(2026, 11, 15).unwrap(), skip_weekend: false, auto_post: false } }
+
+    #[test]
+    fn new_schedule_starts_at_its_first_occurrence() {
+        let s = apply_draft(None, None, &draft());
+        assert_eq!((s.name.as_str(), s.amount, s.next_date, s.completed), ("Gimnasio", -35_000, None, false));
+        assert_eq!(s.recurrence.as_ref().map(|r| (r.frequency, r.interval, r.weekend_mode)), Some((Frequency::Monthly, 1, WeekendMode::After)));
+    }
+    #[test]
+    fn editing_keeps_progress_only_while_the_rule_is_unchanged() {
+        let mut s = apply_draft(None, None, &draft());
+        s.next_date = NaiveDate::from_ymd_opt(2026, 12, 15);
+        let kept = apply_draft(Some(s.clone()), Some(7), &ScheduleDraft { amount: -40_000, ..draft() });
+        assert_eq!((kept.next_date, kept.amount, kept.payee_id), (NaiveDate::from_ymd_opt(2026, 12, 15), -40_000, Some(7)));
+        s.completed = true;
+        let reset = apply_draft(Some(s), None, &ScheduleDraft { interval: 2, ..draft() });
+        assert_eq!((reset.next_date, reset.completed), (None, false));
+    }
 
     #[test]
     fn ledger_filters_and_sums_the_matching_rows() {

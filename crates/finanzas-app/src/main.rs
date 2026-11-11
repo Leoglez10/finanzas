@@ -4,10 +4,12 @@ mod entry_helpers;
 mod ledger;
 mod metrics;
 mod overview;
+mod proximos;
+mod schedule_sheet;
 mod sheet;
 
 use std::sync::{Arc, Mutex};
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use finanzas_core::{domain::{money, month}, models::Id};
 use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
 
@@ -19,7 +21,9 @@ type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
 type Suggestions = Vec<(String, Option<Id>)>;
 type SuggestionResult = (String, Result<Suggestions, String>);
 #[derive(Clone, Copy)]
-enum MutationTarget { Sheet, Confirmation(Id), Budget(Id) }
+enum MutationTarget { Sheet, Confirmation(Id), Budget(Id), ScheduleSheet, ScheduleConfirm(Id), ScheduleRow }
+type ProximosKey = (Option<i64>, u64, NaiveDate);
+type ProximosResult = (ProximosKey, Result<data::Proximos, String>);
 type BudgetKey = (i32, Option<i64>, u64);
 type BudgetResult = (BudgetKey, Result<finanzas_core::service::BudgetView, String>);
 
@@ -58,6 +62,18 @@ struct State {
     budget_gen: u64,
     budget_inputs: std::collections::HashMap<Id, (TextEdit, String)>,
     budget_error: Option<(Option<Id>, String)>,
+    today_date: NaiveDate,
+    proximos: Option<data::Proximos>,
+    proximos_latest: Latest<ProximosResult>,
+    proximos_key: Option<ProximosKey>,
+    proximos_gen: u64,
+    schedule_sheet: Option<schedule_sheet::ScheduleSheet>,
+    schedule_selected: Option<Id>,
+    schedule_confirm: Option<Id>,
+    upcoming_error: Option<String>,
+    auto_post: bool,
+    auto_latest: Latest<Result<usize, String>>,
+    next_auto: f64,
 }
 
 impl State {
@@ -66,9 +82,10 @@ impl State {
         Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
-            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None }
+            search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
+            today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0 }
     }
-    fn load() -> Self { let mut state = Self::empty(); state.open_default = true; state }
+    fn load() -> Self { let mut state = Self::empty(); state.open_default = true; state.auto_post = true; state }
     fn current_key(&self) -> Option<LedgerKey> {
         let account = match self.route { Route::Todas => None, Route::Cuenta(id) => Some(id), _ => return None };
         Some((account, self.search.text.clone(), self.version))
@@ -77,7 +94,53 @@ impl State {
         if self.ledger_key.as_ref() != self.current_key().as_ref() || self.current_key().is_none() { return None; }
         self.ledger.as_ref()?.rows.iter().find(|entry| entry.id == id)
     }
+    fn proximos_key_now(&self) -> ProximosKey { (self.version, self.proximos_gen, self.today_date) }
+    /// True only while the list on screen was read for the current data version and day.
+    fn proximos_fresh(&self) -> bool { self.route == Route::Proximos && self.proximos.is_some() && self.proximos_key == Some(self.proximos_key_now()) }
+    fn visible_schedule(&self, id: Id) -> Option<&finanzas_core::service::ScheduleView> {
+        if !self.proximos_fresh() { return None; }
+        self.proximos.as_ref()?.schedules.iter().find(|v| v.schedule.id == id)
+    }
+    fn open_schedule_sheet(&mut self, id: Option<Id>) {
+        if self.mutation_active() || self.route != Route::Proximos { return; }
+        if id.is_some_and(|id| self.visible_schedule(id).is_none()) { return; }
+        self.schedule_sheet = Some(schedule_sheet::ScheduleSheet::new(self, id.and_then(|id| self.visible_schedule(id))));
+        self.mutation_error = None;
+    }
+    fn submit_schedule(&mut self) {
+        if self.mutation_active() { return; }
+        let Some(sh) = self.schedule_sheet.as_ref() else { return };
+        let Some(draft) = sh.draft() else { return };
+        if sh.id.is_some_and(|id| self.visible_schedule(id).is_none()) { return; }
+        let (id, worker) = (sh.id, Arc::clone(&self.worker));
+        self.mutation_target = Some(MutationTarget::ScheduleSheet);
+        self.mutation.request(data::Mutation::SaveSchedule(id, draft), move |m| data::mutate(worker, m));
+    }
+    /// Registrar (`post`) or Saltar a payment that is still the pending occurrence on screen.
+    fn schedule_action(&mut self, id: Id, post: bool) {
+        if self.mutation_active() { return; }
+        if !self.visible_schedule(id).is_some_and(|v| !v.schedule.completed && v.next_date.is_some()) { return; }
+        let (worker, today) = (Arc::clone(&self.worker), self.today_date);
+        self.upcoming_error = None;
+        self.mutation_target = Some(MutationTarget::ScheduleRow);
+        let mutation = if post { data::Mutation::PostSchedule(id, today) } else { data::Mutation::SkipSchedule(id) };
+        self.mutation.request(mutation, move |m| data::mutate(worker, m));
+    }
+    fn request_schedule_delete(&mut self, id: Id) {
+        if self.mutation_active() || self.visible_schedule(id).is_none() { return; }
+        self.schedule_selected = Some(id); self.schedule_confirm = Some(id); self.mutation_error = None;
+    }
+    fn delete_schedule_confirmed(&mut self) {
+        if self.mutation_active() { return; }
+        if let Some(id) = self.schedule_confirm.filter(|id| self.visible_schedule(*id).is_some()) {
+            let worker = Arc::clone(&self.worker);
+            self.mutation_target = Some(MutationTarget::ScheduleConfirm(id));
+            self.mutation.request(data::Mutation::DeleteSchedule(id), move |m| data::mutate(worker, m));
+        }
+    }
     fn invalidate_selection(&mut self) {
+        if self.schedule_selected.is_some_and(|id| self.visible_schedule(id).is_none()) { self.schedule_selected = None; }
+        if self.schedule_confirm.is_some_and(|id| self.visible_schedule(id).is_none()) { self.schedule_confirm = None; }
         if self.selected.is_some_and(|id| self.visible_entry(id).is_none()) { self.selected = None; }
         if self.confirm.is_some_and(|id| self.visible_entry(id).is_none()) { self.confirm = None; }
     }
@@ -146,7 +209,7 @@ impl State {
 
 fn scene(s: &mut State, seed: bool, dark: bool) {
     let result = std::thread::spawn(move || data::scene(seed)).join();
-    *s = State::empty(); s.month = 202611; s.today = 202611; s.dark = Some(dark); s.refresh = false;
+    *s = State::empty(); s.today_date = NaiveDate::from_ymd_opt(2026, 11, 10).expect("valid date"); s.month = 202611; s.today = 202611; s.dark = Some(dark); s.refresh = false;
     match result {
         Ok(Ok((worker, snapshot))) => { s.worker = worker; s.accept(snapshot); },
         Ok(Err(error)) => s.error = Some(error),
@@ -184,15 +247,49 @@ fn entry_scene(s: &mut State, dark: bool) {
     movements_scene(s, dark); s.open_sheet(true, None);
     if let Some(sh) = &mut s.sheet { sh.amount.replace_text("125.50"); sh.payee.replace_text("Farmacia"); sh.notes.replace_text("Compra mensual"); }
 }
+fn proximos_scene(s: &mut State, dark: bool) {
+    scene(s, true, dark);
+    s.route = Route::Proximos;
+    let (worker, today) = (Arc::clone(&s.worker), s.today_date);
+    match std::thread::spawn(move || data::seed_schedules(&worker).and_then(|()| data::proximos(worker, today))).join() {
+        Ok(Ok(view)) => { s.proximos = Some(view); s.proximos_key = Some(s.proximos_key_now()); }
+        Ok(Err(error)) => s.error = Some(error),
+        Err(_) => s.error = Some("No se pudo preparar la escena".into()),
+    }
+}
+fn proximos_light(s: &mut State) { proximos_scene(s, false); }
+fn proximos_dark(s: &mut State) { proximos_scene(s, true); }
+fn schedule_sheet_scene(s: &mut State) {
+    proximos_scene(s, false); s.open_schedule_sheet(None);
+    if let Some(sh) = &mut s.schedule_sheet { sh.name.replace_text("Gimnasio"); sh.amount.replace_text("350"); sh.payee.replace_text("Smart Fit"); sh.start.replace_text("15/11/2026"); }
+}
 fn entry_light(s: &mut State) { entry_scene(s, false); }
 fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
         let target = s.mutation_target.take();
-        match result { Ok(()) => { match target { Some(MutationTarget::Sheet) => s.sheet = None, Some(MutationTarget::Budget(id)) => { s.budget_inputs.remove(&id); s.budget_error = None; s.budget_gen += 1; }, Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }, _ => {} } s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true; }, Err(e) => { if let Some(MutationTarget::Budget(id)) = target { s.budget_error = Some((Some(id), e)); } else { s.mutation_error = Some(e); } changed = true; } }
+        match result {
+            Ok(()) => {
+                match target {
+                    Some(MutationTarget::Sheet) => s.sheet = None,
+                    Some(MutationTarget::Budget(id)) => { s.budget_inputs.remove(&id); s.budget_error = None; s.budget_gen += 1; }
+                    Some(MutationTarget::Confirmation(id)) if s.confirm == Some(id) => { s.confirm = None; s.selected = None; }
+                    Some(MutationTarget::ScheduleSheet) => s.schedule_sheet = None,
+                    Some(MutationTarget::ScheduleConfirm(id)) if s.schedule_confirm == Some(id) => { s.schedule_confirm = None; s.schedule_selected = None; }
+                    _ => {}
+                }
+                // Every write can move balances and projections, so the list is read again.
+                s.proximos_gen += 1;
+                s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true;
+            }
+            Err(e) => {
+                match target { Some(MutationTarget::Budget(id)) => s.budget_error = Some((Some(id), e)), Some(MutationTarget::ScheduleRow) => s.upcoming_error = Some(e), _ => s.mutation_error = Some(e) }
+                changed = true;
+            }
+        }
     }
     if let Some((query, result)) = s.suggestion_latest.take()
         && s.sheet.as_ref().is_some_and(|sh| sh.payee.text == query) {
@@ -241,6 +338,29 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         let worker = Arc::clone(&s.worker);
         s.budget_latest.request_if_changed(&key, move |key| { let result = data::budget(worker, key.0); (key, result) });
     }
+    if let Some((key, result)) = s.proximos_latest.take() {
+        match result { Ok(view) => { s.proximos = Some(view); s.proximos_key = Some(key); } Err(error) => s.upcoming_error = Some(error) }
+        tx.instant(); changed = true;
+    }
+    if s.open_default && s.today_date != Local::now().date_naive() { s.today_date = Local::now().date_naive(); }
+    if s.route == Route::Proximos && s.version.is_some() {
+        let key = s.proximos_key_now();
+        let worker = Arc::clone(&s.worker);
+        s.proximos_latest.request_if_changed(&key, move |key| { let result = data::proximos(worker, key.2); (key, result) });
+    }
+    // Automatic payments run once after the data loads and then every hour, never on the UI thread.
+    if let Some(result) = s.auto_latest.take() {
+        match result {
+            Ok(0) => {}
+            Ok(_) => { s.proximos_gen += 1; s.refresh = true; s.ledger = None; s.ledger_key = None; s.ledger_latest.cancel(); tx.instant(); changed = true; }
+            Err(error) => { s.upcoming_error = Some(error); changed = true; }
+        }
+    }
+    if s.auto_post && s.version.is_some() && now >= s.next_auto && !s.auto_latest.is_pending() && !s.mutation_active() {
+        s.next_auto = now + 3600.0;
+        let (worker, today) = (Arc::clone(&s.worker), s.today_date);
+        s.auto_latest.request((), move |()| data::auto_post(worker, today));
+    }
     s.invalidate_selection();
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
@@ -249,6 +369,12 @@ fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
     if s.mutation_active() { return true; }
     if s.sheet.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.sheet = None; } return true; } return false; }
     if s.confirm.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.confirm = None; } return true; } return false; }
+    if s.schedule_sheet.is_some() { if ev.key == Key::Escape { s.schedule_sheet = None; return true; } return false; }
+    if s.schedule_confirm.is_some() { if ev.key == Key::Escape { s.schedule_confirm = None; return true; } return false; }
+    if s.route == Route::Proximos {
+        if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_schedule_sheet(None); return true; }
+        if matches!(ev.key, Key::Delete | Key::Backspace) && let Some(id) = s.schedule_selected { s.request_schedule_delete(id); return true; }
+    }
     if matches!(s.route, Route::Todas | Route::Cuenta(_)) {
         if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_sheet(!ev.mods.shift, None); return true; }
         if matches!(ev.key, Key::Delete | Key::Backspace) && s.selected.is_some_and(|id| s.visible_entry(id).is_some()) { s.confirm = s.selected; return true; }
@@ -314,24 +440,26 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
-    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
+    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if s.route == Route::Proximos { proximos::render(s, p, dark) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
         col().grow(1.0).h_full().padding(48.0).gap(12.0)
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
     };
-    let modal_open = s.sheet.is_some() || s.confirm.is_some();
+    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some();
     let sidebar = if modal_open { sidebar.inert() } else { sidebar };
     let detail = if modal_open { detail.inert() } else { detail };
     let mut root = row().w_full().h_full().fill(p.canvas)
         .child(sidebar).child(el().w(1.0).h_full().fill(p.border)).child(detail);
     if s.sheet.is_some() { root = root.child(sheet::render(s, p, dark)); }
     if s.confirm.is_some() { root = root.child(sheet::confirm(s, p)); }
+    if s.schedule_sheet.is_some() { root = root.child(schedule_sheet::render(s, p, dark)); }
+    if s.schedule_confirm.is_some() { root = root.child(schedule_sheet::confirm(s, p)); }
     root
 }
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });
@@ -634,6 +762,223 @@ mod tests {
         let (x, y) = rt.find("delete-confirm").unwrap(); rt.pointer_down(x, y); rt.pointer_up(x, y);
         for _ in 0..100 { rt.frame(0.02); std::thread::sleep(std::time::Duration::from_millis(5)); }
         assert!(!rt.state.ledger.as_ref().unwrap().rows.iter().any(|r| r.id == id));
+    }
+    fn proximos_runtime() -> Runtime<State> {
+        let mut state = State::empty(); proximos_scene(&mut state, false);
+        let mut rt = Runtime::new(state, view, (1200.0, 1800.0), Env::new(false, 1.0));
+        rt.on_key = Some(on_key); rt.poll = Some(poll); rt.frame(0.0); rt
+    }
+    fn click(rt: &mut Runtime<State>, key: &str) {
+        let (x, y) = rt.find(key).unwrap_or_else(|| panic!("missing {key}"));
+        rt.pointer_down(x, y); rt.pointer_up(x, y); rt.frame(0.0);
+    }
+    fn animate(rt: &mut Runtime<State>) { for _ in 0..60 { rt.frame(1.0 / 60.0); } }
+    fn fill(rt: &mut Runtime<State>, key: &str, value: &str) {
+        click(rt, key);
+        rt.key(KeyEvent { key: Key::Command('a'), mods: rune::Mods { cmd: true, ..Default::default() } });
+        rt.key(KeyEvent { key: Key::Text(value.into()), mods: Default::default() });
+        rt.frame(0.0);
+    }
+    fn has_text(rt: &Runtime<State>, value: &str) -> bool { rt.elements().into_iter().any(|e| e.text.as_deref() == Some(value)) }
+    fn schedule_id(rt: &Runtime<State>, name: &str) -> Id {
+        rt.state.proximos.as_ref().unwrap().schedules.iter().find(|v| v.schedule.name == name).unwrap_or_else(|| panic!("no schedule {name}")).schedule.id
+    }
+    fn stored(rt: &Runtime<State>, id: Id) -> Option<finanzas_core::models::Schedule> { rt.state.worker.lock().unwrap().as_ref().unwrap().get_schedule(id).unwrap() }
+    fn entries(rt: &Runtime<State>) -> data::Ledger { data::ledger(Arc::clone(&rt.state.worker), None, "").unwrap() }
+    fn schedule_count(rt: &Runtime<State>) -> usize { data::proximos(Arc::clone(&rt.state.worker), rt.state.today_date).unwrap().schedules.len() }
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate { NaiveDate::from_ymd_opt(y, m, day).unwrap() }
+
+    #[test]
+    fn registrar_posts_one_entry_and_advances_the_next_date() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Renta");
+        assert_eq!(text_of(&rt, "metric-overdue").as_deref(), Some("1"));
+        let before = entries(&rt);
+        click(&mut rt, &format!("post-{id}"));
+        settle(&mut rt);
+        let after = entries(&rt);
+        assert_eq!(after.rows.len(), before.rows.len() + 1);
+        let posted: Vec<_> = after.rows.iter().filter(|r| r.amount == -80_000).collect();
+        assert_eq!(posted.len(), 1);
+        assert_eq!((posted[0].date, posted[0].payee_name.as_deref(), posted[0].category_name.as_deref()), (d(2026, 11, 5), Some("Renta"), Some("Vivienda")));
+        assert_eq!(stored(&rt, id).unwrap().next_date, Some(d(2026, 12, 5)));
+        assert_eq!(text_of(&rt, "metric-overdue").as_deref(), Some("0"));
+        assert!(rt.state.upcoming_error.is_none());
+    }
+    #[test]
+    fn saltar_advances_without_creating_an_entry() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Renta");
+        let before = entries(&rt);
+        click(&mut rt, &format!("skip-{id}"));
+        settle(&mut rt);
+        let after = entries(&rt);
+        assert_eq!((after.rows.len(), after.total), (before.rows.len(), before.total));
+        assert_eq!(stored(&rt, id).unwrap().next_date, Some(d(2026, 12, 5)));
+        assert_eq!(text_of(&rt, "metric-overdue").as_deref(), Some("0"));
+    }
+    #[test]
+    fn duplicate_tap_while_pending_mutates_once() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Renta");
+        let before = entries(&rt);
+        let worker = Arc::clone(&rt.state.worker);
+        let guard = worker.lock().unwrap();
+        rt.state.schedule_action(id, true); rt.state.schedule_action(id, true); rt.state.schedule_action(id, false);
+        assert!(rt.state.mutation_active());
+        rt.frame(0.0);
+        click(&mut rt, &format!("post-{id}"));
+        drop(guard);
+        settle(&mut rt);
+        assert_eq!(entries(&rt).rows.len(), before.rows.len() + 1);
+        assert_eq!(stored(&rt, id).unwrap().next_date, Some(d(2026, 12, 5)));
+        assert!(rt.state.upcoming_error.is_none());
+    }
+    #[test]
+    fn creating_a_monthly_schedule_shows_it() {
+        let mut rt = proximos_runtime();
+        rt.key(KeyEvent { key: Key::Command('n'), mods: rune::Mods { cmd: true, ..Default::default() } });
+        rt.frame(0.0);
+        assert!(rt.find("schedule-sheet").is_some());
+        animate(&mut rt);
+        fill(&mut rt, "schedule-name", "Gimnasio");
+        fill(&mut rt, "schedule-amount", "350");
+        fill(&mut rt, "schedule-date", "15/11/2026");
+        click(&mut rt, "schedule-save");
+        settle(&mut rt);
+        assert!(rt.state.schedule_sheet.is_none(), "error {:?} sheet {:?}", rt.state.mutation_error, rt.state.schedule_sheet.as_ref().map(|s| (s.name.text.clone(), s.amount.text.clone(), s.start.text.clone(), s.account, s.valid())));
+        let created = rt.state.proximos.as_ref().unwrap().schedules.iter().find(|v| v.schedule.name == "Gimnasio").expect("listed").schedule.clone();
+        let rule = created.recurrence.unwrap();
+        assert_eq!((created.amount, rule.frequency, rule.interval, rule.start, created.auto_post), (-35_000, finanzas_core::models::Frequency::Monthly, 1, d(2026, 11, 15), false));
+        assert!(has_text(&rt, "Gimnasio"));
+        assert_eq!(text_of(&rt, "metric-schedules").as_deref(), Some("5"));
+    }
+    #[test]
+    fn editing_a_schedule_keeps_its_id_and_progress() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Renta");
+        rt.state.open_schedule_sheet(Some(id));
+        rt.frame(0.0); animate(&mut rt);
+        assert_eq!(rt.state.schedule_sheet.as_ref().unwrap().id, Some(id));
+        assert!(has_text(&rt, "Editar pago programado"));
+        fill(&mut rt, "schedule-name", "Renta depa");
+        click(&mut rt, "schedule-save");
+        settle(&mut rt);
+        let s = stored(&rt, id).unwrap();
+        assert_eq!((s.name.as_str(), s.amount, s.next_date), ("Renta depa", -80_000, Some(d(2026, 11, 5))));
+        assert_eq!(schedule_count(&rt), 4);
+    }
+    #[test]
+    fn invalid_schedule_cannot_be_saved() {
+        let mut rt = proximos_runtime();
+        rt.state.open_schedule_sheet(None);
+        let before = schedule_count(&rt);
+        rt.state.submit_schedule();
+        assert!(!rt.state.mutation_active());
+        let sh = rt.state.schedule_sheet.as_mut().unwrap();
+        sh.name.replace_text("Sin monto"); sh.amount.replace_text("abc");
+        assert!(!sh.valid());
+        sh.amount.replace_text("10"); sh.start.replace_text("31/02/2026");
+        assert!(!sh.valid());
+        rt.state.submit_schedule();
+        assert!(!rt.state.mutation_active());
+        assert_eq!(schedule_count(&rt), before);
+    }
+    #[test]
+    fn delete_requires_confirmation_that_names_the_schedule() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Netflix");
+        click(&mut rt, &format!("delete-{id}"));
+        assert!(rt.find("confirm-schedule-delete").is_some());
+        assert_eq!(schedule_count(&rt), 4, "nothing is deleted before confirming");
+        assert!(rt.elements().into_iter().any(|e| e.text.as_deref().is_some_and(|t| t.contains("Netflix") && t.contains("Tarjeta") && t.contains(&money::format(-2_000)))));
+        animate(&mut rt);
+        click(&mut rt, "schedule-delete-cancel");
+        assert!(rt.find("confirm-schedule-delete").is_none());
+        assert_eq!(schedule_count(&rt), 4);
+        click(&mut rt, &format!("delete-{id}"));
+        animate(&mut rt);
+        click(&mut rt, "schedule-delete-confirm");
+        settle(&mut rt);
+        assert_eq!(schedule_count(&rt), 3);
+        assert!(stored(&rt, id).is_none());
+        assert!(rt.state.schedule_confirm.is_none());
+        assert!(!has_text(&rt, "Netflix"));
+    }
+    #[test]
+    fn stale_target_cannot_delete() {
+        for mode in 0..4 {
+            let mut rt = proximos_runtime();
+            let id = schedule_id(&rt, "Netflix");
+            rt.state.request_schedule_delete(id);
+            assert_eq!(rt.state.schedule_confirm, Some(id));
+            match mode {
+                0 => rt.state.route = Route::Resumen,
+                1 => rt.state.proximos_gen += 1, // data changed; the list on screen is not current
+                2 => rt.state.schedule_confirm = Some(9_999),
+                _ => { rt.state.schedule_confirm = None; rt.state.route = Route::Todas; rt.key(KeyEvent { key: Key::Delete, mods: Default::default() }); assert!(rt.state.schedule_confirm.is_none(), "hidden selection asked to delete"); rt.state.schedule_confirm = Some(id); }
+            }
+            rt.state.delete_schedule_confirmed();
+            assert!(!rt.state.mutation_active(), "mode {mode}");
+            settle(&mut rt);
+            assert_eq!(schedule_count(&rt), 4, "mode {mode}");
+            assert!(stored(&rt, id).is_some(), "mode {mode}");
+        }
+    }
+    #[test]
+    fn duplicate_confirmed_delete_mutates_once() {
+        let mut rt = proximos_runtime();
+        let id = schedule_id(&rt, "Netflix");
+        rt.state.request_schedule_delete(id);
+        let worker = Arc::clone(&rt.state.worker);
+        let guard = worker.lock().unwrap();
+        rt.state.delete_schedule_confirmed(); rt.state.delete_schedule_confirmed();
+        assert!(rt.state.mutation_active());
+        drop(guard);
+        settle(&mut rt);
+        assert_eq!(schedule_count(&rt), 3);
+        assert!(rt.state.mutation_error.is_none());
+    }
+    #[test]
+    fn list_shows_overdue_auto_recurrence_account_and_category() {
+        let rt = proximos_runtime();
+        assert!(has_text(&rt, "Tus próximos compromisos"));
+        for text in ["Vencido", "Automático", "Renta · Cuenta principal · Vivienda · Mensual", "Netflix · Tarjeta · Ocio · Mensual", "Saldo: ", "Registrar", "Saltar"] {
+            assert!(rt.elements().into_iter().any(|e| e.text.as_deref().is_some_and(|t| t.starts_with(text))), "missing {text}");
+        }
+        assert!(has_text(&rt, &money::format(-80_000)) && has_text(&rt, &money::format(320_000)));
+        assert!(rt.find("section-overdue").is_some() && rt.find("section-coming").is_some() && rt.find("section-schedules").is_some());
+    }
+    #[test]
+    fn empty_list_says_nothing_is_scheduled() {
+        let mut s = State::empty(); scene(&mut s, false, false); s.route = Route::Proximos;
+        let loaded = data::proximos(Arc::clone(&s.worker), s.today_date).unwrap();
+        s.proximos = Some(loaded); s.proximos_key = Some(s.proximos_key_now());
+        let mut rt = Runtime::new(s, view, (1200.0, 800.0), Env::new(false, 1.0));
+        rt.on_key = Some(on_key); rt.poll = Some(poll); rt.frame(0.0);
+        assert!(has_text(&rt, "Nada programado"));
+        assert_eq!(text_of(&rt, "metric-schedules").as_deref(), Some("0"));
+        assert!(rt.find("section-overdue").is_none());
+    }
+    #[test]
+    fn automatic_payments_post_once_off_the_ui_thread_only_when_enabled() {
+        assert!(State::load().auto_post && !State::empty().auto_post);
+        let mut rt = proximos_runtime();
+        {
+            let guard = rt.state.worker.lock().unwrap(); let store = guard.as_ref().unwrap();
+            let account = store.list_accounts().unwrap()[0].id;
+            let rule = finanzas_core::models::Recurrence { start: d(2026, 11, 8), frequency: finanzas_core::models::Frequency::Monthly, interval: 1, skip_weekend: false, weekend_mode: finanzas_core::models::WeekendMode::After, end_date: None };
+            store.insert_schedule(&finanzas_core::models::Schedule { id: 0, name: "Spotify".into(), amount: -1_500, auto_post: true, completed: false, next_date: None, recurrence: Some(rule), account_id: Some(account), category_id: None, payee_id: None }).unwrap();
+        }
+        let before = entries(&rt).rows.len();
+        settle(&mut rt);
+        assert_eq!(entries(&rt).rows.len(), before, "scenes never auto-post");
+        rt.state.auto_post = true;
+        settle(&mut rt); settle(&mut rt);
+        let after = entries(&rt);
+        assert_eq!(after.rows.iter().filter(|r| r.amount == -1_500).count(), 1, "posted once, not on every frame");
+        assert_eq!(after.rows.len(), before + 1);
+        assert!(rt.state.proximos.as_ref().unwrap().schedules.iter().any(|v| v.schedule.name == "Spotify" && v.next_date == Some(d(2026, 12, 8))));
     }
     #[test]
     fn sidebar_navigation_changes_route() {

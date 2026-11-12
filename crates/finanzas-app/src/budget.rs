@@ -35,7 +35,8 @@ fn category_row(s: &State, c: &BudgetCategory, income: bool, p: Palette) -> El {
     let id = c.id;
     let line = row().w_full().gap(8.0).px(16.0).py(8.0).center_y()
         .child(col().grow(1.0).min_w(0.0).gap(4.0)
-            .child(label(c.name.clone(), p).truncate())
+            .child({ let name = c.name.clone(); theme::tappable(label(c.name.clone(), p).truncate().px(4.0).py(1.0), p).key(format!("budget-name-{id}"))
+                .help(format!("Ver movimientos de {}", c.name)).on_press(move |s: &mut State| s.show_movements(&name)) })
             .child(if income { el().h(0.0) } else { progress(c.spent_share, p) }));
     if income { return line.child(cell(amount(c.activity, p.emerald))); }
     let failed = s.budget_error.as_ref().is_some_and(|(row, _)| *row == Some(id));

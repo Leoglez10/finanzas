@@ -8,10 +8,14 @@ S2. Agreed scope (assistant proposal, accepted by S1 target answer): projected-b
 S3. Exclusions (assumption, from proposal): no couple-split or credit-card invoice features, no third-party bank branding, no licensed 3D art — flat in-app SVG icons instead.
 S4. Presentation only: existing calculations, persistence, guards and actions unchanged.
 
+S5. "mira como se ve la esquina superior izquierda y has que haya mucha interactividad con TODO" (screenshot: macOS traffic lights over the sidebar logo).
+
 ## Tasks
 - T1 [S1–S4] inline: shared type scale, big-money helper, SVG icons; redesigned Resumen (header, saldo previsto, pagos por hacer, categorías, gráfico, presupuesto, recientes); upcoming data loaded on Resumen; sidebar with icons and sections. Status: done (commit below).
 
 - T2 [S1–S4] inline: same look on Presupuesto, Próximos pagos, Movimientos and Ajustes (header bar, big amounts, icon titles, calendar date chips, card table). Status: done.
+
+- T3 [S5] inline: traffic-light clearance + window drag bands; clickable/hover/press/tooltips across Resumen (legend, segments, day-chip filter, tick-to-register, categories, chart months, budget, recent, reminders collapse, first steps) and other screens. Status: done.
 
 ## Log
 L1. User request verbatim: "podemos usar esta ui para esto? tomar lo mejor de eso y los diseños pero en español. estya bien no?" (reference image: "Duo Finn" Portuguese couple-finance dashboard).
@@ -20,3 +24,4 @@ L3. Route: inline, no writer trigger (one coherent presentation change). Rune ex
 L4. Theme toggle dropped: `sheet.rs` uses `s.dark.is_some()` to pin the scene date, so a runtime toggle would change new-entry default dates. System appearance still applies.
 L5. Checks: `cargo test --workspace` with scratch `FINANZAS_DB` all pass (67 app tests incl. 3 new forecast/split tests); clippy clean; `git diff --check` clean. Snapshots demo-light, demo-dark (1440x1000/1500) and empty (1200x800) inspected: no overlap; dark contrast fixed for primary button and wallet art. Test `previous_month_changes_the_displayed_header` kept unchanged by rendering the title as one keyed text. Resumen payments list is read-only; "Ver próximos pagos" links to the actionable screen. Not verified: live window interaction and narrow widths below 1200.
 L6. User request verbatim: "sigue con las demás pantallas, y despues correlo para verlo". T2 checks: workspace tests pass, clippy clean, snapshots presupuesto-light, proximos-dark, movimientos-light, ajustes-dark inspected with no overlap. Keyed texts used by tests (to-assign, metric-*, ledger-title, month-title, new-schedule) kept as single text elements.
+L7. T3: Registrar from Resumen needed a separate `payments_fresh()`; loosening `proximos_fresh()` broke `stale_target_cannot_delete` (delete must stay Próximos-only), so that guard was restored unchanged. Sidebar "Todas" now clears the search (needed to leave a category filter). 5 new interaction tests; workspace tests pass (72 app), clippy clean.

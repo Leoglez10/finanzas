@@ -6,7 +6,7 @@ use theme::{badge, header_bar, headline, primary, primary_disabled, titles};
 use rune::ScrollSpec;
 
 fn day(date: chrono::NaiveDate) -> String { date.format("%d.%m.%Y").to_string() }
-const MONTHS: [&str; 12] = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+pub const MONTHS: [&str; 12] = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 fn amount_color(value: i64, p: Palette) -> Color { if value < 0 { p.coral } else { p.emerald } }
 
 fn metric(title: &str, value: usize, key: &str, color: Color, glyph: &'static rune::Icon, p: Palette) -> El {
@@ -60,12 +60,13 @@ fn item_row(s: &State, item: &UpcomingView, view: Option<&ScheduleView>, enabled
     if actionable {
         let enabled = enabled && !s.mutation_active();
         r = r.child(row().gap(6.0)
-            .child(action("Registrar", format!("post-{id}"), enabled, move |s: &mut State| s.schedule_action(id, true), p, dark))
-            .child(quiet("Saltar", format!("skip-{id}"), enabled, move |s: &mut State| s.schedule_action(id, false), p)));
+            .child(action("Registrar", format!("post-{id}"), enabled, move |s: &mut State| s.schedule_action(id, true), p, dark).help("Registrar este pago hoy").press_scale(0.96))
+            .child(quiet("Saltar", format!("skip-{id}"), enabled, move |s: &mut State| s.schedule_action(id, false), p).help("Saltar esta fecha sin registrar").press_scale(0.96)));
     } else {
         r = r.child(el().w(142.0)); // keeps the amounts aligned with the rows that have buttons
     }
-    r.key(format!("upcoming-{id}-{}", item.date))
+    r.key(format!("upcoming-{id}-{}", item.date)).hover(p.selected.alpha(0.5)).help("Doble clic para editar el pago programado")
+        .on_double_press(move |s: &mut State| s.open_schedule_sheet(Some(id)))
 }
 
 fn schedule_row(s: &State, v: &ScheduleView, enabled: bool, p: Palette) -> El {

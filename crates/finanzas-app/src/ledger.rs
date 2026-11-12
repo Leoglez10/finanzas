@@ -49,6 +49,7 @@ pub fn render(s: &State, p: Palette, title: &str) -> El {
                     r.fill(if s.selected == Some(id) { p.selected } else { Color::TRANSPARENT }).hover(p.selected)
                         .on_press(move |s: &mut State| if !s.mutation_active() { s.selected = Some(id) })
                         .on_double_press(move |s: &mut State| s.open_sheet(true, Some(id)))
+                        .help("Doble clic para editar · clic derecho para más opciones")
                         .on_secondary_press(move |s: &mut State, press, tx| {
                             if s.mutation_active() { return; }
                             s.selected = Some(id);

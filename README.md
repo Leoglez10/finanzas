@@ -108,6 +108,7 @@ These links always download the latest release ([all releases](https://github.co
 
 ```sh
 brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas
+brew trust leoglez10/finanzas   # recent Homebrew asks to trust third-party taps
 brew install --cask finanzas
 brew upgrade finanzas   # later, to update
 ```

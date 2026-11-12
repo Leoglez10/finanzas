@@ -1,5 +1,6 @@
 # Homebrew cask for the macOS app. This repository is its own tap:
 #   brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas
+#   brew trust leoglez10/finanzas
 #   brew install --cask finanzas
 # .github/workflows/release.yml rewrites `version` and `sha256` after each release.
 cask "finanzas" do

@@ -1,10 +1,13 @@
 name: Release
 
-# Push a tag like v0.2.0 to build the installers and attach them to a GitHub Release.
-# "Run workflow" (manual) builds them as downloadable artifacts without publishing.
-# Pull requests that touch packaging build the installers too, without publishing.
+# Automatic releases: when `main` gets a workspace version (Cargo.toml) that has no `v<version>` tag
+# yet, this builds the installers, creates the tag and publishes the GitHub Release. To ship a new
+# version, bump `version` in Cargo.toml and merge. Pushing a `v*` tag by hand also releases.
+# Pull requests that touch packaging, and manual runs, only build the installers as artifacts.
+# Asset names carry no version, so https://github.com/<repo>/releases/latest/download/<name> stays valid.
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   pull_request:
     paths: [".github/workflows/release.yml", "packaging/**", "scripts/package-macos.sh", "crates/finanzas-app/Cargo.toml"]
@@ -14,24 +17,40 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          crate="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; echo "release=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            echo "version=$crate" >> "$GITHUB_OUTPUT"
+            if gh release view "v$crate" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release=false"; else echo "release=true"; fi >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$crate-dev" >> "$GITHUB_OUTPUT"; echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   package:
+    needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-          - os: windows-latest
-          - os: ubuntu-latest
+        os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Version
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-dev"; fi
-          echo "VERSION=$v" >> "$GITHUB_ENV"
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
@@ -55,8 +74,8 @@ jobs:
         run: |
           cargo install cargo-deb --locked
           mkdir -p dist
-          cargo deb -p finanzas-app --no-build --deb-version "$VERSION" -o dist/
-          tar -czf "dist/finanzas-$VERSION-linux-x86_64.tar.gz" -C target/release finanzas finanzas-mcp -C "$GITHUB_WORKSPACE/packaging/linux" finanzas.desktop
+          cargo deb -p finanzas-app --no-build --deb-version "$VERSION" -o dist/finanzas-linux-amd64.deb
+          tar -czf dist/finanzas-linux-x86_64.tar.gz -C target/release finanzas finanzas-mcp -C "$GITHUB_WORKSPACE/packaging/linux" finanzas.desktop finanzas.png
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,8 +84,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: package
+    needs: [version, package]
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -75,10 +94,13 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Finanzas ${{ needs.version.outputs.version }}
           files: dist/*
           generate_release_notes: true
           body: |
             Instaladores sin firma.
-            - macOS: abre el .dmg y arrastra Finanzas a Aplicaciones. La primera vez, clic derecho sobre la app → Abrir.
+            - macOS (Apple Silicon): abre el .dmg y arrastra Finanzas a Aplicaciones. La primera vez, clic derecho sobre la app → Abrir.
             - Windows: ejecuta el setup; si aparece SmartScreen, "Más información" → "Ejecutar de todas formas".
-            - Linux: `sudo apt install ./finanzas_*.deb`, o descomprime el .tar.gz.
+            - Linux: `sudo apt install ./finanzas-linux-amd64.deb`, o descomprime el .tar.gz.

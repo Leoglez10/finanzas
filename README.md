@@ -1,4 +1,12 @@
+<p align="center"><img src="packaging/icon/finanzas-1024.png" width="128" alt="Finanzas icon"></p>
+
 # Finanzas
+
+[![Latest release](https://img.shields.io/github/v/release/Leoglez10/finanzas?label=versi%C3%B3n)](https://github.com/Leoglez10/finanzas/releases/latest)
+[![Rust CI](https://github.com/Leoglez10/finanzas/actions/workflows/rust.yml/badge.svg)](https://github.com/Leoglez10/finanzas/actions/workflows/rust.yml)
+[![Release](https://github.com/Leoglez10/finanzas/actions/workflows/release.yml/badge.svg)](https://github.com/Leoglez10/finanzas/actions/workflows/release.yml)
+[![Downloads](https://img.shields.io/github/downloads/Leoglez10/finanzas/total)](https://github.com/Leoglez10/finanzas/releases)
+[![Website](https://img.shields.io/badge/web-leoglez10.github.io%2Ffinanzas-155E75)](https://leoglez10.github.io/finanzas/)
 
 Local personal finance app for macOS, Windows and Linux, built in Rust with the [Rune](https://github.com/anomalyco/rune) GPU UI framework.
 Manage accounts, envelope budgets and scheduled payments, and connect AI assistants through MCP.
@@ -36,18 +44,23 @@ The file dialogs used by import go through the XDG desktop portal on Linux.
 
 ## Install
 
-Download an installer from the [Releases](https://github.com/Leoglez10/finanzas/releases) page.
-The installers are not signed yet:
+These links always download the latest release:
 
-- **macOS** (`.dmg`, Apple Silicon): drag Finanzas to Applications; the first time, right-click the app and choose Open.
-- **Windows** (`-setup.exe`): installs for the current user; if SmartScreen appears, choose More info → Run anyway.
-- **Linux** (`.deb` or `.tar.gz`): `sudo apt install ./finanzas_*.deb`.
+| Platform | Download | Notes |
+|---|---|---|
+| macOS (Apple Silicon) | [Finanzas-macos-arm64.dmg](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-macos-arm64.dmg) | Drag Finanzas to Applications; the first time, right-click the app and choose Open. |
+| Windows (x64) | [Finanzas-windows-x64-setup.exe](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-windows-x64-setup.exe) | Installs for the current user; if SmartScreen appears, choose More info → Run anyway. |
+| Linux (Debian/Ubuntu) | [finanzas-linux-amd64.deb](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-amd64.deb) | `sudo apt install ./finanzas-linux-amd64.deb` |
+| Linux (other) | [finanzas-linux-x86_64.tar.gz](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-x86_64.tar.gz) | Extract and run `./finanzas`. |
 
-Each installer also ships the MCP server (`finanzas-mcp`). Your data stays in the data location below,
-so reinstalling or upgrading keeps it.
+The installers are not signed yet. Each one also ships the MCP server (`finanzas-mcp`). Your data
+stays in the data location below, so reinstalling or upgrading keeps it.
 
-To publish a release, push a version tag: `git tag v0.2.0 && git push origin v0.2.0`.
-`.github/workflows/release.yml` builds the three installers and attaches them to the release;
+### Releasing
+
+Releases are automatic: bump `version` in the root `Cargo.toml` and merge to `main`.
+`.github/workflows/release.yml` sees that `v<version>` has no release yet, builds the three
+installers, creates the tag and publishes the release. Pushing a `v*` tag by hand also works.
 `bash scripts/package-macos.sh <version>` builds the `.dmg` locally after a release build.
 
 ### From source

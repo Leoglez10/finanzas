@@ -79,9 +79,12 @@ pub fn render(s: &State, p: Palette) -> El {
         Some(Err(error)) => import = import.child(text(error.clone()).key("import-error").font(type_::BODY).color(p.coral).wrap().w_full()),
         None => {}
     }
+    let status = match &s.update_available { Some(v) => format!("{} · nueva versión {v} disponible", update::CURRENT), None => update::CURRENT.to_owned() };
+    let version = card(p).child(icon_title(&theme::DOWNLOAD, "Versión", p.petroleum, p)).child(muted(status, p).key("version-status"))
+        .child(muted("Finanzas busca actualizaciones al abrir y una vez al día, y te avisa en Resumen.", p).wrap().w_full());
     let database = card(p).child(icon_title(&theme::DATABASE, "Base de datos", p.emerald, p)).child(field("Ubicación", muted(s.db_label.clone(), p), p));
     col().grow(1.0).h_full().min_h(0.0).scroll(rune::ScrollSpec { stick_bottom: false }).child(
         col().wrap().w_full().padding(24.0).gap(16.0)
             .child(header_bar(p).child(badge(&theme::GEAR, 16.0, p.petroleum)).child(titles("Tus recordatorios, a tu ritmo", headline("Ajustes", p), p)))
-            .child(reminders).child(import).child(database))
+            .child(reminders).child(import).child(database).child(version))
 }

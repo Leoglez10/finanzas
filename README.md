@@ -104,6 +104,20 @@ These links always download the latest release ([all releases](https://github.co
 | Linux (Debian/Ubuntu, x86_64) | [finanzas-linux-amd64.deb](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-amd64.deb) | `sudo apt install ./finanzas-linux-amd64.deb` |
 | Linux (other, x86_64) | [finanzas-linux-x86_64.tar.gz](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-x86_64.tar.gz) | Extract and run `./finanzas`. |
 
+**macOS with Homebrew** (this repository is its own tap; also links `finanzas-mcp` into your `PATH`):
+
+```sh
+brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas
+brew trust leoglez10/finanzas   # recent Homebrew asks to trust third-party taps
+brew install --cask finanzas
+brew upgrade finanzas   # later, to update
+```
+
+**Updates:** the app checks GitHub for a newer release when it opens and once a day. When there is one,
+*Resumen* shows a notice with a download link (or `brew upgrade finanzas`), and after updating it shows
+which version you are on with a link to its release notes. *Ajustes › Versión* shows the installed version.
+The check needs `curl` (bundled with macOS and Windows 10+); offline, the app stays quiet.
+
 The installers are not signed yet. Each one also ships the MCP server (`finanzas-mcp`).
 Your data lives outside the app (see below), so reinstalling or upgrading keeps it.
 

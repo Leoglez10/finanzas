@@ -269,6 +269,22 @@ fn recent(o: &Overview, p: Palette) -> El {
     }
     c
 }
+/// "New version available" (with how to get it) or "you were updated to X"; closable for this session.
+fn update_banner(s: &State, p: Palette) -> Option<El> {
+    if s.update_dismissed { return None; }
+    let link = |name: &'static str, key: &'static str, url: String| el().key(key).role("button").label(name).focusable(true).padding(8.0).radius(8.0).fill(p.petroleum).press_scale(0.96)
+        .on_press_tx(move |_: &mut State, tx: &mut Tx| { let _ = tx.open_url(&url); }).child(text(name.to_owned()).font(type_::BODY).color(Color::WHITE));
+    let (title, note, action) = if let Some(v) = &s.update_available {
+        (format!("Nueva versión disponible: {v}"), format!("Tienes la {}. Descárgala o, si instalaste con Homebrew, ejecuta: brew upgrade finanzas", update::CURRENT),
+            link("Descargar", "update-download", format!("{}/latest", update::RELEASES)))
+    } else if let Some(v) = &s.updated_to {
+        (format!("Finanzas se actualizó a la versión {v}"), "Tus datos siguen intactos.".to_owned(), link("Ver novedades", "update-notes", format!("{}/tag/v{v}", update::RELEASES)))
+    } else { return None; };
+    Some(card(p).key("update-banner").fill(p.petroleum.alpha(0.10)).border(1.0, p.petroleum)
+        .child(row().w_full().center_y().justify_between().gap(12.0)
+            .child(col().gap(2.0).grow(1.0).child(card_title(&title, p)).child(muted(note, p).wrap().w_full()))
+            .child(row().gap(8.0).child(action).child(button("Cerrar", "update-dismiss", |s| s.update_dismissed = true, p)))))
+}
 /// Payment reminders planned by the worker; each one can be dismissed for this session.
 pub const BANNER_ROWS: usize = 3;
 fn reminders_banner(s: &State, p: Palette) -> Option<El> {
@@ -298,6 +314,7 @@ fn reminders_banner(s: &State, p: Palette) -> Option<El> {
 }
 pub fn render(s: &State, p: Palette) -> El {
     let mut content = col().w_full().padding(24.0).gap(16.0).child(header(s, p));
+    if let Some(banner) = update_banner(s, p) { content = content.child(banner); }
     if let Some(banner) = reminders_banner(s, p) { content = content.child(banner); }
     if let Some(o) = &s.overview {
         let first = &o.first_run;

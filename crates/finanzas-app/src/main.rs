@@ -10,13 +10,16 @@ mod proximos;
 mod schedule_sheet;
 mod settings;
 mod sheet;
+mod theme;
 #[cfg(test)]
 mod t10c_tests;
+#[cfg(test)]
+mod interaction_tests;
 
 use std::sync::{Arc, Mutex};
 use chrono::{Local, NaiveDate};
 use finanzas_core::{domain::{money, month}, models::Id};
-use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, row, text, tok::type_};
+use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, icon, row, text, tok::type_};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Route { Resumen, Presupuesto, Proximos, Ajustes, Todas, Cuenta(Id) }
@@ -96,6 +99,9 @@ struct State {
     next_reminders: f64,
     dismissed: std::collections::HashSet<String>,
     db_label: String,
+    /// Resumen: the day chip picked in "Pagos por hacer", if any.
+    payment_day: Option<NaiveDate>,
+    reminders_collapsed: bool,
 }
 
 impl State {
@@ -106,7 +112,7 @@ impl State {
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
             today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0,
-            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into() }
+            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), payment_day: None, reminders_collapsed: false }
     }
     fn load() -> Self { Self::load_from(finanzas_core::store::Store::default_path()) }
     /// The real app: opens the default store, runs automatic payments and the hourly reminder check.
@@ -157,7 +163,10 @@ impl State {
     }
     fn proximos_key_now(&self) -> ProximosKey { (self.version, self.proximos_gen, self.today_date) }
     /// True only while the list on screen was read for the current data version and day.
-    fn proximos_fresh(&self) -> bool { self.route == Route::Proximos && self.proximos.is_some() && self.proximos_key == Some(self.proximos_key_now()) }
+    fn proximos_fresh(&self) -> bool { self.route == Route::Proximos && self.list_current() }
+    fn list_current(&self) -> bool { self.proximos.is_some() && self.proximos_key == Some(self.proximos_key_now()) }
+    /// Registrar/Saltar also work from Resumen's "Pagos por hacer"; edit and delete stay on Próximos.
+    fn payments_fresh(&self) -> bool { matches!(self.route, Route::Proximos | Route::Resumen) && self.list_current() }
     fn visible_schedule(&self, id: Id) -> Option<&finanzas_core::service::ScheduleView> {
         if !self.proximos_fresh() { return None; }
         self.proximos.as_ref()?.schedules.iter().find(|v| v.schedule.id == id)
@@ -180,7 +189,8 @@ impl State {
     /// Registrar (`post`) or Saltar a payment that is still the pending occurrence on screen.
     fn schedule_action(&mut self, id: Id, post: bool) {
         if self.mutation_active() { return; }
-        if !self.visible_schedule(id).is_some_and(|v| !v.schedule.completed && v.next_date.is_some()) { return; }
+        if !self.payments_fresh() { return; }
+        if !self.proximos.as_ref().and_then(|d| d.schedules.iter().find(|v| v.schedule.id == id)).is_some_and(|v| !v.schedule.completed && v.next_date.is_some()) { return; }
         let (worker, today) = (Arc::clone(&self.worker), self.today_date);
         self.upcoming_error = None;
         self.mutation_target = Some(MutationTarget::ScheduleRow);
@@ -231,6 +241,10 @@ impl State {
             self.mutation.request(data::Mutation::Delete(id), move |m| data::mutate(worker, m));
         }
     }
+    /// Opens Movimientos (all accounts) filtered by `query`.
+    fn show_movements(&mut self, query: &str) {
+        self.search.replace_text(query); self.selected = None; self.route = Route::Todas;
+    }
     fn total(&self) -> i64 { self.accounts.iter().filter(|a| !a.account.closed).map(|a| a.balance).sum() }
     fn set_month(&mut self, month: i32) { self.month = month; self.refresh = true; self.budget_error = None; }
     fn budget_edit(&mut self, id: Id) -> &mut TextEdit {
@@ -277,8 +291,9 @@ fn scene(s: &mut State, seed: bool, dark: bool) {
         Err(_) => s.error = Some("No se pudo preparar la escena".into()),
     }
 }
-fn demo_light(s: &mut State) { scene(s, true, false); }
-fn demo_dark(s: &mut State) { scene(s, true, true); }
+fn demo_scene(s: &mut State, dark: bool) { proximos_scene(s, dark); s.route = Route::Resumen; }
+fn demo_light(s: &mut State) { demo_scene(s, false); }
+fn demo_dark(s: &mut State) { demo_scene(s, true); }
 fn empty_scene(s: &mut State) { scene(s, false, false); }
 fn movements_scene(s: &mut State, dark: bool) {
     scene(s, true, dark);
@@ -422,7 +437,8 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         tx.instant(); changed = true;
     }
     if s.open_default && s.today_date != Local::now().date_naive() { s.today_date = Local::now().date_naive(); }
-    if s.route == Route::Proximos && s.version.is_some() {
+    // Resumen reads the same list for its "Pagos por hacer" card; actions stay on Próximos.
+    if matches!(s.route, Route::Proximos | Route::Resumen) && s.version.is_some() {
         let key = s.proximos_key_now();
         let worker = Arc::clone(&s.worker);
         s.proximos_latest.request_if_changed(&key, move |key| { let result = data::proximos(worker, key.2); (key, result) });
@@ -502,16 +518,18 @@ fn palette(dark: bool) -> Palette {
     }
 }
 
-fn nav(label: &str, key: String, route: Route, selected: bool, balance: Option<i64>, p: Palette) -> El {
-    let mut content = row().w_full().h(38.0).px(12.0).center_y().justify_between().gap(8.0)
-        .child(text(label.to_owned()).font(type_::BODY).color(if selected { p.petroleum } else { p.ink }));
+fn nav(label: &str, key: String, route: Route, selected: bool, balance: Option<i64>, glyph: &'static rune::Icon, p: Palette) -> El {
+    let mut content = row().w_full().h(36.0).px(10.0).center_y().gap(10.0)
+        .child(icon(glyph, 16.0).color(if selected { p.petroleum } else { p.muted }))
+        .child(text(label.to_owned()).font(if selected { type_::TITLE } else { type_::BODY }).color(if selected { p.petroleum } else { p.ink }).grow(1.0).min_w(0.0).truncate());
     if let Some(amount) = balance {
-        content = content.child(text(money::format(amount)).font(type_::BODY).color(if amount < 0 { p.coral } else { p.muted }));
+        content = content.child(text(money::format(amount)).font(type_::LABEL).color(if amount < 0 { p.coral } else { p.muted }));
     }
-    content.key(key).role("button").label(label).focusable(true).radius(8.0)
+    content.key(key).role("button").label(label).focusable(true).radius(10.0).press_scale(0.98)
         .fill(if selected { p.selected } else { Color::TRANSPARENT })
-        .hover(p.selected).on_press(move |s: &mut State| s.route = route)
+        .hover(p.selected).on_press(move |s: &mut State| { if matches!(route, Route::Todas) { s.search.replace_text(""); } s.route = route })
 }
+fn section_label(name: &str, p: Palette) -> El { text(name.to_owned()).font(type_::SECTION).color(p.muted).pt(20.0).pb(6.0).px(10.0) }
 
 fn view(s: &State, cx: &mut Cx<State>) -> El {
     let dark = s.dark.unwrap_or_else(|| cx.system_dark());
@@ -521,27 +539,30 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             .child(text("No se pudo abrir la base de datos").font(type_::TITLE).color(p.ink))
             .child(text(error.clone()).font(type_::BODY).color(p.muted));
     }
-    let mut sidebar = col().w(280.0).h_full().padding(20.0).gap(3.0).fill(p.card)
-        .child(row().gap(12.0).center_y().pb(24.0)
-            .child(el().size(42.0, 42.0).radius(12.0).fill(color("#155E75")).center().child(text("F").font(type_::TITLE).color(Color::WHITE)))
-            .child(col().gap(3.0).child(text("Finanzas").font(type_::TITLE).color(p.ink)).child(text("Tu dinero, en orden").font(type_::BODY).color(p.muted))))
-        .child(nav("Resumen", "resumen".into(), Route::Resumen, s.route == Route::Resumen, None, p))
-        .child(nav("Presupuesto", "presupuesto".into(), Route::Presupuesto, s.route == Route::Presupuesto, None, p))
-        .child(nav("Próximos pagos", "proximos".into(), Route::Proximos, s.route == Route::Proximos, None, p))
-        .child(text("CUENTAS").font(type_::SECTION).color(p.muted).pt(24.0).pb(7.0).px(12.0))
-        .child(nav("Todas", "todas".into(), Route::Todas, s.route == Route::Todas, Some(s.total()), p));
+    // The top band clears the macOS traffic lights and drags the window.
+    let mut sidebar = col().w(260.0).h_full().padding(16.0).pt(0.0).gap(2.0).fill(p.canvas)
+        .child(el().w_full().h(40.0).window_drag())
+        .child(row().gap(12.0).center_y().px(6.0).pb(12.0).window_drag()
+            .child(el().size(38.0, 38.0).radius(12.0).fill(p.petroleum).center().child(text("F").font(type_::TITLE).color(if dark { p.canvas } else { Color::WHITE })))
+            .child(col().gap(2.0).child(text("Finanzas").font(type_::TITLE).color(p.ink)).child(text("Tu dinero, en orden").font(type_::LABEL).color(p.muted))))
+        .child(section_label("MENÚ", p).pt(8.0))
+        .child(nav("Resumen", "resumen".into(), Route::Resumen, s.route == Route::Resumen, None, &theme::GRID, p))
+        .child(nav("Presupuesto", "presupuesto".into(), Route::Presupuesto, s.route == Route::Presupuesto, None, &theme::PIE, p))
+        .child(nav("Próximos pagos", "proximos".into(), Route::Proximos, s.route == Route::Proximos, None, &theme::CALENDAR, p))
+        .child(section_label("CUENTAS", p))
+        .child(nav("Todas", "todas".into(), Route::Todas, s.route == Route::Todas, Some(s.total()), &theme::LIST, p));
     for a in s.accounts.iter().filter(|a| !a.account.closed) {
         let route = Route::Cuenta(a.account.id);
-        sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), p));
+        sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), &theme::CARD, p));
     }
-    sidebar = sidebar.child(row().w_full().h(38.0).px(12.0).center_y().gap(8.0).key("new-account").role("button").label("Nueva cuenta").focusable(true).radius(8.0).hover(p.selected)
-        .on_press(|s: &mut State| s.open_account_sheet()).child(text("+  Nueva cuenta").font(type_::BODY).color(p.petroleum)));
-    sidebar = sidebar.child(text("CERRADAS").font(type_::SECTION).color(p.muted).pt(24.0).pb(7.0).px(12.0));
+    sidebar = sidebar.child(row().w_full().h(36.0).px(10.0).center_y().gap(10.0).key("new-account").role("button").label("Nueva cuenta").focusable(true).radius(10.0).hover(p.selected)
+        .on_press(|s: &mut State| s.open_account_sheet()).child(icon(&theme::PLUS, 16.0).color(p.petroleum)).child(text("Nueva cuenta").font(type_::BODY).color(p.petroleum)));
+    if s.accounts.iter().any(|a| a.account.closed) { sidebar = sidebar.child(section_label("CERRADAS", p)); }
     for a in s.accounts.iter().filter(|a| a.account.closed) {
         let route = Route::Cuenta(a.account.id);
-        sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), p));
+        sidebar = sidebar.child(nav(&a.account.name, format!("cuenta-{}", a.account.id), route, s.route == route, Some(a.balance), &theme::CARD, p));
     }
-    sidebar = sidebar.child(el().grow(1.0)).child(nav("Ajustes", "ajustes".into(), Route::Ajustes, s.route == Route::Ajustes, None, p));
+    sidebar = sidebar.child(el().grow(1.0)).child(nav("Ajustes", "ajustes".into(), Route::Ajustes, s.route == Route::Ajustes, None, &theme::GEAR, p));
     let title = match s.route {
         Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Ajustes => "Ajustes", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),

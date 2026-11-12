@@ -1,10 +1,11 @@
 //! Ajustes: reminder preferences and the one-time importers.
 use super::*;
 use finanzas_core::store::ImportSummary;
-use overview::{card, label, muted};
+use overview::{card, muted};
 use rune::FileDialogOptions;
 use schedule_sheet::toggle;
 use sheet::{button, field};
+use theme::{badge, header_bar, headline, icon_title, titles};
 
 pub struct ImportRequest { pub kind: data::ImportKind, pub source: std::path::PathBuf }
 pub type ImportOutcome = Result<ImportSummary, String>;
@@ -61,13 +62,13 @@ pub fn render(s: &State, p: Palette) -> El {
         let b = button(name, key, p);
         if busy { b.disabled(true) } else { b.on_press_tx(move |s: &mut State, tx: &mut Tx| choose(s, tx, kind)) }
     };
-    let mut reminders = card(p).child(label("Recordatorios", p))
+    let mut reminders = card(p).child(icon_title(&theme::BELL, "Recordatorios", p.amber, p))
         .child(toggle("Avisarme antes de cada pago", "reminders-toggle", on, p).on_press(|s: &mut State| s.change_settings(|v| v.enabled = !v.enabled)))
         .child(stepper("days-value", format!("Avisar {} día(s) antes", s.settings.days), ("days-minus", |s| s.change_settings(|v| v.days = (v.days - 1).max(0))), ("days-plus", |s| s.change_settings(|v| v.days = (v.days + 1).min(settings::MAX_DAYS))), on, p))
         .child(stepper("hour-value", format!("a las {}:00", s.settings.hour), ("hour-minus", |s| s.change_settings(|v| v.hour = v.hour.saturating_sub(1))), ("hour-plus", |s| s.change_settings(|v| v.hour = (v.hour + 1).min(settings::MAX_HOUR))), on, p))
         .child(muted("Los avisos aparecen en Resumen mientras la app está abierta. Los pagos marcados como \"Registrar automáticamente\" se registran solos en su fecha al abrir la app y cada hora.", p).wrap().w_full());
     if let Some(error) = &s.settings_error { reminders = reminders.child(text(error.clone()).key("settings-error").font(type_::BODY).color(p.coral)); }
-    let mut import = card(p).child(label("Importar datos", p))
+    let mut import = card(p).child(icon_title(&theme::DOWNLOAD, "Importar datos", p.petroleum, p))
         .child(muted("Copia tus datos a una base de datos vacía. El archivo de origen solo se lee, nunca se modifica.", p).wrap().w_full())
         .child(row().gap(10.0)
             .child(import_button("Importar desde Finanzas (SwiftData)", "import-swiftdata", data::ImportKind::SwiftData))
@@ -78,9 +79,9 @@ pub fn render(s: &State, p: Palette) -> El {
         Some(Err(error)) => import = import.child(text(error.clone()).key("import-error").font(type_::BODY).color(p.coral).wrap().w_full()),
         None => {}
     }
-    let database = card(p).child(label("Base de datos", p)).child(field("Ubicación", muted(s.db_label.clone(), p), p));
+    let database = card(p).child(icon_title(&theme::DATABASE, "Base de datos", p.emerald, p)).child(field("Ubicación", muted(s.db_label.clone(), p), p));
     col().grow(1.0).h_full().min_h(0.0).scroll(rune::ScrollSpec { stick_bottom: false }).child(
-        col().wrap().w_full().padding(32.0).gap(16.0)
-            .child(col().gap(5.0).child(text("Ajustes").font(type_::TITLE).color(p.ink)).child(text("Tus recordatorios, a tu ritmo").font(type_::BODY).color(p.muted)))
+        col().wrap().w_full().padding(24.0).gap(16.0)
+            .child(header_bar(p).child(badge(&theme::GEAR, 16.0, p.petroleum)).child(titles("Tus recordatorios, a tu ritmo", headline("Ajustes", p), p)))
             .child(reminders).child(import).child(database))
 }

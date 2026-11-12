@@ -1,6 +1,6 @@
 use super::*;
 use finanzas_core::service::{Overview, UpcomingView};
-use theme::{badge, card_title, dot, money_big};
+use theme::{badge, card_title, dot, icon_button, money_big, primary, secondary};
 
 pub fn label(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.ink) }
 pub fn muted(value: impl Into<String>, p: Palette) -> El { text(value.into()).font(type_::BODY).color(p.muted) }
@@ -8,18 +8,6 @@ pub fn card(p: Palette) -> El { col().grow(1.0).padding(20.0).gap(12.0).radius(1
 pub fn button(name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
     el().key(key).role("button").label(name).focusable(true).padding(8.0).radius(8.0).fill(p.card).hover(p.selected)
         .on_press(action).child(label(name, p))
-}
-fn icon_button(i: &'static rune::Icon, name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
-    el().key(key).role("button").label(name).focusable(true).size(32.0, 32.0).radius(10.0).center().border(1.0, p.border).hover(p.selected)
-        .on_press(action).child(icon(i, 16.0).color(p.ink))
-}
-fn primary(i: &'static rune::Icon, name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
-    row().key(key).role("button").label(name).focusable(true).gap(6.0).px(14.0).py(8.0).radius(10.0).center_y().fill(p.petroleum).hover(p.petroleum.alpha(0.85))
-        .on_press(action).child(icon(i, 14.0).color(p.card)).child(text(name.to_owned()).font(type_::LABEL).color(p.card))
-}
-fn secondary(i: &'static rune::Icon, name: &'static str, key: &'static str, action: fn(&mut State), p: Palette) -> El {
-    row().key(key).role("button").label(name).focusable(true).gap(6.0).px(14.0).py(8.0).radius(10.0).center_y().border(1.0, p.border).hover(p.selected)
-        .on_press(action).child(icon(i, 14.0).color(p.ink)).child(text(name.to_owned()).font(type_::LABEL).color(p.ink))
 }
 /// Card heading with an optional subtitle and a flat illustration on the right.
 fn heading(title: &str, note: Option<String>, art: &'static rune::Icon, p: Palette) -> El {

@@ -11,9 +11,12 @@ S4. Presentation only: existing calculations, persistence, guards and actions un
 ## Tasks
 - T1 [S1–S4] inline: shared type scale, big-money helper, SVG icons; redesigned Resumen (header, saldo previsto, pagos por hacer, categorías, gráfico, presupuesto, recientes); upcoming data loaded on Resumen; sidebar with icons and sections. Status: done (commit below).
 
+- T2 [S1–S4] inline: same look on Presupuesto, Próximos pagos, Movimientos and Ajustes (header bar, big amounts, icon titles, calendar date chips, card table). Status: done.
+
 ## Log
 L1. User request verbatim: "podemos usar esta ui para esto? tomar lo mejor de eso y los diseños pero en español. estya bien no?" (reference image: "Duo Finn" Portuguese couple-finance dashboard).
 L2. User answer verbatim: "en la de rust, la de main."
 L3. Route: inline, no writer trigger (one coherent presentation change). Rune exposes `TextStyle::new(size, weight)` for large figures and SVG `Icon { name, view, body }` for icons. Upcoming payments currently load only on the Próximos route; Resumen list will be read-only with a link to Próximos so schedule action guards stay untouched.
 L4. Theme toggle dropped: `sheet.rs` uses `s.dark.is_some()` to pin the scene date, so a runtime toggle would change new-entry default dates. System appearance still applies.
 L5. Checks: `cargo test --workspace` with scratch `FINANZAS_DB` all pass (67 app tests incl. 3 new forecast/split tests); clippy clean; `git diff --check` clean. Snapshots demo-light, demo-dark (1440x1000/1500) and empty (1200x800) inspected: no overlap; dark contrast fixed for primary button and wallet art. Test `previous_month_changes_the_displayed_header` kept unchanged by rendering the title as one keyed text. Resumen payments list is read-only; "Ver próximos pagos" links to the actionable screen. Not verified: live window interaction and narrow widths below 1200.
+L6. User request verbatim: "sigue con las demás pantallas, y despues correlo para verlo". T2 checks: workspace tests pass, clippy clean, snapshots presupuesto-light, proximos-dark, movimientos-light, ajustes-dark inspected with no overlap. Keyed texts used by tests (to-assign, metric-*, ledger-title, month-title, new-schedule) kept as single text elements.

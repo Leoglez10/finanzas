@@ -11,6 +11,7 @@ mod schedule_sheet;
 mod settings;
 mod sheet;
 mod theme;
+mod update;
 #[cfg(test)]
 mod t10c_tests;
 #[cfg(test)]
@@ -102,6 +103,14 @@ struct State {
     /// Resumen: the day chip picked in "Pagos por hacer", if any.
     payment_day: Option<NaiveDate>,
     reminders_collapsed: bool,
+    /// Update notices: the real app asks GitHub at launch and daily; scenes and tests never do.
+    check_updates: bool,
+    next_update_check: f64,
+    update_latest: Latest<Result<String, String>>,
+    /// A newer published version, or the version this launch was updated to.
+    update_available: Option<String>,
+    updated_to: Option<String>,
+    update_dismissed: bool,
 }
 
 impl State {
@@ -112,7 +121,8 @@ impl State {
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
             today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0,
-            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), payment_day: None, reminders_collapsed: false }
+            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), payment_day: None, reminders_collapsed: false,
+            check_updates: false, next_update_check: 0.0, update_latest: Latest::default(), update_available: None, updated_to: None, update_dismissed: false }
     }
     fn load() -> Self { Self::load_from(finanzas_core::store::Store::default_path()) }
     /// The real app: opens the default store, runs automatic payments and the hourly reminder check.
@@ -122,6 +132,8 @@ impl State {
         state.open_default = true; state.auto_post = true; state.hourly = true;
         state.db_label = db.as_ref().map_or_else(|| "Base de datos predeterminada".into(), |p| p.display().to_string());
         state.settings_path = db.as_ref().and_then(|p| p.parent()).map(|dir| dir.join("settings.json"));
+        state.check_updates = true;
+        if let Some(dir) = db.as_ref().and_then(|p| p.parent()) && update::record_version(dir, update::CURRENT).is_some() { state.updated_to = Some(update::CURRENT.into()); }
         if let Some(path) = &state.settings_path {
             match settings::load(path) { Ok(value) => state.settings = value, Err(e) => state.settings_error = Some(format!("Ajustes inválidos: {e}")) }
         }
@@ -359,7 +371,7 @@ fn reminders_scene(s: &mut State) {
 fn entry_light(s: &mut State) { entry_scene(s, false); }
 fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.update_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
@@ -476,6 +488,14 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     } else if s.version.is_some() {
         let (key, worker, at) = (s.reminders_key(), Arc::clone(&s.worker), s.now());
         s.reminders_latest.request_if_changed(&key, move |key| { let result = data::reminders(worker, at, key.3, key.4); (key, result) });
+    }
+    if s.check_updates && now >= s.next_update_check {
+        s.next_update_check = now + 86_400.0;
+        s.update_latest.request((), |()| update::fetch_latest());
+    }
+    // Offline or rate-limited: stay quiet and try again tomorrow.
+    if let Some(Ok(latest)) = s.update_latest.take() && update::newer(&latest, update::CURRENT) && s.update_available.as_ref() != Some(&latest) {
+        s.update_available = Some(latest); s.update_dismissed = false; changed = true;
     }
     s.invalidate_selection();
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });

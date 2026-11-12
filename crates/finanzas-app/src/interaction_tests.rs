@@ -79,3 +79,23 @@ fn reminders_banner_collapses_and_expands() {
 
 trait Parts { fn clone_parts(&self) -> (Id, String); }
 impl Parts for finanzas_core::service::CategoryProgress { fn clone_parts(&self) -> (Id, String) { (self.category_id, self.name.clone()) } }
+
+#[test]
+fn a_newer_release_is_announced_on_resumen_with_a_download_link() {
+    let mut rt = dashboard();
+    assert!(rt.find("update-banner").is_none(), "no notice without a newer version");
+    rt.update(|s, _| s.update_available = Some("99.0.0".into())); settle(&mut rt);
+    assert!(rt.find("update-banner").is_some());
+    click(&mut rt, "update-download");
+    assert_eq!(rt.take_url_requests(), vec![format!("{}/latest", update::RELEASES)]);
+    click(&mut rt, "update-dismiss");
+    assert!(rt.find("update-banner").is_none(), "closed for this session");
+}
+
+#[test]
+fn an_update_that_just_happened_links_to_its_release_notes() {
+    let mut rt = dashboard();
+    rt.update(|s, _| s.updated_to = Some("0.2.0".into())); settle(&mut rt);
+    click(&mut rt, "update-notes");
+    assert_eq!(rt.take_url_requests(), vec![format!("{}/tag/v0.2.0", update::RELEASES)]);
+}

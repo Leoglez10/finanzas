@@ -15,3 +15,17 @@ chrono.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+# `cargo deb -p finanzas-app` (see .github/workflows/release.yml). The graphics and windowing
+# libraries are loaded at runtime, so dpkg-shlibdeps can't see them; they are listed by hand.
+[package.metadata.deb]
+name = "finanzas"
+maintainer = "Finanzas"
+extended-description = "Personal finance app: accounts, budget, scheduled payments and an MCP server."
+section = "utils"
+depends = "$auto, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libvulkan1"
+assets = [
+    ["target/release/finanzas", "usr/bin/", "755"],
+    ["target/release/finanzas-mcp", "usr/bin/", "755"],
+    ["../../packaging/linux/finanzas.desktop", "usr/share/applications/", "644"],
+]

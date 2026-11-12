@@ -1,0 +1,84 @@
+name: Release
+
+# Push a tag like v0.2.0 to build the installers and attach them to a GitHub Release.
+# "Run workflow" (manual) builds them as downloadable artifacts without publishing.
+# Pull requests that touch packaging build the installers too, without publishing.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/release.yml", "packaging/**", "scripts/package-macos.sh", "crates/finanzas-app/Cargo.toml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+          - os: windows-latest
+          - os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-dev"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p finanzas-app -p finanzas-mcp
+
+      - name: macOS .dmg
+        if: runner.os == 'macOS'
+        run: scripts/package-macos.sh "$VERSION"
+
+      - name: Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VERSION" packaging\windows\finanzas.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Linux .deb and .tar.gz
+        if: runner.os == 'Linux'
+        run: |
+          cargo install cargo-deb --locked
+          mkdir -p dist
+          cargo deb -p finanzas-app --no-build --deb-version "$VERSION" -o dist/
+          tar -czf "dist/finanzas-$VERSION-linux-x86_64.tar.gz" -C target/release finanzas finanzas-mcp -C "$GITHUB_WORKSPACE/packaging/linux" finanzas.desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ runner.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Instaladores sin firma.
+            - macOS: abre el .dmg y arrastra Finanzas a Aplicaciones. La primera vez, clic derecho sobre la app → Abrir.
+            - Windows: ejecuta el setup; si aparece SmartScreen, "Más información" → "Ejecutar de todas formas".
+            - Linux: `sudo apt install ./finanzas_*.deb`, o descomprime el .tar.gz.

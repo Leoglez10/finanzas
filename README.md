@@ -36,6 +36,22 @@ The file dialogs used by import go through the XDG desktop portal on Linux.
 
 ## Install
 
+Download an installer from the [Releases](https://github.com/Leoglez10/finanzas/releases) page.
+The installers are not signed yet:
+
+- **macOS** (`.dmg`, Apple Silicon): drag Finanzas to Applications; the first time, right-click the app and choose Open.
+- **Windows** (`-setup.exe`): installs for the current user; if SmartScreen appears, choose More info → Run anyway.
+- **Linux** (`.deb` or `.tar.gz`): `sudo apt install ./finanzas_*.deb`.
+
+Each installer also ships the MCP server (`finanzas-mcp`). Your data stays in the data location below,
+so reinstalling or upgrading keeps it.
+
+To publish a release, push a version tag: `git tag v0.2.0 && git push origin v0.2.0`.
+`.github/workflows/release.yml` builds the three installers and attaches them to the release;
+`bash scripts/package-macos.sh <version>` builds the `.dmg` locally after a release build.
+
+### From source
+
 Start the app from the repository root:
 
 ```sh

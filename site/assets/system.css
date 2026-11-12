@@ -1326,3 +1326,6 @@ main > .photo-band--hero:first-child > .photo-band__text { padding-top: calc(var
 .stack-4 > * + * { margin-top: var(--s-4); }
 .stack-5 > * + * { margin-top: var(--s-5); }
 .stack-6 > * + * { margin-top: var(--s-6); }
+
+/* Homebrew commands in the download list: long tap URL must wrap on phones. */
+.dl code { overflow-wrap: anywhere; font-size: 0.9em; }

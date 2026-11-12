@@ -104,3 +104,26 @@ jobs:
             - macOS (Apple Silicon): abre el .dmg y arrastra Finanzas a Aplicaciones. La primera vez, clic derecho sobre la app → Abrir.
             - Windows: ejecuta el setup; si aparece SmartScreen, "Más información" → "Ejecutar de todas formas".
             - Linux: `sudo apt install ./finanzas-linux-amd64.deb`, o descomprime el .tar.gz.
+
+  # Points the Homebrew cask (Casks/finanzas.rb, this repo is its own tap) at the new release.
+  # Pushes made with GITHUB_TOKEN start no workflows, so this commit does not release again.
+  cask:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Bump version and sha256
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern Finanzas-macos-arm64.dmg --dir "$RUNNER_TEMP"
+          sha="$(sha256sum "$RUNNER_TEMP/Finanzas-macos-arm64.dmg" | cut -d' ' -f1)"
+          sed -i -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/finanzas.rb
+          git diff --quiet && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(cask): finanzas $VERSION"
+          git push origin HEAD:main

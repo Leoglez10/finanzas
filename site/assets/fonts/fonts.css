@@ -1,0 +1,5 @@
+/* Funnel Display, Funnel Sans and DM Mono (SIL Open Font License 1.1), latin subset, self-hosted from Google Fonts */
+@font-face { font-family: 'Funnel Display'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(funnel-display.woff2) format('woff2'); }
+@font-face { font-family: 'Funnel Sans'; font-style: normal; font-weight: 400 600; font-display: swap; src: url(funnel-sans.woff2) format('woff2'); }
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(dm-mono-400.woff2) format('woff2'); }
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url(dm-mono-500.woff2) format('woff2'); }

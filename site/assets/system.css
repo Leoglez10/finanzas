@@ -1327,5 +1327,9 @@ main > .photo-band--hero:first-child > .photo-band__text { padding-top: calc(var
 .stack-5 > * + * { margin-top: var(--s-5); }
 .stack-6 > * + * { margin-top: var(--s-6); }
 
-/* Homebrew commands in the download list: long tap URL must wrap on phones. */
-.dl code { overflow-wrap: anywhere; font-size: 0.9em; }
+/* Homebrew commands under the macOS download, with a copy button. */
+.brew { display: grid; gap: var(--s-2); }
+.brew__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.brew__head p { color: var(--muted); }
+.brew pre { margin: 0; padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+  font: 0.85em/1.6 var(--font-mono); font-variant-ligatures: none; white-space: pre-wrap; overflow-wrap: anywhere; }

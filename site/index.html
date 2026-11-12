@@ -284,8 +284,14 @@
       <div class="grid fill">
         <div class="dl-list span-5 stack-6">
           <div class="dl" data-os="mac">
-            <div class="dl__text"><h3 class="t-card dl__name"><span class="ic-tile ic-tile--32"><img class="ic" data-icon="apple" src="assets/icons/apple.svg" alt="" width="32" height="32" loading="lazy"></span>macOS</h3><p>Apple Silicon, macOS 11 o superior. La primera vez: clic derecho → Abrir. Con Homebrew: <code>brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas</code>, <code>brew trust leoglez10/finanzas</code> y <code>brew install --cask finanzas</code>.</p></div>
+            <div class="dl__text"><h3 class="t-card dl__name"><span class="ic-tile ic-tile--32"><img class="ic" data-icon="apple" src="assets/icons/apple.svg" alt="" width="32" height="32" loading="lazy"></span>macOS</h3><p>Apple Silicon, macOS 11 o superior. La primera vez: clic derecho → Abrir.</p></div>
             <a class="btn btn--secondary" href="https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-macos-arm64.dmg">Descargar el .dmg</a>
+          </div>
+          <div class="brew">
+            <div class="brew__head"><p>O instálala con Homebrew:</p><button class="btn btn--secondary" type="button" data-copy="brew-cmd">Copiar</button></div>
+            <pre id="brew-cmd"><code>brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas
+brew trust leoglez10/finanzas
+brew install --cask finanzas</code></pre>
           </div>
           <div class="dl" data-os="win">
             <div class="dl__text"><h3 class="t-card dl__name"><span class="ic-tile ic-tile--32"><img class="ic" data-icon="windows" src="assets/icons/windows.svg" alt="" width="32" height="32" loading="lazy"></span>Windows</h3><p>Windows 10 u 11 de 64 bits. En SmartScreen: “Más información” → “Ejecutar de todas formas”.</p></div>
@@ -377,6 +383,13 @@
       });
     }
   }
+  document.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      navigator.clipboard.writeText(document.getElementById(b.dataset.copy).textContent).then(function () {
+        b.textContent = "Copiado"; setTimeout(function () { b.textContent = "Copiar"; }, 2000);
+      }, function () { b.textContent = "Selecciona y copia"; });
+    });
+  });
   fetch("https://api.github.com/repos/Leoglez10/finanzas/releases/latest")
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (r) { if (r && r.tag_name) document.getElementById("version").textContent = "Versión " + r.tag_name + " · gratis y de código abierto"; })

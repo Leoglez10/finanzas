@@ -587,6 +587,8 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
 }
 
 fn main() {
+    // Dock / taskbar icon; the installers also set it on the bundle, executable shortcut and desktop entry.
+    let _ = rune::set_app_icon(include_bytes!("../../../packaging/linux/finanzas.png").to_vec());
     rune::run(AppSpec::<State> {
         scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),

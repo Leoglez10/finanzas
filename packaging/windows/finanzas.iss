@@ -12,12 +12,13 @@ DefaultGroupName=Finanzas
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\..\dist
-OutputBaseFilename=Finanzas-{#AppVersion}-windows-x64-setup
+OutputBaseFilename=Finanzas-windows-x64-setup
+SetupIconFile=finanzas.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\finanzas.exe
+UninstallDisplayIcon={app}\finanzas.ico
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
@@ -28,10 +29,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\..\target\release\finanzas.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\target\release\finanzas-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "finanzas.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Finanzas"; Filename: "{app}\finanzas.exe"
-Name: "{autodesktop}\Finanzas"; Filename: "{app}\finanzas.exe"; Tasks: desktopicon
+Name: "{group}\Finanzas"; Filename: "{app}\finanzas.exe"; IconFilename: "{app}\finanzas.ico"
+Name: "{autodesktop}\Finanzas"; Filename: "{app}\finanzas.exe"; IconFilename: "{app}\finanzas.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\finanzas.exe"; Description: "{cm:LaunchProgram,Finanzas}"; Flags: nowait postinstall skipifsilent

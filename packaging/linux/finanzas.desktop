@@ -3,5 +3,6 @@ Type=Application
 Name=Finanzas
 Comment=Tu dinero, en orden
 Exec=finanzas
+Icon=finanzas
 Terminal=false
 Categories=Office;Finance;

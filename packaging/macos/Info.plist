@@ -6,6 +6,7 @@
   <key>CFBundleDisplayName</key><string>Finanzas</string>
   <key>CFBundleIdentifier</key><string>io.github.leoglez10.finanzas</string>
   <key>CFBundleExecutable</key><string>finanzas</string>
+  <key>CFBundleIconFile</key><string>Finanzas</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleVersion</key><string>@VERSION@</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>

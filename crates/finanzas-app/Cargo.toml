@@ -28,4 +28,5 @@ assets = [
     ["target/release/finanzas", "usr/bin/", "755"],
     ["target/release/finanzas-mcp", "usr/bin/", "755"],
     ["../../packaging/linux/finanzas.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/linux/finanzas.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
 ]

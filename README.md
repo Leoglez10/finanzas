@@ -225,7 +225,7 @@ in-memory demo data, for example `target/release/finanzas --scene demo-light --s
 | `crates/finanzas-mcp` | MCP stdio server |
 | `packaging/` | App icon (`icon/finanzas.svg` source), macOS `Info.plist`, Windows Inno Setup script, Linux desktop entry |
 | `scripts/` | `dev.sh`, `build.sh`, `package-macos.sh` |
-| `site/` | Project website (GitHub Pages) |
+| `site/` | Project website (GitHub Pages), built with the [taste-skill](https://github.com/Leonxlnx/taste-skill) kit (MIT, files in `site/assets/`) |
 | `.github/workflows/` | `rust.yml` tests and builds on every push and PR; `release.yml` installers and releases; `pages.yml` website |
 
 ## Releasing

@@ -110,6 +110,7 @@ jobs:
   cask:
     needs: [version, publish]
     runs-on: ubuntu-latest
+    concurrency: { group: cask, cancel-in-progress: false }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,8 +123,12 @@ jobs:
           gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern Finanzas-macos-arm64.dmg --dir "$RUNNER_TEMP"
           sha="$(sha256sum "$RUNNER_TEMP/Finanzas-macos-arm64.dmg" | cut -d' ' -f1)"
           sed -i -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/finanzas.rb
+          if ! grep -qx "  version \"$VERSION\"" Casks/finanzas.rb || ! grep -qx "  sha256 \"$sha\"" Casks/finanzas.rb; then
+            echo "Casks/finanzas.rb format changed; version/sha256 were not updated"; exit 1
+          fi
           git diff --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(cask): finanzas $VERSION"
+          git pull --rebase origin main   # main may have moved while the installers were building
           git push origin HEAD:main

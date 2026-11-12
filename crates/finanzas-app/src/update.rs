@@ -30,14 +30,15 @@ pub fn fetch_latest() -> Result<String, String> {
     tag(&out.stdout)
 }
 
-/// Records `current` as the version that last ran in `dir` and returns the previous one when it
-/// differs. The first launch (no record yet) returns `None`, so it is not announced as an update.
-pub fn record_version(dir: &Path, current: &str) -> Option<String> {
+/// Records `current` as the version that last ran in `dir`; true when this launch is an update.
+/// Without a record, it is an update only if the app was already in use (`had_data`): versions
+/// before 0.2.0 kept no record, while a fresh install has no data yet.
+pub fn record_version(dir: &Path, current: &str, had_data: bool) -> bool {
     let path = dir.join("last-version");
     let previous = std::fs::read_to_string(&path).ok().map(|v| v.trim().to_owned());
-    if previous.as_deref() == Some(current) { return None; }
+    if previous.as_deref() == Some(current) { return false; }
     let _ = std::fs::create_dir_all(dir).and_then(|()| std::fs::write(&path, current));
-    previous
+    previous.is_some() || had_data
 }
 
 #[cfg(test)]
@@ -65,10 +66,12 @@ mod tests {
     fn announces_only_a_changed_version() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/update-tests").join(std::process::id().to_string());
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(record_version(&dir, "0.1.0"), None, "first launch");
-        assert_eq!(record_version(&dir, "0.1.0"), None, "same version");
-        assert_eq!(record_version(&dir, "0.2.0"), Some("0.1.0".into()), "updated");
-        assert_eq!(record_version(&dir, "0.2.0"), None, "already announced");
+        assert!(!record_version(&dir, "0.1.0", false), "fresh install");
+        assert!(!record_version(&dir, "0.1.0", true), "same version");
+        assert!(record_version(&dir, "0.2.0", true), "updated");
+        assert!(!record_version(&dir, "0.2.0", true), "already announced");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(record_version(&dir, "0.2.0", true), "upgrade from a version that kept no record");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

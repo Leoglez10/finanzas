@@ -133,7 +133,7 @@ impl State {
         state.db_label = db.as_ref().map_or_else(|| "Base de datos predeterminada".into(), |p| p.display().to_string());
         state.settings_path = db.as_ref().and_then(|p| p.parent()).map(|dir| dir.join("settings.json"));
         state.check_updates = true;
-        if let Some(dir) = db.as_ref().and_then(|p| p.parent()) && update::record_version(dir, update::CURRENT).is_some() { state.updated_to = Some(update::CURRENT.into()); }
+        if let Some(dir) = db.as_ref().and_then(|p| p.parent()) && update::record_version(dir, update::CURRENT, db.as_ref().is_some_and(|p| p.exists())) { state.updated_to = Some(update::CURRENT.into()); }
         if let Some(path) = &state.settings_path {
             match settings::load(path) { Ok(value) => state.settings = value, Err(e) => state.settings_error = Some(format!("Ajustes inválidos: {e}")) }
         }
@@ -1113,7 +1113,7 @@ mod tests {
     }
     #[test]
     fn automatic_payments_post_once_off_the_ui_thread_only_when_enabled() {
-        assert!(State::load().auto_post && !State::empty().auto_post);
+        assert!(State::load_from(None).auto_post && !State::empty().auto_post);
         let mut rt = proximos_runtime();
         {
             let guard = rt.state.worker.lock().unwrap(); let store = guard.as_ref().unwrap();

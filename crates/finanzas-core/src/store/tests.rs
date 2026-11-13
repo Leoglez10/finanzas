@@ -317,3 +317,43 @@ fn setting_a_budget_updates_instead_of_duplicating() {
     assert_eq!(amounts.len(), 1);
     assert_eq!(amounts[&(202609, category)], 200);
 }
+
+#[test]
+fn profile_paths_slugs_and_labels() {
+    let home = std::path::Path::new("/data/Finanzas/finanzas.db");
+    assert_eq!(Store::profile_path_beside(home, "personal"), Some(home.to_path_buf()));
+    assert_eq!(Store::profile_path_beside(home, "mi-tienda"), Some(home.with_file_name("mi-tienda.db")));
+    for bad in ["../x", "Mi Tienda", "finanzas", "", "a/b"] { assert_eq!(Store::profile_path_beside(home, bad), None, "{bad}"); }
+    assert_eq!(Store::profile_slug("  Mi   Tienda! "), Some("mi-tienda".into()));
+    assert_eq!(Store::profile_slug("Señora_Ñu"), Some("señora-ñu".into()));
+    for bad in ["", "  ", "!!", "Personal", &"x".repeat(41)] { assert_eq!(Store::profile_slug(bad), None, "{bad}"); }
+    assert_eq!(Store::profile_label("mi-tienda"), "Mi tienda");
+    assert_eq!(Store::profile_path("personal"), Store::default_path());
+}
+
+#[test]
+fn profiles_create_list_rename_and_delete() {
+    let home = unique_db_path("profiles-home");
+    let dir = home.with_extension("d"); std::fs::create_dir_all(&dir).unwrap();
+    let home = dir.join("finanzas.db");
+    Store::open(&home).unwrap();
+    assert_eq!(Store::profiles_beside(&home), ["personal"]);
+    let negocio = Store::profile_path_beside(&home, "negocio").unwrap();
+    { let store = Store::open(&negocio).unwrap(); store.insert_account(&Account { id: 0, name: "Caja".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap(); }
+    std::fs::write(dir.join("notas.txt"), "x").unwrap();
+    std::fs::write(dir.join("Raro Nombre.db"), "").unwrap();
+    assert_eq!(Store::profiles_beside(&home), ["personal", "negocio"]);
+    Store::rename_profile(&home, "negocio", "tienda").unwrap();
+    assert!(!negocio.exists());
+    let tienda = Store::profile_path_beside(&home, "tienda").unwrap();
+    assert_eq!(Store::open(&tienda).unwrap().list_accounts().unwrap().len(), 1, "data moves with the rename");
+    assert_eq!(Store::profiles_beside(&home), ["personal", "tienda"]);
+    Store::open(Store::profile_path_beside(&home, "otro").unwrap()).unwrap();
+    assert_eq!(Store::rename_profile(&home, "tienda", "otro"), Err("Ya existe un perfil con ese nombre".into()));
+    assert_eq!(Store::rename_profile(&home, "personal", "x"), Err("El perfil Personal no se puede cambiar".into()));
+    assert_eq!(Store::delete_profile(&home, "personal"), Err("El perfil Personal no se puede cambiar".into()));
+    Store::delete_profile(&home, "tienda").unwrap();
+    assert!(!tienda.exists() && !tienda.with_file_name("tienda.db-wal").exists() && !tienda.with_file_name("tienda.db-shm").exists());
+    assert_eq!(Store::profiles_beside(&home), ["personal", "otro"]);
+    assert!(home.exists(), "personal is never touched");
+}

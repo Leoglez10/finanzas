@@ -1,5 +1,6 @@
 //! Ajustes: reminder preferences and the one-time importers.
 use super::*;
+use finanzas_core::agents::{self, Agent};
 use finanzas_core::store::ImportSummary;
 use overview::{card, muted};
 use rune::FileDialogOptions;
@@ -55,6 +56,64 @@ fn stepper(text_key: &'static str, caption: String, minus: Step, plus: Step, on:
     row().gap(8.0).center_y().child(step("−", minus, "Menos")).child(text(caption).key(text_key).font(type_::BODY).color(ink).w(190.0)).child(step("+", plus, "Más"))
 }
 
+impl State {
+    /// `None` follows the system; the choice is saved with the other settings.
+    pub(crate) fn set_theme(&mut self, dark: Option<bool>) {
+        self.dark = dark;
+        self.change_settings(|s| s.dark = dark);
+    }
+    /// Re-reads the MCP heartbeats; true when an agent connected or disconnected.
+    pub(crate) fn check_agents(&mut self) -> bool {
+        let Some(home) = &self.home_db else { return false };
+        let dir = agents::heartbeat_dir(home);
+        let now = std::time::SystemTime::now();
+        let connected = Agent::ALL.map(|a| agents::connected(&dir, a, now));
+        std::mem::replace(&mut self.agents_connected, connected) != connected
+    }
+    /// The server installed beside the app (macOS bundle, Windows folder, /usr/bin, target/…).
+    pub(crate) fn mcp_command() -> std::path::PathBuf {
+        let name = format!("finanzas-mcp{}", std::env::consts::EXE_SUFFIX);
+        std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.join(&name))).unwrap_or_else(|| name.into())
+    }
+}
+
+fn theme_card(s: &State, p: Palette) -> El {
+    let mut options = row().wrap().gap(8.0);
+    for (label, key, value) in [("Automático", "tema-auto", None), ("Claro", "tema-claro", Some(false)), ("Oscuro", "tema-oscuro", Some(true))] {
+        let active = s.dark == value;
+        let b = button(label, key, p).on_press(move |s: &mut State| s.set_theme(value));
+        options = options.child(if active { b.border(2.0, p.petroleum) } else { b });
+    }
+    card(p).child(icon_title(&theme::GEAR, "Tema", p.petroleum, p))
+        .child(muted("Automático sigue el modo claro u oscuro del sistema.", p).wrap().w_full())
+        .child(options)
+}
+
+fn agents_card(s: &State, p: Palette) -> El {
+    let command = State::mcp_command();
+    let mut c = card(p).child(icon_title(&theme::DATABASE, "Agentes MCP", p.emerald, p))
+        .child(muted("Conecta un agente de IA para consultar y registrar tus finanzas. El indicador se pone verde mientras el agente tiene Finanzas abierto.", p).wrap().w_full());
+    for (i, agent) in Agent::ALL.into_iter().enumerate() {
+        let on = s.agents_connected[i];
+        let mut block = col().w_full().gap(8.0).key(format!("agente-{}", agent.name()))
+            .child(row().gap(10.0).center_y()
+                .child(el().size(10.0, 10.0).radius(5.0).fill(if on { p.emerald } else { p.border }).label(if on { "Conectado" } else { "Sin conexión" }))
+                .child(text(agent.name()).font(type_::TITLE).color(p.ink))
+                .child(muted(if on { "Conectado" } else { "Sin conexión" }, p)));
+        if !on {
+            let config = agent.config(&command);
+            let copied = s.agent_copied == Some(i);
+            block = block.child(muted(agent.instructions(), p).wrap().w_full())
+                .child(el().w_full().padding(12.0).radius(10.0).fill(p.canvas).border(1.0, p.border).child(text(config.clone()).font(type_::BODY).color(p.ink).wrap_anywhere().w_full()))
+                .child(row().gap(10.0).center_y()
+                    .child(button("Copiar configuración", &format!("agente-copiar-{i}"), p).on_press_tx(move |s: &mut State, tx: &mut Tx| { tx.copy(config.clone()); s.agent_copied = Some(i); }))
+                    .child(if copied { muted("Copiado", p) } else { el() }));
+        }
+        c = c.child(block);
+    }
+    c
+}
+
 pub fn render(s: &State, p: Palette) -> El {
     let on = s.settings.enabled;
     let busy = s.mutation_active();
@@ -86,5 +145,5 @@ pub fn render(s: &State, p: Palette) -> El {
     col().grow(1.0).h_full().min_h(0.0).scroll(rune::ScrollSpec { stick_bottom: false }).child(
         col().wrap().w_full().padding(24.0).gap(16.0)
             .child(header_bar(p).child(badge(&theme::GEAR, 16.0, p.petroleum)).child(titles("Tus recordatorios, a tu ritmo", headline("Ajustes", p), p)))
-            .child(reminders).child(import).child(database).child(version))
+            .child(reminders).child(import).child(perfiles::card_view(s, p)).child(theme_card(s, p)).child(agents_card(s, p)).child(database).child(version))
 }

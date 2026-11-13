@@ -19,15 +19,75 @@ pub fn cents_from(input: &str) -> Option<Cents> {
     Some(value)
 }
 
+/// A leading `+`/`-` adjusts `current`; anything else sets it. The amount may be arithmetic:
+/// `550*2`, `100/4`, `(200+50)*3`.
 pub fn budgeted_from(input: &str, current: Cents) -> Option<Cents> {
     let text = input.trim();
-    let value = cents_from(&text.replace('+', ""))?;
-    match text.chars().next() {
+    if text.is_empty() { return Some(0); }
+    let (sign, rest) = match text.chars().next() { Some(c @ ('+' | '-')) => (Some(c), &text[1..]), _ => (None, text) };
+    let value = eval_cents(rest).filter(|v| *v >= 0)?;
+    match sign {
         Some('+') => current.checked_add(value),
         Some('-') => Some(current.saturating_sub(value).max(0)),
         _ => Some(value),
     }
 }
+
+/// A typed amount: blank is 0, a leading sign is ignored (the form picks expense or income),
+/// and arithmetic works (`550*2`). Never negative.
+pub fn amount_from(input: &str) -> Option<Cents> {
+    let text = input.trim();
+    if text.is_empty() { return Some(0); }
+    eval_cents(text.strip_prefix(['-', '+']).unwrap_or(text)).filter(|v| *v >= 0)
+}
+
+/// Evaluates `+ - * x /` and parentheses over amounts, in cents, rounding half up at each
+/// division or product. `$`, `,` and spaces are ignored.
+pub fn eval_cents(input: &str) -> Option<Cents> {
+    let chars: Vec<char> = input.chars().filter(|c| !matches!(c, ' ' | '$' | ',')).collect();
+    let mut p = Parser { chars, at: 0 };
+    let value = p.expr()?;
+    (p.at == p.chars.len()).then_some(value).and_then(|v| Cents::try_from(v).ok())
+}
+
+struct Parser { chars: Vec<char>, at: usize }
+impl Parser {
+    fn peek(&self) -> Option<char> { self.chars.get(self.at).copied() }
+    fn expr(&mut self) -> Option<i128> {
+        let mut value = self.term()?;
+        while let Some(op @ ('+' | '-')) = self.peek() {
+            self.at += 1;
+            let rhs = self.term()?;
+            value = if op == '+' { value.checked_add(rhs)? } else { value.checked_sub(rhs)? };
+        }
+        Some(value)
+    }
+    fn term(&mut self) -> Option<i128> {
+        let mut value = self.factor()?;
+        while let Some(op @ ('*' | 'x' | 'X' | '/')) = self.peek() {
+            self.at += 1;
+            let rhs = self.factor()?;
+            value = if op == '/' {
+                if rhs == 0 { return None; }
+                div_round(value.checked_mul(100)?, rhs)
+            } else { div_round(value.checked_mul(rhs)?, 100) };
+        }
+        Some(value)
+    }
+    fn factor(&mut self) -> Option<i128> {
+        match self.peek()? {
+            '(' => { self.at += 1; let v = self.expr()?; (self.peek() == Some(')')).then(|| { self.at += 1; v }) }
+            '-' => { self.at += 1; self.factor()?.checked_neg() }
+            _ => {
+                let start = self.at;
+                while self.peek().is_some_and(|c| c.is_ascii_digit() || c == '.') { self.at += 1; }
+                let number: String = self.chars[start..self.at].iter().collect();
+                cents_from(&number).map(i128::from)
+            }
+        }
+    }
+}
+fn div_round(n: i128, d: i128) -> i128 { let (q, r) = (n / d, n % d); if 2 * r.abs() >= d.abs() { q + n.signum() * d.signum() } else { q } }
 
 pub fn format(cents: Cents) -> String {
     let magnitude = cents.unsigned_abs();
@@ -65,6 +125,24 @@ mod tests {
 
     #[test]
     fn budget_input_rejects_invalid_text() { assert_eq!(budgeted_from("+abc", 20_000), None); }
+
+    #[test]
+    fn typed_amounts_do_math_and_blank_is_zero() {
+        for (text, expected) in [("", 0), ("  ", 0), ("550*2", 110_000), ("-40", 4_000), ("+12.5", 1_250), ("$1,000/4", 25_000), ("(10+5)*2", 3_000)] {
+            assert_eq!(amount_from(text), Some(expected), "{text}");
+        }
+        for text in ["abc", "5/0", "10-20", "2*"] { assert_eq!(amount_from(text), None, "{text}"); }
+        assert_eq!(budgeted_from("", 20_000), Some(0), "a blank budget is 0");
+    }
+
+    #[test]
+    fn budget_input_does_math() {
+        for (text, current, expected) in [("550*2", 0, 110_000), ("550 x 2", 0, 110_000), ("100/4", 0, 2_500), ("(200+50)*3", 0, 75_000), ("100-20", 50_000, 8_000),
+            ("10/3", 0, 333), ("2*1.5", 0, 300), ("$1,000*2", 0, 200_000), ("+550*2", 10_000, 120_000), ("-25*2", 20_000, 15_000), ("1+2*3", 0, 700)] {
+            assert_eq!(budgeted_from(text, current), Some(expected), "{text}");
+        }
+        for text in ["5/0", "20-50", "2*", "(1+2", "1+abc", "*3"] { assert_eq!(budgeted_from(text, 0), None, "{text}"); }
+    }
 
     #[test]
     fn formatting_and_rounding_boundaries() {

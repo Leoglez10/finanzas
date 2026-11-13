@@ -10,7 +10,7 @@ pub fn header_label(search: &str) -> &'static str {
     if search.trim().is_empty() { "Saldo de los movimientos" } else { "Total de la búsqueda" }
 }
 pub fn valid_sheet(amount: &str, account: Option<Id>, date: &str) -> bool {
-    finanzas_core::domain::money::cents_from(amount).is_some() && account.is_some() && parse_date(date).is_some()
+    finanzas_core::domain::money::amount_from(amount).is_some() && account.is_some() && parse_date(date).is_some()
 }
 
 #[cfg(test)]

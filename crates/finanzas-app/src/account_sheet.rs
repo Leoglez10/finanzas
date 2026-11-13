@@ -6,13 +6,12 @@ use sheet::{button, field};
 pub struct AccountSheet { pub name: TextEdit, pub opening: TextEdit, pub off_budget: bool }
 impl AccountSheet {
     pub fn new() -> Self { Self { name: TextEdit::new(""), opening: TextEdit::new(""), off_budget: false } }
-    /// Blank means no opening balance; a leading `-` makes it a debt. `Err` while the text is not an amount.
+    /// Blank means no opening balance; a leading `-` makes it a debt; arithmetic works. `Err` while the text is not an amount.
     fn opening_cents(&self) -> Result<Option<i64>, ()> {
         let text = self.opening.text.trim();
         if text.is_empty() { return Ok(None); }
         let (negative, digits) = text.strip_prefix('-').map_or((false, text), |rest| (true, rest));
-        if digits.contains('-') { return Err(()); }
-        money::cents_from(digits).map(|cents| Some(if negative { -cents } else { cents })).ok_or(())
+        money::eval_cents(digits).filter(|c| *c >= 0).map(|cents| Some(if negative { -cents } else { cents })).ok_or(())
     }
     pub fn draft(&self, today: NaiveDate) -> Option<data::AccountDraft> {
         let name = Some(self.name.text.trim()).filter(|n| !n.is_empty())?.to_owned();

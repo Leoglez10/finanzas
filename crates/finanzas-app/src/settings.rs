@@ -8,8 +8,8 @@ pub const MAX_HOUR: u32 = 23;
 /// Unknown fields (the Tauri app also kept a `sent` list) are ignored; missing ones take the defaults.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Settings { pub enabled: bool, pub days: i64, pub hour: u32 }
-impl Default for Settings { fn default() -> Self { Self { enabled: true, days: 2, hour: 9 } } }
+pub struct Settings { pub enabled: bool, pub days: i64, pub hour: u32, pub hidden_profiles: Vec<String>, pub dark: Option<bool> }
+impl Default for Settings { fn default() -> Self { Self { enabled: true, days: 2, hour: 9, hidden_profiles: Vec::new(), dark: None } } }
 impl Settings {
     fn clamped(mut self) -> Self { self.days = self.days.clamp(0, MAX_DAYS); self.hour = self.hour.min(MAX_HOUR); self }
 }

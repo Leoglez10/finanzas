@@ -161,10 +161,10 @@ pub fn read(store: &Store, month: i32, chart_months: u32) -> Result<Snapshot, St
     Ok(Snapshot { accounts, overview, version, groups, categories })
 }
 
-pub fn open_default(worker: &WorkerStore) -> Result<(), String> {
+pub fn open(worker: &WorkerStore, path: Option<std::path::PathBuf>) -> Result<(), String> {
     let mut guard = worker.lock().map_err(|e| e.to_string())?;
     if guard.is_none() {
-        let path = Store::default_path().ok_or("No se pudo determinar la ruta de la base de datos")?;
+        let path = path.ok_or("No se pudo determinar la ruta de la base de datos")?;
         *guard = Some(Store::open(path).map_err(|e| e.to_string())?);
     }
     Ok(())

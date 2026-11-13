@@ -47,14 +47,20 @@ Everything stays on your computer: no account, cloud or telemetry.
   - **Gasto por categoría**, **Ingresos vs gastos** (6 or 12 months), **Presupuesto del mes** with a 100% marker,
     and **Movimientos recientes**.
   - Payment reminders and a **Primeros pasos** checklist for a new database.
-- **Presupuesto** — monthly envelope budget: assign amounts per category (type a number, or `+100` / `-50`
-  to add or subtract), see activity, availability and how much is left to assign.
+- **Presupuesto** — monthly envelope budget: assign amounts per category (type a number, `+100` / `-50`
+  to add or subtract, or math such as `550*2`; blank means 0), see activity, availability and how much is left to assign.
+- **Math in amounts** — every amount field (budget, movements, scheduled payments, opening balance) accepts
+  `+ - * x /` and parentheses, e.g. `550*2` or `(200+50)/2`, and a blank amount is 0.
+- **Perfiles** — keep separate data (for example personal and business): switch, create, rename, hide or delete
+  profiles from the sidebar and Ajustes. Personal is the main profile and cannot be deleted.
 - **Próximos pagos** — scheduled payments for the next 30 days with projected account balances;
   register (Registrar) or skip (Saltar) each occurrence; recurring schedules can register themselves (automatic).
 - **Movimientos** — searchable ledger for all accounts or one account; add, edit and delete income and expenses.
 - **Cuentas** — on-budget and off-budget accounts with balances in the sidebar; closed accounts listed separately.
-- **Ajustes** — payment reminders (days before and hour), import from the old Finanzas app or Actual, database location.
-- Light and dark mode follow the system.
+- **Ajustes** — payment reminders (days before and hour), import from the old Finanzas app or Actual, profiles,
+  theme, MCP agents and database location.
+- **Tema** — automatic (follows the system), light or dark; the choice is saved.
+- **Agentes MCP** — Claude, Codex and OpenCode with a green dot while connected, and a copy button with each one's setup.
 - A local **MCP server** for AI assistants (see [MCP server](#mcp-server)).
 
 <p align="center">
@@ -146,7 +152,9 @@ cargo run --release -p finanzas-app      # or: bash scripts/dev.sh
 ## Data location and backups
 
 The app and MCP server share one SQLite database (WAL mode). Set `FINANZAS_DB` to use a different file;
-otherwise the default is the platform data directory:
+otherwise the default is the platform data directory. That file is the **Personal** profile. Other profiles
+(create, switch, rename, hide or delete them in the sidebar and **Ajustes → Perfiles**) are `<name>.db` files in the
+same folder, and settings are shared. Deleting a profile removes its file permanently; Personal cannot be deleted.
 
 | Platform | Default database |
 |---|---|
@@ -180,6 +188,9 @@ Point your MCP client at the installed binary:
 
 Optionally set `FINANZAS_DB` in the client's environment to use the same non-default database as the app.
 Amounts are decimal currency units (negative for outflows); dates use `YYYY-MM-DD` and months use `YYYY-MM`.
+**Ajustes → Agentes MCP** shows Claude, Codex and OpenCode with a green dot while that client has the server running
+(the server refreshes `mcp-clients/<agent>` beside the database every 30 s), and copies each client's setup.
+Every tool accepts an optional `perfil` (default `personal`, or the name of a profile created in the app, such as `negocio`) to choose which profile's data it uses.
 
 | Tool | Purpose |
 |---|---|

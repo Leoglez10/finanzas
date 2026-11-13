@@ -18,14 +18,15 @@ cask "finanzas" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: ">= :big_sur"
+  depends_on :macos
 
   app "Finanzas.app"
   binary "#{appdir}/Finanzas.app/Contents/MacOS/finanzas-mcp"
 
   # The app is ad-hoc signed, not notarized: without this, Gatekeeper blocks the first launch.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Finanzas.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args:           ["-dr", "com.apple.quarantine", "{{appdir}}/Finanzas.app"],
+                          writable_paths: "{{appdir}}/Finanzas.app"
   end
 
   # No `zap`: ~/Library/Application Support/Finanzas holds the user's financial data.

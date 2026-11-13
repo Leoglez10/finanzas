@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod account_sheet;
 mod ajustes;
 mod budget;

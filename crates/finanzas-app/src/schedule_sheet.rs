@@ -28,7 +28,7 @@ impl ScheduleSheet {
     pub fn valid(&self) -> bool { self.draft().is_some() }
     /// `None` until the name, amount, account and first date are all usable.
     pub fn draft(&self) -> Option<data::ScheduleDraft> {
-        let cents = money::cents_from(&self.amount.text)?;
+        let cents = money::amount_from(&self.amount.text)?;
         Some(data::ScheduleDraft { name: Some(self.name.text.trim()).filter(|n| !n.is_empty())?.to_owned(), amount: if self.expense { -cents } else { cents }, account_id: self.account?,
             category_id: self.category, payee: self.payee.text.clone(), frequency: self.frequency, interval: self.interval.clamp(1, 52),
             start: entry_helpers::parse_date(&self.start.text)?, skip_weekend: self.skip_weekend, auto_post: self.auto_post })

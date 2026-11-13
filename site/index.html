@@ -192,14 +192,14 @@
         <div class="grid fill">
           <article class="card card--row card--open span-6 m-nolift">
             <h3>Reparte tu ingreso en sobres</h3>
-            <p>Escribe cuánto va a cada categoría o usa +100 y −50. Ves al momento cuánto queda disponible.</p>
+            <p>Escribe cuánto va a cada categoría, usa +100 y −50 o haz cuentas como 550*2. Ves al momento cuánto queda disponible.</p>
             <div class="panel" role="img" aria-label="Pantalla Presupuesto: 5,720 disponibles para asignar y las categorías con lo asignado y lo gastado">
               <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:32px;--ay:32px"><img src="img/presupuesto-panel.webp" srcset="img/presupuesto-panel-700.webp 700w, img/presupuesto-panel.webp 1300w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1300" height="800" loading="lazy" data-source="client" data-subject="Finanzas, pantalla Presupuesto"></div></div>
             </div>
           </article>
           <article class="card card--row card--open span-6 m-nolift">
             <h3>Registra un gasto en segundos</h3>
-            <p>Monto, cuenta, comercio y categoría en una sola hoja. Después lo buscas, lo editas o lo borras.</p>
+            <p>Monto, cuenta, comercio y categoría en una sola hoja. El monto acepta cuentas como 550*2. Después lo buscas, lo editas o lo borras.</p>
             <div class="panel" role="img" aria-label="Hoja Nuevo movimiento con monto, cuenta, comercio, categoría, fecha y notas">
               <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:40px;--ay:24px"><img src="img/movimiento-panel.webp" srcset="img/movimiento-panel-700.webp 700w, img/movimiento-panel.webp 900w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="900" height="929" loading="lazy" data-source="client" data-subject="Finanzas, hoja Nuevo movimiento"></div></div>
             </div>
@@ -247,7 +247,7 @@
       <div class="grid fill">
         <div class="span-5 stack-5">
           <h2 id="mcp-h">Un servidor MCP para tus finanzas</h2>
-          <p class="t-lead">Con <code>finanzas-mcp</code>, asistentes como Claude consultan y registran movimientos por ti, aunque la app esté cerrada.</p>
+          <p class="t-lead">Con <code>finanzas-mcp</code>, Claude, Codex u OpenCode consultan y registran movimientos por ti, aunque la app esté cerrada. En Ajustes ves cuáles están conectados y copias su configuración.</p>
           <ul class="rows">
             <li>“¿Cuánto gasté en comida este mes?”</li>
             <li>“Registra 250 de farmacia hoy en la cuenta principal.”</li>
@@ -323,6 +323,8 @@ brew install --cask finanzas</code></pre>
         <div class="faq span-6 start-7">
           <div class="faq__item"><h3>¿Cuánto cuesta Finanzas?</h3><p>Nada. Finanzas es gratis y de código abierto, con licencia MIT.</p></div>
           <div class="faq__item"><h3>¿Dónde guarda Finanzas mis datos?</h3><p>En un solo archivo SQLite en tu computadora. No hay cuenta, ni nube, ni telemetría.</p></div>
+          <div class="faq__item"><h3>¿Puedo separar lo personal del negocio?</h3><p>Sí. Crea perfiles como Negocio desde la barra lateral; cada uno guarda sus cuentas, presupuesto y pagos por separado, y puedes renombrarlos, ocultarlos o borrarlos.</p></div>
+          <div class="faq__item"><h3>¿Tiene modo oscuro?</h3><p>Sí. En Ajustes eliges claro, oscuro o automático según el sistema, y la app recuerda tu elección.</p></div>
           <div class="faq__item"><h3>¿Puedo traer mis datos de otra app?</h3><p>Sí. En Ajustes importas desde Actual Budget o desde la app anterior de Finanzas hecha con SwiftData.</p></div>
           <div class="faq__item"><h3>¿Finanzas funciona en una Mac con Intel?</h3><p>No. El instalador de macOS es para Apple Silicon, M1 o posterior, con macOS 11 o superior.</p></div>
           <div class="faq__item"><h3>¿Cómo respaldo mis datos?</h3><p>Cierra la app y copia el archivo finanzas.db. Para restaurarlo, ponlo de vuelta en la misma carpeta.</p></div>

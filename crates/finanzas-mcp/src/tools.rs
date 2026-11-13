@@ -10,6 +10,8 @@ pub struct ToolError(pub String);
 pub struct ToolSpec { pub name: &'static str, pub description: &'static str, pub input_schema: Value, pub read_only: bool, pub destructive: bool }
 fn schema(properties: Value, required: &[&str]) -> Value { json!({"type":"object","properties":properties,"required":required}) }
 fn spec(name: &'static str, description: &'static str, properties: Value, required: &[&str], read_only: bool, destructive: bool) -> ToolSpec {
+    let mut properties = properties;
+    properties.as_object_mut().expect("tool properties are an object").insert("perfil".into(), json!({"type":"string","description":"Profile whose data to use: personal (default) or a profile created in the app, e.g. negocio"}));
     ToolSpec { name, description, input_schema: schema(properties, required), read_only, destructive }
 }
 pub fn specs() -> Vec<ToolSpec> {
@@ -30,6 +32,13 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("skip_schedule", "Skip the next occurrence of a scheduled payment once, or with `through` keep skipping every occurrence dated on or before that day (max 500 skips per call). Completed schedules cannot be skipped.", json!({"id":{"type":"string","description":"Schedule id (see list_schedules)"},"through":{"type":"string","description":"YYYY-MM-DD; skip all occurrences up to and including this date"}}), &["id"], false, false),
         spec("get_upcoming", "Upcoming scheduled payments from overdue ones through the next `days` days (default 30), oldest first, with each account's projected balance after the payment.", json!({"days":{"type":"integer","minimum":0,"maximum":365,"description":"Days ahead (default 30)"}}), &[], true, false),
     ]
+}
+/// The `perfil` argument, `personal` when omitted.
+pub fn profile(args: &Value) -> Result<String, ToolError> {
+    match args.get("perfil") {
+        None => Ok("personal".into()),
+        Some(v) => v.as_str().map(str::to_owned).ok_or_else(|| ToolError("perfil: expected a string".into())),
+    }
 }
 fn err(e: impl std::fmt::Display) -> ToolError { ToolError(e.to_string()) }
 fn id(entity: &str, n: i64) -> String { format!("{entity}/p{n}") }

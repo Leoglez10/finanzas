@@ -4,14 +4,16 @@ use serde_json::{json, Value};
 #[test]
 fn stdio_initializes_lists_and_calls_tools() {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-    let db = std::env::temp_dir().join(format!("finanzas-mcp-{}-{unique}.db", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("finanzas-mcp-{}-{unique}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (db, negocio) = (dir.join("finanzas.db"), dir.join("negocio.db"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_finanzas-mcp"))
-        .env("FINANZAS_DB", db).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        .env("FINANZAS_DB", &db).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
     let mut input = child.stdin.take().unwrap();
     let mut output = BufReader::new(child.stdout.take().unwrap());
     fn send(input: &mut impl Write, value: Value) { writeln!(input, "{value}").unwrap(); input.flush().unwrap(); }
     fn recv(output: &mut impl BufRead) -> Value { let mut line = String::new(); assert!(output.read_line(&mut line).unwrap() > 0, "server closed stdout"); serde_json::from_str(&line).unwrap() }
-    send(&mut input,json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}));
+    send(&mut input,json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"claude-code","version":"1"}}}));
     let init=recv(&mut output); assert_eq!(init["result"]["serverInfo"]["name"],"finanzas"); assert_eq!(init["result"]["serverInfo"]["version"],"1.0.0");
     send(&mut input,json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     send(&mut input,json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}));
@@ -25,7 +27,16 @@ fn stdio_initializes_lists_and_calls_tools() {
     let error=recv(&mut output); assert_eq!(error["result"]["content"][0]["text"],"Error: days: expected an integer from 0 to 365"); assert_eq!(error["result"]["isError"],true);
     send(&mut input,json!({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_transactions","arguments":{"startDate":"2026-09-01","endDate":"2026-09-30"}}}));
     let sorted=recv(&mut output); assert_eq!(sorted["result"]["content"][0]["text"],"{\n  \"total\": 0,\n  \"transactions\": [],\n  \"truncated\": false\n}");
+    assert_eq!(tools[0]["inputSchema"]["properties"]["perfil"]["type"],"string");
+    std::fs::write(&negocio, b"").unwrap();
+    send(&mut input,json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"set_budget_amount","arguments":{"perfil":"negocio","month":"2026-11","categoryId":"Category/p999","amount":1}}}));
+    let separate=recv(&mut output); assert_eq!(separate["result"]["content"][0]["text"],"Error: categoryId: not found");
+    assert!(negocio.exists(), "negocio profile opens its own file");
+    send(&mut input,json!({"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"list_accounts","arguments":{"perfil":"otro"}}}));
+    let bad=recv(&mut output); assert_eq!(bad["result"]["content"][0]["text"],"Error: perfil: unknown profile otro"); assert_eq!(bad["result"]["isError"],true);
     send(&mut input,json!({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"nope","arguments":{}}}));
     let unknown=recv(&mut output); assert_eq!(unknown["result"]["content"][0]["text"],"Error: Unknown tool: nope"); assert_eq!(unknown["result"]["isError"],true);
+    assert!(dir.join("mcp-clients").join("claude").exists(), "a known client marks itself connected");
+    assert!(!dir.join("mcp-clients").join("codex").exists());
     drop(input); assert!(child.wait().unwrap().success());
 }

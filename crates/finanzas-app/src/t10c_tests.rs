@@ -63,17 +63,17 @@ fn account_names(rt: &Runtime<State>) -> Vec<String> { rt.state.accounts.iter().
 #[test]
 fn settings_round_trip_defaults_and_clamping() {
     let path = scratch_dir().join("settings.json");
-    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 2, hour: 9 });
-    let saved = settings::Settings { enabled: false, days: 5, hour: 7 };
+    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 2, hour: 9, hidden_profiles: Vec::new(), dark: None });
+    let saved = settings::Settings { enabled: false, days: 5, hour: 7, hidden_profiles: Vec::new(), dark: None };
     settings::save(&path, &saved).unwrap();
     assert_eq!(settings::load(&path).unwrap(), saved);
     std::fs::write(&path, r#"{"days":3}"#).unwrap();
-    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 3, hour: 9 });
+    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 3, hour: 9, hidden_profiles: Vec::new(), dark: None });
     std::fs::write(&path, r#"{"days":99,"hour":40}"#).unwrap();
-    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 14, hour: 23 });
+    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: true, days: 14, hour: 23, hidden_profiles: Vec::new(), dark: None });
     // A legacy Tauri file carries a `sent` list that must not break loading.
     std::fs::write(&path, r#"{"enabled":false,"days":4,"sent":["pago-1"]}"#).unwrap();
-    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: false, days: 4, hour: 9 });
+    assert_eq!(settings::load(&path).unwrap(), settings::Settings { enabled: false, days: 4, hour: 9, hidden_profiles: Vec::new(), dark: None });
     std::fs::write(&path, "not json").unwrap();
     assert!(settings::load(&path).is_err());
 }
@@ -83,7 +83,7 @@ fn load_from_reads_settings_next_to_the_database_and_enables_timers() {
     std::fs::write(dir.join("settings.json"), r#"{"enabled":false,"days":5,"hour":7}"#).unwrap();
     let state = State::load_from(Some(dir.join("finanzas.db")));
     assert_eq!(state.settings_path, Some(dir.join("settings.json")));
-    assert_eq!(state.settings, settings::Settings { enabled: false, days: 5, hour: 7 });
+    assert_eq!(state.settings, settings::Settings { enabled: false, days: 5, hour: 7, hidden_profiles: Vec::new(), dark: None });
     assert!(state.hourly && state.open_default && state.settings_error.is_none());
     assert!(!State::empty().hourly);
     let broken = scratch_dir(); std::fs::write(broken.join("settings.json"), "{{").unwrap();
@@ -359,4 +359,90 @@ fn scenes_build_without_the_default_store() {
     let mut state = State::empty(); nueva_cuenta_scene(&mut state); assert!(state.account_sheet.is_some());
     let mut state = State::empty(); ajustes_light(&mut state); assert_eq!(state.route, Route::Ajustes);
     let mut state = State::empty(); reminders_scene(&mut state); assert!(state.reminders.len() >= 2 && state.route == Route::Resumen);
+}
+
+#[test]
+fn profiles_create_switch_rename_hide_and_delete() {
+    let dir = scratch_dir();
+    let mut state = State::load_home(Some(dir.join("finanzas.db")));
+    assert_eq!((state.profile.as_str(), state.profiles.clone()), ("personal", vec!["personal".to_owned()]));
+    state.dark = Some(true); state.route = Route::Presupuesto;
+    state.profile_edit = Some((None, TextEdit::new("Mi Tienda")));
+    state.submit_profile_edit();
+    assert_eq!((state.profile.as_str(), state.dark, state.route), ("mi-tienda", Some(true), Route::Resumen));
+    assert_eq!(state.profiles, ["personal", "mi-tienda"]);
+    assert_eq!(state.db_path, Some(dir.join("mi-tienda.db")));
+    assert!(state.open_default && state.refresh && state.profile_edit.is_none());
+    data::open(&state.worker, state.db_path.clone()).unwrap();
+    assert!(dir.join("mi-tienda.db").exists());
+
+    state.profile_edit = Some((None, TextEdit::new("!!")));
+    state.submit_profile_edit();
+    assert_eq!(state.profile_error.as_deref(), Some("Escribe un nombre con letras o números"));
+    state.profile_edit = Some((None, TextEdit::new("Mi tienda")));
+    state.submit_profile_edit();
+    assert_eq!(state.profile_error.as_deref(), Some("Ya existe un perfil con ese nombre"));
+    state.profile_edit = None;
+
+    state.toggle_profile_hidden("mi-tienda");
+    assert_eq!(state.settings.hidden_profiles, ["mi-tienda"]);
+    assert_eq!(state.visible_profiles(), ["personal", "mi-tienda"], "the active profile stays visible");
+    state.profile_edit = Some((Some("mi-tienda".into()), TextEdit::new("Tienda")));
+    state.submit_profile_edit();
+    assert_eq!((state.profile.as_str(), state.route), ("tienda", Route::Ajustes));
+    assert_eq!(state.profiles, ["personal", "tienda"]);
+    assert_eq!(state.settings.hidden_profiles, ["tienda"], "hidden follows the rename");
+    assert!(dir.join("tienda.db").exists() && !dir.join("mi-tienda.db").exists());
+    state.switch_to("personal".into());
+    assert_eq!(state.visible_profiles(), ["personal"]);
+    assert_eq!(settings::load(&dir.join("settings.json")).unwrap().hidden_profiles, ["tienda"]);
+
+    state.switch_to("tienda".into());
+    state.request_profile_delete("personal");
+    assert!(state.profile_delete.is_none(), "personal cannot be deleted");
+    state.request_profile_delete("tienda");
+    assert_eq!(state.profile_delete.as_deref(), Some("tienda"));
+    state.confirm_profile_delete();
+    assert_eq!((state.profile.as_str(), state.profiles.clone()), ("personal", vec!["personal".to_owned()]));
+    assert!(state.profile_delete.is_none() && state.settings.hidden_profiles.is_empty());
+    assert!(!dir.join("tienda.db").exists() && !dir.join("finanzas.db").exists(), "only the deleted profile's file is removed");
+}
+
+#[test]
+fn theme_choice_is_saved_and_restored() {
+    let dir = scratch_dir();
+    let mut state = State::load_home(Some(dir.join("finanzas.db")));
+    assert_eq!(state.dark, None, "automatic by default");
+    state.set_theme(Some(true));
+    assert_eq!(state.dark, Some(true));
+    assert_eq!(State::load_home(Some(dir.join("finanzas.db"))).dark, Some(true));
+    state.set_theme(Some(false));
+    assert_eq!(State::load_home(Some(dir.join("finanzas.db"))).dark, Some(false));
+    state.set_theme(None);
+    assert_eq!(State::load_home(Some(dir.join("finanzas.db"))).dark, None);
+}
+
+#[test]
+fn agents_turn_connected_from_fresh_heartbeats() {
+    use finanzas_core::agents::{self, Agent};
+    let dir = scratch_dir();
+    let mut state = State::load_home(Some(dir.join("finanzas.db")));
+    assert!(!state.check_agents());
+    assert_eq!(state.agents_connected, [false; 3]);
+    agents::beat(&agents::heartbeat_dir(&dir.join("finanzas.db")), Agent::Codex).unwrap();
+    assert!(state.check_agents(), "a change re-renders");
+    assert_eq!(state.agents_connected, [false, true, false]);
+    assert!(!state.check_agents());
+    assert!(State::mcp_command().file_name().unwrap().to_string_lossy().starts_with("finanzas-mcp"));
+}
+
+#[test]
+fn form_amounts_do_math_and_blank_is_zero() {
+    assert!(entry_helpers::valid_sheet("", Some(1), "13/11/2026"), "blank amount is 0");
+    assert!(entry_helpers::valid_sheet("550*2", Some(1), "13/11/2026"));
+    assert!(!entry_helpers::valid_sheet("5/0", Some(1), "13/11/2026"));
+    let mut sheet = account_sheet::AccountSheet::new();
+    sheet.name.replace_text("Ahorros");
+    sheet.opening.replace_text("-100*2");
+    assert_eq!(sheet.draft(NaiveDate::from_ymd_opt(2026, 11, 13).unwrap()).map(|d| d.opening), Some(Some(-20_000)));
 }

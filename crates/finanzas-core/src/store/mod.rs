@@ -41,9 +41,76 @@ impl Store {
             Err(error) => { self.conn.execute_batch("ROLLBACK")?; Err(error) }
         }
     }
-    pub fn default_path() -> Option<std::path::PathBuf> {
+    pub fn default_path() -> Option<PathBuf> {
         std::env::var_os("FINANZAS_DB").map(std::path::PathBuf::from)
             .or_else(|| dirs::data_dir().map(|p| p.join("Finanzas").join("finanzas.db")))
+    }
+
+    /// Profiles keep separate data: `personal` is the default database (`home`), any other
+    /// profile is `<slug>.db` beside it, so settings stay shared.
+    pub fn profile_path(profile: &str) -> Option<PathBuf> { Self::profile_path_beside(&Self::default_path()?, profile) }
+    pub fn profile_path_beside(home: &Path, profile: &str) -> Option<PathBuf> {
+        if profile == "personal" { return Some(home.to_path_buf()); }
+        if Self::profile_slug(profile).as_deref() != Some(profile) { return None; }
+        let path = home.with_file_name(format!("{profile}.db"));
+        (path != home).then_some(path)
+    }
+    /// A profile name typed by the user as a file-safe slug: lowercase letters and digits, words joined by `-`.
+    pub fn profile_slug(name: &str) -> Option<String> {
+        let cleaned: String = name.to_lowercase().chars()
+            .map(|c| if c.is_whitespace() || c == '_' { '-' } else { c })
+            .filter(|c| c.is_alphanumeric() || *c == '-').collect();
+        let slug = cleaned.split('-').filter(|w| !w.is_empty()).collect::<Vec<_>>().join("-");
+        (!slug.is_empty() && slug.chars().count() <= 40 && slug != "personal").then_some(slug)
+    }
+    /// "mi-tienda" → "Mi tienda".
+    pub fn profile_label(profile: &str) -> String {
+        let words = profile.replace('-', " ");
+        let mut chars = words.chars();
+        chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+    }
+    /// `personal` first, then every other profile file beside `home`, sorted.
+    pub fn profiles_beside(home: &Path) -> Vec<String> {
+        let dir = home.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let mut found: Vec<String> = std::fs::read_dir(dir).into_iter().flatten().filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let stem = path.file_stem()?.to_str()?.to_owned();
+            (path.extension()? == "db" && Self::profile_path_beside(home, &stem).as_deref() == Some(path.as_path())).then_some(stem)
+        }).collect();
+        found.sort();
+        found.insert(0, "personal".into());
+        found
+    }
+    fn profile_files(path: &Path) -> [PathBuf; 3] {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        [path.to_path_buf(), path.with_file_name(format!("{name}-wal")), path.with_file_name(format!("{name}-shm"))]
+    }
+    fn editable_profile(home: &Path, profile: &str) -> std::result::Result<PathBuf, String> {
+        if profile == "personal" { return Err("El perfil Personal no se puede cambiar".into()); }
+        Self::profile_path_beside(home, profile).ok_or_else(|| "Nombre de perfil inválido".into())
+    }
+    /// Moves a profile's database (and its WAL files) to a new name; never overwrites another profile.
+    pub fn rename_profile(home: &Path, from: &str, to: &str) -> std::result::Result<(), String> {
+        let (from, to) = (Self::editable_profile(home, from)?, Self::editable_profile(home, to)?);
+        if to.exists() { return Err("Ya existe un perfil con ese nombre".into()); }
+        for (a, b) in Self::profile_files(&from).iter().zip(Self::profile_files(&to)) {
+            match std::fs::rename(a, &b) {
+                Err(e) if !(a != &from && e.kind() == std::io::ErrorKind::NotFound) => return Err(format!("No se pudo renombrar el perfil: {e}")),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    /// Permanently deletes a profile's database and its WAL files. `personal` is refused.
+    pub fn delete_profile(home: &Path, profile: &str) -> std::result::Result<(), String> {
+        let path = Self::editable_profile(home, profile)?;
+        for file in Self::profile_files(&path) {
+            match std::fs::remove_file(&file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(format!("No se pudo borrar el perfil: {e}")),
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {

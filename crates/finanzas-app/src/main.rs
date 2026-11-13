@@ -8,6 +8,7 @@ mod entry_helpers;
 mod ledger;
 mod metrics;
 mod overview;
+mod perfiles;
 mod proximos;
 mod schedule_sheet;
 mod settings;
@@ -42,6 +43,7 @@ type RemindersResult = (RemindersKey, Result<Vec<finanzas_core::service::Reminde
 
 struct State {
     route: Route,
+    logo: Option<(rune::ImageCache, rune::Image)>,
     accounts: Vec<data::AccountBalance>,
     dark: Option<bool>,
     error: Option<String>,
@@ -102,6 +104,20 @@ struct State {
     next_reminders: f64,
     dismissed: std::collections::HashSet<String>,
     db_label: String,
+    db_path: Option<std::path::PathBuf>,
+    profile: String,
+    /// The personal profile's database; other profiles live beside it.
+    home_db: Option<std::path::PathBuf>,
+    profiles: Vec<String>,
+    /// Ajustes: the name being typed for a new profile (`None`) or a rename (`Some(from)`).
+    profile_edit: Option<(Option<String>, TextEdit)>,
+    profile_error: Option<String>,
+    profile_delete: Option<String>,
+    /// Ajustes: Claude, Codex, OpenCode (`Agent::ALL` order) with a fresh MCP heartbeat.
+    agents_connected: [bool; 3],
+    next_agents: f64,
+    agent_copied: Option<usize>,
+    waker: Option<Waker>,
     /// Resumen: the day chip picked in "Pagos por hacer", if any.
     payment_day: Option<NaiveDate>,
     reminders_collapsed: bool,
@@ -118,20 +134,28 @@ struct State {
 impl State {
     fn empty() -> Self {
         let today = month::month_of(Local::now().date_naive());
-        Self { route: Route::Resumen, accounts: Vec::new(), dark: None, error: None,
+        Self { route: Route::Resumen, logo: None, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
             today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0,
-            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), payment_day: None, reminders_collapsed: false,
+            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), db_path: None, profile: "personal".into(), home_db: None, profiles: vec!["personal".into()], profile_edit: None, profile_error: None, profile_delete: None, agents_connected: [false; 3], next_agents: 0.0, agent_copied: None, waker: None, payment_day: None, reminders_collapsed: false,
             check_updates: false, next_update_check: 0.0, update_latest: Latest::default(), update_available: None, updated_to: None, update_dismissed: false }
     }
-    fn load() -> Self { Self::load_from(finanzas_core::store::Store::default_path()) }
+    fn load() -> Self { Self::load_home(finanzas_core::store::Store::default_path()) }
+    /// Starts on the personal profile at `home` and lists the profiles beside it.
+    fn load_home(home: Option<std::path::PathBuf>) -> Self {
+        let mut state = Self::load_from(home.clone());
+        if let Some(home) = &home { state.profiles = finanzas_core::store::Store::profiles_beside(home); }
+        state.home_db = home;
+        state
+    }
     /// The real app: opens the default store, runs automatic payments and the hourly reminder check.
     /// Settings live next to the database file. Nothing else enables timers.
     fn load_from(db: Option<std::path::PathBuf>) -> Self {
         let mut state = Self::empty();
         state.open_default = true; state.auto_post = true; state.hourly = true;
+        state.db_path = db.clone();
         state.db_label = db.as_ref().map_or_else(|| "Base de datos predeterminada".into(), |p| p.display().to_string());
         state.settings_path = db.as_ref().and_then(|p| p.parent()).map(|dir| dir.join("settings.json"));
         state.check_updates = true;
@@ -139,6 +163,7 @@ impl State {
         if let Some(path) = &state.settings_path {
             match settings::load(path) { Ok(value) => state.settings = value, Err(e) => state.settings_error = Some(format!("Ajustes inválidos: {e}")) }
         }
+        state.dark = state.settings.dark;
         state
     }
     /// The clock reminders are planned against; scenes and tests keep theirs fixed.
@@ -241,7 +266,7 @@ impl State {
         if self.mutation_active() { return; }
         let Some(sh) = self.sheet.as_ref().filter(|sh| sh.valid()) else { return; };
         if sh.id.is_some_and(|id| self.visible_entry(id).is_none()) { return; }
-        let (Some(date), Some(amount), Some(account)) = (entry_helpers::parse_date(&sh.date.text), money::cents_from(&sh.amount.text), sh.account) else { return; };
+        let (Some(date), Some(amount), Some(account)) = (entry_helpers::parse_date(&sh.date.text), money::amount_from(&sh.amount.text), sh.account) else { return; };
         let entry = finanzas_core::service::NewEntry { date, amount: if sh.expense { -amount } else { amount }, account_id: account, payee: Some(sh.payee.text.clone()), category_id: sh.category, notes: sh.notes.text.clone(), cleared: sh.cleared };
         let worker = Arc::clone(&self.worker);
         self.mutation_target = Some(MutationTarget::Sheet);
@@ -373,7 +398,9 @@ fn reminders_scene(s: &mut State) {
 fn entry_light(s: &mut State) { entry_scene(s, false); }
 fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
-fn setup(s: &mut State, waker: Waker) { s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.update_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+fn setup(s: &mut State, waker: Waker) {
+    if s.logo.is_none() { let cache = rune::ImageCache::new(waker.clone()); let logo = cache.load(&include_bytes!("../../../packaging/linux/finanzas.png")[..]); s.logo = Some((cache, logo)); }
+    s.waker = Some(waker.clone()); s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.update_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
@@ -421,9 +448,9 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         s.next_poll = now + 2.0;
         let worker = Arc::clone(&s.worker);
         let input = (s.month, s.chart_months, s.version, force);
-        let open_default = s.open_default;
+        let open = s.open_default.then(|| s.db_path.clone());
         s.latest.request(input, move |(month, chart, version, force)| {
-            if open_default { data::open_default(&worker)?; }
+            if let Some(path) = open { data::open(&worker, path)?; }
             data::fetch(worker, month, chart, version, force)
         });
     }
@@ -479,6 +506,7 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         s.import_outcome = Some(result); tx.instant(); changed = true;
     }
     // Reminders are planned on the worker: at startup, then hourly (real app only), and whenever data or settings move.
+    if s.route == Route::Ajustes && now >= s.next_agents { s.next_agents = now + 5.0; changed |= s.check_agents(); }
     if s.hourly && now >= s.next_reminders { s.reminders_gen += 1; s.next_reminders = now + 3600.0; }
     if let Some((key, result)) = s.reminders_latest.take() && key == s.reminders_key() {
         match result { Ok(list) => s.reminders = list, Err(error) => { s.reminders.clear(); s.settings_error = Some(format!("No se pudieron calcular los recordatorios: {error}")); } }
@@ -511,6 +539,8 @@ fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
     if s.schedule_confirm.is_some() { if ev.key == Key::Escape { s.schedule_confirm = None; return true; } return false; }
     if s.account_sheet.is_some() { if ev.key == Key::Escape { s.account_sheet = None; return true; } return false; }
     if s.import_confirm.is_some() { if ev.key == Key::Escape { s.import_confirm = None; return true; } return false; }
+    if s.profile_delete.is_some() { if ev.key == Key::Escape { s.profile_delete = None; return true; } return false; }
+    if s.profile_edit.is_some() && ev.key == Key::Escape { s.profile_edit = None; s.profile_error = None; return true; }
     if (ev.mods.cmd || ev.mods.ctrl) && !ev.mods.shift && !ev.mods.alt && matches!(ev.key, Key::Command(',')) { s.route = Route::Ajustes; return true; }
     if s.route == Route::Proximos {
         if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_schedule_sheet(None); return true; }
@@ -565,8 +595,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     let mut sidebar = col().w(260.0).h_full().padding(16.0).pt(0.0).gap(2.0).fill(p.canvas)
         .child(el().w_full().h(40.0).window_drag())
         .child(row().gap(12.0).center_y().px(6.0).pb(12.0).window_drag()
-            .child(el().size(38.0, 38.0).radius(12.0).fill(p.petroleum).center().child(text("F").font(type_::TITLE).color(if dark { p.canvas } else { Color::WHITE })))
+            .child(match &s.logo { Some((_, logo)) if logo.is_ready() && logo.error().is_none() => el().size(38.0, 38.0).pixels(logo.pixels()),
+                _ => el().size(38.0, 38.0).radius(12.0).fill(p.petroleum).center().child(text("F").font(type_::TITLE).color(if dark { p.canvas } else { Color::WHITE })) })
             .child(col().gap(2.0).child(text("Finanzas").font(type_::TITLE).color(p.ink)).child(text("Tu dinero, en orden").font(type_::LABEL).color(p.muted))))
+        .child(section_label("PERFILES", p).pt(4.0))
+        .child(perfiles::sidebar(s, p))
         .child(section_label("MENÚ", p).pt(8.0))
         .child(nav("Resumen", "resumen".into(), Route::Resumen, s.route == Route::Resumen, None, &theme::GRID, p))
         .child(nav("Presupuesto", "presupuesto".into(), Route::Presupuesto, s.route == Route::Presupuesto, None, &theme::PIE, p))
@@ -594,7 +627,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
     };
-    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some() || s.account_sheet.is_some() || s.import_confirm.is_some();
+    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some() || s.account_sheet.is_some() || s.import_confirm.is_some() || s.profile_delete.is_some();
     let sidebar = if modal_open { sidebar.inert() } else { sidebar };
     let detail = if modal_open { detail.inert() } else { detail };
     let mut root = row().w_full().h_full().fill(p.canvas)
@@ -605,6 +638,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     if s.schedule_confirm.is_some() { root = root.child(schedule_sheet::confirm(s, p)); }
     if s.account_sheet.is_some() { root = root.child(account_sheet::render(s, p, dark)); }
     if s.import_confirm.is_some() { root = root.child(ajustes::confirm(s, p)); }
+    if s.profile_delete.is_some() { root = root.child(perfiles::confirm(s, p)); }
     root
 }
 

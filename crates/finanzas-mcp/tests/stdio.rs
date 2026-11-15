@@ -19,7 +19,7 @@ fn stdio_initializes_lists_and_calls_tools() {
     send(&mut input,json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}));
     let list=recv(&mut output); let tools=list["result"]["tools"].as_array().unwrap();
     let names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","get_upcoming"]);
+    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming"]);
     assert_eq!(tools[0]["annotations"]["readOnlyHint"],true); assert_eq!(tools[7]["annotations"]["destructiveHint"],true);
     send(&mut input,json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_accounts","arguments":{}}}));
     let result=recv(&mut output); assert_eq!(result["result"]["content"][0]["text"],"[]"); assert_ne!(result["result"]["isError"],true);
@@ -38,5 +38,15 @@ fn stdio_initializes_lists_and_calls_tools() {
     let unknown=recv(&mut output); assert_eq!(unknown["result"]["content"][0]["text"],"Error: Unknown tool: nope"); assert_eq!(unknown["result"]["isError"],true);
     assert!(dir.join("mcp-clients").join("claude").exists(), "a known client marks itself connected");
     assert!(!dir.join("mcp-clients").join("codex").exists());
+    send(&mut input,json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"save_wish","arguments":{"perfil":"negocio","name":"PS5","price":500}}}));
+    let saved = recv(&mut output); assert_ne!(saved["result"]["isError"],true);
+    let wish: Value = serde_json::from_str(saved["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(wish["price"],500.0); assert_eq!(wish["id"],"Wish/p1");
+    send(&mut input,json!({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"list_wishes","arguments":{}}}));
+    assert_eq!(recv(&mut output)["result"]["content"][0]["text"],"[]");
+    send(&mut input,json!({"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"list_wishes","arguments":{"perfil":"negocio"}}}));
+    let listed = recv(&mut output);
+    let wishes: Value = serde_json::from_str(listed["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(wishes[0]["wish"]["name"],"PS5"); assert_eq!(wishes[0]["evaluation"]["status"],"unknown");
     drop(input); assert!(child.wait().unwrap().success());
 }

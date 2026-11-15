@@ -175,7 +175,7 @@ fn bounded_integer_reports_its_range() {
 #[test]
 fn every_spec_has_an_object_schema() {
     let specs = specs();
-    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","get_upcoming"]);
+    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming"]);
     assert!(specs.iter().all(|s| s.input_schema["type"] == "object"));
 }
 #[test]
@@ -226,4 +226,37 @@ fn schedules_list_and_upcoming() {
 fn unknown_tool_bad_ids_and_wrong_types_are_errors() {
     let mut s=Seed::new(); let today=day(10,15);
     for (name,args,expected) in [("nope",json!({}),"Unknown tool: nope"),("get_transactions",json!({"startDate":"2026-09-01","endDate":"2026-09-30","accountId":"Schedule/p1"}),"accountId: not found"),("get_transactions",json!({"startDate":"2026-09-01","endDate":"2026-09-30","accountId":123}),"accountId: expected a string"),("get_upcoming",json!({"days":true}),"days: expected an integer from 0 to 365"),("spending_by_category",json!({"startDate":"2026-09-01","endDate":"2026-09-30","includeOffBudget":1}),"includeOffBudget: expected true or false"),("get_budget_month",json!({"month":"2026-13"}),"month: expected YYYY-MM")] { assert_eq!(call(&mut s.store,name,&args,today).unwrap_err().to_string(),expected); }
+}
+
+#[test]
+fn wishes_public_tools_save_evaluate_reserve_edit_and_archive() {
+    let mut s = Seed::new();
+    s.store.set_budget(202610, s.food, 50000).unwrap();
+    let category = format!("Category/p{}", s.food);
+    let wish = s.call("save_wish", json!({"name":"PlayStation", "price":500, "url":"https://example.com/ps5", "notes":"Con mando", "categoryId":category}));
+    assert_eq!(wish["id"], "Wish/p1");
+    assert_eq!(wish["price"], 500.0);
+    assert_eq!(wish["categoryId"], category);
+    let reserve = s.call("reserve_wish", json!({"id":wish["id"], "amount":350}));
+    assert_eq!(reserve["reserved"], 350.0);
+    let evaluation = s.call("evaluate_wish", json!({"id":wish["id"]}));
+    assert_eq!(evaluation["budgetShortfall"], 0.0);
+    assert_eq!(evaluation["horizonDays"], 30);
+    let before = s.call("list_wishes", json!({}));
+    for args in [json!({"id":wish["id"],"amount":501}),json!({"id":wish["id"],"amount":-1}),json!({"id":wish["id"],"amount":1.001})] {
+        assert!(call(&mut s.store,"reserve_wish", &args, day(10,15)).is_err());
+        assert_eq!(s.call("list_wishes", json!({})), before);
+    }
+    let edited = s.call("save_wish", json!({"id":wish["id"],"name":"PS5", "price":550, "url":"", "notes":"", "categoryId":category}));
+    assert_eq!(edited["name"], "PS5");
+    assert_eq!(edited["reserved"], 350.0);
+    s.call("archive_wish", json!({"id":wish["id"]}));
+    assert_eq!(s.call("list_wishes", json!({})), json!([]));
+    assert_eq!(s.call("list_wishes", json!({"includeArchived":true}))[0]["wish"]["reserved"], 0.0);
+    assert_eq!(s.call("list_wishes", json!({"includeArchived":true}))[0]["wish"]["archived"], true);
+    for name in ["list_wishes", "save_wish", "reserve_wish", "archive_wish", "evaluate_wish"] {
+        let tool = specs().into_iter().find(|t| t.name == name).unwrap();
+        assert_eq!(tool.input_schema["properties"]["perfil"]["type"], "string");
+        assert_eq!(tool.read_only, name == "list_wishes" || name == "evaluate_wish");
+    }
 }

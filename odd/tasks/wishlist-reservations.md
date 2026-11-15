@@ -9,9 +9,9 @@ S3. "modificar el MCP for that controller to the list of desers, all the list of
 S4. "puede ser apartar d euna vez". Check: partial reservation/release, no double allocation, validated amounts, atomic cross-connection enforcement and persistent migration.
 
 ## Tasks
-T1 | S1,S2,S4 | inline | done | Core wishes, schema migration, evaluation and atomic reservations; cargo test -p finanzas-core and clippy passed; commit pending.
-T2 | S1-S4 | inline | in_progress | MCP tools and docs; public-interface tests; commit pending.
-T3 | S1,S2,S4 | inline | pending | App navigation, forms, list/evaluation/reservation interactions; commit pending.
+T1 | S1,S2,S4 | inline | done | Core tests and clippy passed; commit 72554c8; assess escalated high item 4, reviewDue=false under_budget; independent verification pending.
+T2 | S1-S4 | inline | done | MCP tools, stdio profile isolation and clippy passed (job-6); commit pending.
+T3 | S1,S2,S4 | inline | in_progress | App navigation, forms, list/evaluation/reservation interactions; commit pending.
 T4 | S1-S4 | independent gentle-ai-verify | pending | Full suite, clippy, visual/interaction evidence, independent verification and due native reviews.
 
 ## Log
@@ -19,4 +19,5 @@ L1. Original request verbatim: oye ayudame a pensar en una nueva impolementacion
 L2. Implementation approval: "si. hazlo". Scope clarification: "puede ser apartar d euna vez".
 L3. Design assumptions: reservations claim existing expense-category funds, do not move accounts or create expenses, and persist across months. Partial reservations allowed. Evaluation uses current month and 30-day recorded-payment horizon; open on-budget accounts only; future income is not counted as cash. Existing overspending is reported, never silently repaired. Archived wishes release reservations. Purchase recording remains the existing transaction workflow: release/archive explicitly rather than inventing or duplicating a transaction.
 L5. T1 RED: missing wish APIs (exit 101). GREEN: core suite and clippy passed (job-4). Two fixture errors corrected: schedules require recurrence; uncategorized deposits do not fund the envelope engine. Migration preserves existing ledger and reopens wishes; concurrent writers test admits exactly one claim. MCP RED: Unknown tool: save_wish (exit 101).
+L6. MCP GREEN: all tests and clippy passed; fixed tool inventory updated for five additions. Stdio saves in negocio and verifies personal remains empty. App RED launched; production UI follows existing Rune conventions, no mockup requested.
 L4. Forecast ~1000 authored changed lines across three coherent local work units (core, MCP, UI); split by behavior, not line-count golf. No publishing. Preserve unrelated untracked odd/tasks/app-wide-visual-refresh.md. Risk: item 1 (persistent schema migration) and item 4 (app/MCP reservation concurrency); independent verifier required. Core rollback boundary: new wish table/services only; no existing transaction data rewritten.

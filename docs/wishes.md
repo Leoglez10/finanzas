@@ -18,6 +18,14 @@ Reservations persist across months. Later spending or budget reductions can leav
 
 This is a conservative estimate based on recorded data, not a guarantee: unrecorded expenses, bank availability, future price changes, currency conversion and account-specific payment routing are not modeled. Price and budget must use the profile's existing monetary unit.
 
+## MCP example
+
+Use `save_wish` with `{"name":"PlayStation","price":500,"url":"https://example.com/ps5","notes":"With controller","categoryId":"Category/p3"}`.
+The result contains a typed id such as `Wish/p1`. Call `reserve_wish` with `{"id":"Wish/p1","amount":150}` to set aside 150 currency units, then `evaluate_wish` with `{"id":"Wish/p1"}`.
+All monetary inputs/outputs use decimal currency units at the MCP boundary (maximum two decimals); `horizonDays` remains an integer day count. Add `perfil` to select a different existing profile.
+
+`save_wish` replaces the editable details, not a partial patch: `name` and `price` are required on edits too; omitted URL/notes become empty and omitted/null category clears it (releasing the reservation). `list_wishes` returns active wishes by default; `includeArchived: true` includes history. `archive_wish` releases reserved funds but never records the purchase.
+
 ## Storage
 
 Schema version 2 adds the `wish` table transactionally to version 1 databases without rewriting ledger records. New and reopened databases use the same migration. Back up your database before upgrading; older binaries do not understand version 2. Each profile has its own wishes and reservations.

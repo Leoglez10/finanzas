@@ -81,6 +81,10 @@ fn commitments_are_a_separate_cash_constraint_not_a_second_budget_deduction() {
     assert_eq!(view.upcoming_outflows, 60_000);
     assert_eq!(view.cash_shortfall, Some(10_000));
     assert_eq!(view.status, "cash_shortfall");
+    let mut payment=store.get_schedule(1).unwrap().unwrap();
+    payment.account_id=None;
+    store.update_schedule(&payment).unwrap();
+    assert_eq!(evaluate_wish(&mut store,wish.id,today()).unwrap().status,"unknown");
 }
 #[test]
 fn unknown_accounts_and_off_budget_cash_never_produce_affordable() {
@@ -88,6 +92,11 @@ fn unknown_accounts_and_off_budget_cash_never_produce_affordable() {
     let wish = save_wish(&mut store, None, draft(None)).unwrap();
     let view = evaluate_wish(&mut store, wish.id, today()).unwrap();
     assert_eq!((view.status.as_str(), view.cash_shortfall), ("unknown", None));
+    for (closed, off_budget) in [(true,false),(false,true)] {
+        let account=store.insert_account(&Account {id:0,name:"Excluded".into(),off_budget,closed,sort_order:0.0}).unwrap();
+        store.insert_entry(&Entry {id:0,date:today(),amount:1_000_000,notes:String::new(),cleared:true,account_id:Some(account),category_id:None,payee_id:None,schedule_id:None}).unwrap();
+    }
+    assert_eq!(evaluate_wish(&mut store,wish.id,today()).unwrap().cash_balance,None);
 }
 #[test]
 fn reservations_serialize_across_two_database_connections() {

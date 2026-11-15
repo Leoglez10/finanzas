@@ -7,8 +7,8 @@ S1. "subelo". Check: publish the local wishes commits to the existing origin rep
 S2. "con nueva version". Check: bump 0.3.0 to 0.4.0 consistently, publish through the existing release workflow, observe release and installer assets.
 
 ## Tasks
-T1 | S1,S2 | inline | in_progress | Bump workspace and lockfile version only; verify local tests/metadata and independent release check; commit pending.
-T2 | S1,S2 | inline remote delivery | pending | Push branch, create release PR, observe CI, merge using normal target policy; no force push.
+T1 | S1,S2 | inline | done | Version commit 393096e; all 206 tests/clippy pass, metadata 0.4.0 on all crates; independent version-only verification PASS; committed assessment medium/under_budget (no native review due).
+T2 | S1,S2 | inline remote delivery | in_progress | Push branch, create release PR, observe CI, merge using normal target policy; no force push.
 T3 | S2 | inline remote delivery | pending | Observe installer workflow, release tag/assets and cask update; report failures honestly.
 
 ## Log

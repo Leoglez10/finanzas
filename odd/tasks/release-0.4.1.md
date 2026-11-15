@@ -11,8 +11,8 @@ S4. "y instala." Check: brew upgrade to 0.4.1 with validated backup of the curre
 ## Tasks
 T1 | S1 | inline | done | RED job-26 (3 expected failures) then GREEN job-27 11/11; commit f2088dc. Full suite runs in T3.
 T2 | S2 | inline | done | #deseos section + nav link + square capture site/img/deseos-panel{,-700}.webp; verified with real headless Chrome via CDP scroll (1440x900, 390x844, no overflow); commit pending below.
-T3 | S3 | inline + gentle-ai-verify (item5) | pending | Bump 0.4.1, full checks, independent verify, assess; commit pending.
-T4 | S3 | inline remote | pending | Push, PR, CI, merge, release, cask, pages.
+T3 | S3 | inline + gentle-ai-verify (item5) | done | Commit d405403 (0.4.1); job-30: 215 tests, clippy, build pass; assess base 35bdda6 reviewDue=false under_budget; verifier mwi894a3 S1-S3 PASS, no blockers (advisories: stale local tags, design/ untracked).
+T4 | S3 | inline remote | in_progress | Push, PR, CI, merge, release, cask, pages.
 T5 | S4 | inline + verify | pending | Backup, brew upgrade, verify installed version/signature/isolated run.
 
 ## Log

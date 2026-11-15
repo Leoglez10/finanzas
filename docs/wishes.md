@@ -2,6 +2,16 @@
 
 A wish stores a name, positive target price, optional HTTP(S) link, notes, and an optional expense category. Amounts in the core are integer cents. Archived wishes remain in history and release their funds.
 
+## Create or edit a wish in the app
+
+1. In **Deseos**, choose **Nuevo deseo** (or **Editar** on an existing wish). **La compra** collects the name and target price.
+2. Choose **Continuar** to review the interpreted price in **Contexto y revisión**. Select an optional expense category and expand **Enlace y detalles** if needed; notes support multiple lines. **Volver** preserves those values.
+3. Choose **Guardar deseo** to save. Advancing to the second step does not create or modify a wish. A visible saving state prevents duplicate submissions; a failed save keeps the draft for correction/retry.
+
+The target-price field accepts `11000`, `11,000`, `11,000.50` and a pasted `$11,000` (comma thousands, period decimal, optional leading `$`). The displayed interpretation makes the monetary unit explicit. Malformed grouping such as `11,00`, non-positive amounts and more than two decimal places produce a field-level error instead of silently disabling the action. Optional links may be empty; otherwise use a complete HTTP(S) product link.
+
+Cancel, close and Escape ask before discarding changed values. Unchanged drafts close without confirmation. Saving does not record a purchase or move money. Reservation fields and MCP numeric amount conventions are unchanged by this editor.
+
 ## Reserve without recording a purchase
 
 A reservation claims money already available in an expense category. It does not move account balances, create an expense, change category assignments, or reduce the original envelope's reported available amount. Partial reserves are allowed. Set the absolute reserved amount to zero to release it.

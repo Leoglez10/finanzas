@@ -3,29 +3,71 @@ use finanzas_core::service::{Wish, WishDraft, WishView};
 use rune::{text_input, PopupItem, PopupMenu};
 use sheet::{button, field};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WishStep { Purchase, Context }
+type WishValues = (String, String, String, String, Option<Id>);
+
 pub struct WishSheet {
     pub id: Option<Id>, pub name: TextEdit, pub price: TextEdit,
     pub url: TextEdit, pub notes: TextEdit, pub category: Option<Id>,
+    step: WishStep, tried_purchase: bool, tried_save: bool,
+    details_open: bool, discard_confirm: bool, initial: WishValues,
 }
+const NAME_ERROR: &str = "Escribe el nombre de lo que quieres comprar.";
+const PRICE_ERROR: &str = "Escribe un precio mayor que cero. Usa 11,000 o 11,000.50; coma para miles y punto para decimales.";
+const PRICE_HELP: &str = "Ej. 11,000.50 · coma para miles, punto para decimales.";
+const URL_ERROR: &str = "Usa un enlace completo que empiece por https:// o deja este campo vacío.";
 fn decimal(cents: i64) -> String { format!("{}.{:02}", cents / 100, cents % 100) }
+// Preserve reservation-input behavior: grouping belongs only to target prices.
 fn parse_amount(text: &str) -> Option<i64> {
     let text = text.trim();
     if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit() || c == '.') || text.split('.').nth(1).is_some_and(|s| s.len() > 2) { return None; }
     money::cents_from(text)
 }
+fn parse_price(text: &str) -> Option<i64> {
+    let text = text.trim();
+    // Prices are displayed as "$11,000.00"; accept that same shape when pasted back.
+    let text = text.strip_prefix('$').map_or(text, str::trim_start);
+    let (whole, fraction) = text.split_once('.').map_or((text, None), |(w, f)| (w, Some(f)));
+    let digits = |value: &str| !value.is_empty() && value.bytes().all(|c| c.is_ascii_digit());
+    if fraction.is_some_and(|f| !digits(f) || f.len() > 2) { return None; }
+    let mut groups = whole.split(',');
+    let first = groups.next()?;
+    if !digits(first) { return None; }
+    if whole.contains(',') && (first.len() > 3 || !groups.all(|g| g.len() == 3 && digits(g))) { return None; }
+    money::cents_from(text).filter(|cents| *cents > 0)
+}
+fn valid_url(value: &str) -> bool {
+    let value = value.trim();
+    if value.is_empty() { return true; }
+    let Some(rest) = value.strip_prefix("https://").or_else(|| value.strip_prefix("http://")) else { return false };
+    !rest.split(['/', '?', '#']).next().unwrap_or("").is_empty()
+        && !value.chars().any(|c| c.is_whitespace() || c.is_control())
+}
 impl WishSheet {
     fn new(wish: Option<&Wish>) -> Self {
-        Self { id: wish.map(|w| w.id), name: TextEdit::new(wish.map_or("", |w| &w.name)),
+        let mut sheet = Self { id: wish.map(|w| w.id), name: TextEdit::new(wish.map_or("", |w| &w.name)),
             price: TextEdit::new(wish.map(|w| decimal(w.price)).unwrap_or_default()),
             url: TextEdit::new(wish.map_or("", |w| &w.url)), notes: TextEdit::new(wish.map_or("", |w| &w.notes)),
-            category: wish.and_then(|w| w.category_id) }
+            category: wish.and_then(|w| w.category_id), step: WishStep::Purchase,
+            tried_purchase: false, tried_save: false, details_open: wish.is_some_and(|w| !w.url.is_empty() || !w.notes.is_empty()),
+            discard_confirm: false, initial: Default::default() };
+        sheet.initial = sheet.values();
+        sheet
     }
+    fn values(&self) -> WishValues {
+        (self.name.text.clone(), parse_price(&self.price.text).map(money::format).unwrap_or_else(|| self.price.text.clone()),
+            self.url.text.clone(), self.notes.text.clone(), self.category)
+    }
+    fn first_control(&self) -> &'static str { if self.step == WishStep::Purchase { "wish-name" } else { "wish-category" } }
+    fn trigger(&self) -> String { self.id.map_or_else(|| "wish-new".into(), |id| format!("wish-edit-{id}")) }
+    fn name_error(&self) -> Option<&'static str> { (self.tried_purchase && self.name.text.trim().is_empty()).then_some(NAME_ERROR) }
+    fn price_error(&self) -> Option<&'static str> { (self.tried_purchase && parse_price(&self.price.text).is_none()).then_some(PRICE_ERROR) }
+    fn url_error(&self) -> Option<&'static str> { (self.tried_save && !valid_url(&self.url.text)).then_some(URL_ERROR) }
     fn draft(&self) -> Option<WishDraft> {
-        let price = parse_amount(&self.price.text).filter(|v| *v > 0)?;
-        let name = self.name.text.trim();
-        let url = self.url.text.trim();
-        if name.is_empty() || (!url.is_empty() && !url.starts_with("http://") && !url.starts_with("https://")) { return None; }
-        Some(WishDraft { name:name.into(), price, url:url.into(), notes:self.notes.text.clone(), category_id:self.category })
+        if self.name.text.trim().is_empty() || !valid_url(&self.url.text) { return None; }
+        Some(WishDraft { name:self.name.text.trim().into(), price:parse_price(&self.price.text)?,
+            url:self.url.text.trim().into(), notes:self.notes.text.clone(), category_id:self.category })
     }
 }
 impl State {
@@ -39,18 +81,57 @@ impl State {
         if self.mutation_active() || !self.wishes_fresh() || id.is_some_and(|id| self.visible_wish(id).is_none()) { return; }
         self.wish_sheet = Some(WishSheet::new(id.and_then(|id| self.visible_wish(id))));
         self.mutation_error = None;
+        self.wish_saved = false;
     }
-    fn save_wish(&mut self) {
-        if self.mutation_active() || !self.wishes_fresh() { return; }
-        let Some(sh) = &self.wish_sheet else { return };
+    fn next_wish(&mut self, tx: &mut Tx) {
+        if self.mutation_active() { return; }
+        let Some(sh) = &mut self.wish_sheet else { return };
+        sh.tried_purchase = true;
+        if sh.name_error().is_some() { tx.focus("wish-name", true); return; }
+        let Some(price) = parse_price(&sh.price.text) else { tx.focus("wish-price", true); return };
+        sh.price.replace_text(money::format(price).trim_start_matches('$'));
+        sh.step = WishStep::Context;
+        tx.focus("wish-category", true);
+    }
+    fn save_wish(&mut self, tx: &mut Tx) {
+        if self.mutation_active() { return; }
+        if self.wish_sheet.as_ref().is_some_and(|sh| sh.step == WishStep::Purchase) { self.next_wish(tx); return; }
+        let Some(sh) = &mut self.wish_sheet else { return };
+        sh.tried_save = true;
+        sh.tried_purchase = true;
+        if sh.name_error().is_some() || sh.price_error().is_some() {
+            sh.step = WishStep::Purchase;
+            tx.focus(if sh.name_error().is_some() { "wish-name" } else { "wish-price" }, true);
+            return;
+        }
+        if sh.url_error().is_some() { sh.details_open = true; tx.focus("wish-url", true); return; }
         let Some(draft) = sh.draft() else { return };
-        if sh.id.is_some_and(|id| self.visible_wish(id).is_none()) { return; }
-        let mutation = data::Mutation::SaveWish(sh.id, draft);
-        self.wish_mutation(mutation, MutationTarget::WishSheet);
+        let id = sh.id;
+        if !self.wishes_fresh() || id.is_some_and(|id| self.visible_wish(id).is_none()) {
+            self.mutation_error = Some("Los datos cambiaron o se están actualizando. Revisa el deseo y vuelve a intentar.".into());
+            return;
+        }
+        self.wish_mutation(data::Mutation::SaveWish(id, draft), MutationTarget::WishSheet);
+    }
+    pub fn request_wish_close(&mut self, tx: &mut Tx) {
+        if self.mutation_active() { return; }
+        let Some(sh) = &mut self.wish_sheet else { return };
+        if sh.discard_confirm {
+            sh.discard_confirm = false;
+            tx.focus(sh.first_control(), true);
+        } else if sh.values() != sh.initial {
+            sh.discard_confirm = true;
+            tx.focus("wish-keep-editing", true);
+        } else { self.dismiss_wish(tx); }
+    }
+    fn dismiss_wish(&mut self, tx: &mut Tx) {
+        if self.mutation_active() { return; }
+        if let Some(sh) = self.wish_sheet.take() { tx.focus(sh.trigger(), true); }
     }
     fn wish_mutation(&mut self, mutation: data::Mutation, target: MutationTarget) {
         if self.mutation_active() || !self.wishes_fresh() { return; }
         self.mutation_error = None;
+        self.wish_saved = false;
         self.mutation_target = Some(target);
         let worker = Arc::clone(&self.worker);
         self.mutation.request(mutation, move |m| data::mutate(worker,m));
@@ -58,12 +139,14 @@ impl State {
     fn reserve_wish(&mut self, id: Id, release: bool) {
         if self.visible_wish(id).is_none() { return; }
         let amount = if release { Some(0) } else { self.wish_inputs.get(&id).and_then(|e| parse_amount(&e.text)) };
-        let Some(amount) = amount.filter(|a| *a >= 0) else { self.mutation_error = Some("Escribe un importe de cero o más, con hasta dos decimales.".into()); return };
+        let Some(amount) = amount.filter(|a| *a >= 0) else { self.wish_saved = false; self.mutation_error = Some("Escribe un importe de cero o más, con hasta dos decimales.".into()); return };
         self.wish_mutation(data::Mutation::ReserveWish(id,amount,self.today_date),MutationTarget::WishRow);
     }
 }
 
 pub fn poll(s: &mut State, tx: &mut Tx, changed: &mut bool) {
+    // The "Deseo guardado." status belongs to the save that just happened on this screen.
+    if s.route != Route::Deseos { s.wish_saved = false; }
     if let Some((key,result)) = s.wishes_latest.take() && key == s.wishes_key_now() {
         match result {
             Ok(views) => {
@@ -138,8 +221,9 @@ pub fn render(s: &State,p: Palette) -> El {
         .child(text("Guarda lo que quieres comprar y aparta dinero sin registrar un gasto.").font(type_::BODY).color(p.muted).wrap().w_full())
         .child(row().wrap().w_full().gap(8.0).child(button("Nuevo deseo","wish-new",p).on_press(|s: &mut State| s.open_wish(None)))
             .child(button(if s.wishes_archived { "Ocultar archivados" } else { "Ver archivados" },"wish-history",p).on_press(|s: &mut State| {
-                if !s.mutation_active() { s.wishes_archived = !s.wishes_archived; }
+                if !s.mutation_active() { s.wishes_archived = !s.wishes_archived; s.wish_saved = false; }
             })));
+    if s.wish_saved { page = page.child(text("Deseo guardado.").key("wish-saved").role("status").font(type_::BODY).color(p.emerald)); }
     if let Some(error) = &s.mutation_error { page = page.child(text(error.clone()).key("wish-error").font(type_::BODY).color(p.coral).wrap().w_full()); }
     let mut list = col().w_full().grow(1.0).min_h(0.0).gap(14.0).scroll(rune::ScrollSpec {stick_bottom:false});
     if !s.wishes_fresh() { list = list.child(text("Cargando deseos y presupuesto…").key("wish-loading").font(type_::BODY).color(p.muted).wrap().w_full()); }
@@ -149,45 +233,125 @@ pub fn render(s: &State,p: Palette) -> El {
     }
     page.child(list)
 }
-fn edit(s: &mut State,pick: fn(&mut WishSheet)->&mut TextEdit) -> &mut TextEdit {
-    if s.mutation_active() || s.wish_sheet.is_none() { return &mut s.blocked_edit; }
+fn edit(s: &mut State, pick: fn(&mut WishSheet)->&mut TextEdit) -> &mut TextEdit {
+    if s.mutation_active() || s.wish_sheet.as_ref().is_none_or(|sh| sh.discard_confirm) { return &mut s.blocked_edit; }
     pick(s.wish_sheet.as_mut().expect("wish sheet present"))
+}
+fn help(value: &str, p: Palette) -> El { text(value.to_owned()).font(type_::LABEL).color(p.ink).wrap().w_full() }
+fn separator(p: Palette) -> El { el().w_full().h(1.0).fill(p.border) }
+fn editor_field(key: &'static str, label: &str, value: &TextEdit,
+    pick: fn(&mut WishSheet)->&mut TextEdit, error: Option<&str>, hint: &str, p: Palette) -> El {
+    let mut input = text_input(value, if key == "wish-price" { theme::AMOUNT } else { type_::BODY })
+        .key(key).label(label).description(error.unwrap_or(hint)).invalid(error.is_some()).color(p.ink)
+        .on_edit(move |s: &mut State| edit(s, pick));
+    if key == "wish-notes" { input = input.h(96.0); }
+    else { input = input.single_line().on_submit(|s: &mut State, tx| s.save_wish(tx)); }
+    if key == "wish-name" { input = input.autofocus(); }
+    let mut field = col().w_full().gap(5.0).child(text(label.to_owned()).font(type_::BODY).color(p.ink))
+        .child(input.w_full().min_h(44.0).padding(9.0).radius(8.0).fill(p.canvas).border(1.0, if error.is_some() { p.coral } else { p.border }));
+    if !hint.is_empty() { field = field.child(help(hint,p)); }
+    if let Some(error) = error { field = field.child(text(error.to_owned()).key(format!("{key}-error")).role("alert").font(type_::BODY).color(p.coral).wrap().w_full()); }
+    field
+}
+fn primary(label: &str, key: &str, p: Palette) -> El {
+    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum)
+        .child(text(label.to_owned()).font(type_::BODY).color(p.canvas))
+}
+fn category_picker(s: &State, p: Palette) -> El {
+    let sh = s.wish_sheet.as_ref().expect("wish sheet present");
+    let category = s.categories.iter().find(|c| Some(c.id)==sh.category).map_or("Elegir después",|c| c.name.as_str());
+    field("Categoría del presupuesto · Opcional", button(category,"wish-category",p).min_h(44.0)
+        .description("Sirve para evaluar el presupuesto. No mueve dinero.").on_press_tx(|s: &mut State,tx| {
+            if s.mutation_active() { return; }
+            let mut menu = PopupMenu::new().item(PopupItem::new("none","Elegir después"));
+            for group in s.groups.iter().filter(|g| !g.is_income) {
+                for category in s.categories.iter().filter(|c| c.group_id == Some(group.id) && !c.hidden) {
+                    menu = menu.item(PopupItem::new(category.id.to_string(),format!("{} · {}",group.name,category.name)));
+                }
+            }
+            tx.popup_menu(menu,"wish-category",|s: &mut State,id,_| {
+                if !s.mutation_active() && let (Some(sh),Some(id)) = (&mut s.wish_sheet,id) { sh.category = id.parse().ok(); }
+            });
+        }),p).child(help("Sirve para evaluar si la compra cabe en tu presupuesto. No mueve dinero.",p))
+}
+fn editor_body(s: &State, p: Palette) -> El {
+    let sh = s.wish_sheet.as_ref().expect("wish sheet present");
+    let mut body = col().key("wish-editor-body").w_full().grow(1.0).min_h(0.0).scroll(rune::ScrollSpec {stick_bottom:false}).gap(24.0).padding(24.0);
+    if sh.step == WishStep::Purchase {
+        body = body.child(editor_field("wish-name","¿Qué quieres comprar? · Obligatorio",&sh.name,|sh| &mut sh.name,sh.name_error(),"",p))
+            .child(editor_field("wish-price","Precio objetivo · Obligatorio",&sh.price,|sh| &mut sh.price,sh.price_error(),PRICE_HELP,p));
+        if let Some(price) = parse_price(&sh.price.text) {
+            body = body.child(text(format!("Importe reconocido: {}",money::format(price))).key("wish-price-recognized").role("status").font(type_::BODY).color(p.emerald).wrap().w_full());
+        }
+    } else {
+        body = body.child(col().w_full().gap(8.0).pb(16.0)
+            .child(help("Tu compra",p)).child(text(sh.name.text.trim().to_owned()).key("wish-review-name").font(theme::HEADLINE).color(p.ink).wrap_anywhere().w_full())
+            .child(text(parse_price(&sh.price.text).map(money::format).unwrap_or_default()).key("wish-review-price").font(theme::AMOUNT).color(p.ink).wrap().w_full()).child(separator(p)))
+            .child(category_picker(s,p))
+            .child(button(if sh.details_open { "Ocultar enlace y detalles · Opcionales" } else { "Enlace y detalles · Opcionales" },"wish-details-toggle",p).min_h(44.0)
+                .description(if sh.details_open { "Sección expandida" } else { "Sección contraída" }).expanded(sh.details_open).on_press_tx(|s: &mut State,tx| {
+                    if s.mutation_active() { return; }
+                    if let Some(sh) = &mut s.wish_sheet { sh.details_open = !sh.details_open; tx.focus(if sh.details_open { "wish-url" } else { "wish-details-toggle" }, true); }
+                }));
+        if sh.details_open {
+            body = body.child(editor_field("wish-url","Enlace del producto · Opcional",&sh.url,|sh| &mut sh.url,sh.url_error(),"Déjalo vacío si todavía no tienes un enlace.",p))
+                .child(editor_field("wish-notes","Detalles · Opcionales",&sh.notes,|sh| &mut sh.notes,None,"Modelo, accesorios o algo que quieras recordar.",p));
+        }
+        if sh.id.is_some() { body = body.child(help("Cambiar la categoría libera lo apartado.",p)); }
+    }
+    body
+}
+fn discard_dialog(p: Palette) -> El {
+    let body = col().w_full().max_w(440.0).padding(24.0).gap(16.0).radius(14.0).fill(p.card).border(1.0,p.border)
+        .child(text("¿Descartar los cambios?").font(theme::HEADLINE).color(p.ink).wrap().w_full())
+        .child(help("Tienes cambios sin guardar en este deseo.",p))
+        .child(row().wrap().w_full().gap(12.0)
+            .child(primary("Seguir editando","wish-keep-editing",p).autofocus().on_press_tx(|s: &mut State,tx| s.request_wish_close(tx)))
+            .child(button("Descartar","wish-discard",p).min_h(44.0).on_press_tx(|s: &mut State,tx| s.dismiss_wish(tx))));
+    el().key("wish-discard-confirm").role("dialog").label("¿Descartar los cambios?").paint_order(110).raise()
+        .absolute(0.0,0.0).w_full().h_full().padding(24.0).center().fill(Color::BLACK.alpha(0.4))
+        .modal_tx(false,|s: &mut State,tx| s.request_wish_close(tx)).child(body)
 }
 pub fn sheet(s: &State,p: Palette) -> El {
     let sh = s.wish_sheet.as_ref().expect("wish sheet present");
-    let input = |key: &'static str,label: &'static str,value: &TextEdit,pick: fn(&mut WishSheet)->&mut TextEdit| {
-        field(label,text_input(value,type_::BODY).key(key).label(label).single_line().color(p.ink).on_edit(move |s: &mut State| edit(s,pick)),p)
-    };
-    let category = s.categories.iter().find(|c| Some(c.id)==sh.category).map_or("Sin categoría",|c| c.name.as_str());
-    let picker = button(category,"wish-category",p).on_press_tx(|s: &mut State,tx| {
-        if s.mutation_active() { return; }
-        let mut menu = PopupMenu::new().item(PopupItem::new("none","Sin categoría"));
-        for group in s.groups.iter().filter(|g| !g.is_income) {
-            for category in s.categories.iter().filter(|c| c.group_id == Some(group.id) && !c.hidden) {
-                menu = menu.item(PopupItem::new(category.id.to_string(),format!("{} · {}",group.name,category.name)));
-            }
-        }
-        tx.popup_menu(menu,"wish-category",|s: &mut State,id,_| {
-            if !s.mutation_active() && let (Some(sh),Some(id)) = (&mut s.wish_sheet,id) { sh.category = id.parse().ok(); }
-        });
-    });
-    let mut body = col().w_full().max_h(570.0).scroll(rune::ScrollSpec {stick_bottom:false}).gap(12.0)
-        .child(input("wish-name","Nombre",&sh.name,|sh| &mut sh.name))
-        .child(input("wish-price","Precio objetivo",&sh.price,|sh| &mut sh.price))
-        .child(input("wish-url","Enlace (http o https, opcional)",&sh.url,|sh| &mut sh.url))
-        .child(input("wish-notes","Detalles",&sh.notes,|sh| &mut sh.notes))
-        .child(field("Categoría del presupuesto",picker,p))
-        .child(text("Nombre y precio mayor que cero son obligatorios. Usa hasta dos decimales. Cambiar la categoría libera lo apartado. Guarda primero; después puedes apartar fondos.").font(type_::BODY).color(p.muted).wrap().w_full());
-    if let Some(error)=&s.mutation_error { body=body.child(text(error.clone()).font(type_::BODY).color(p.coral).wrap().w_full()); }
-    let mut save=button("Guardar","wish-save",p);
-    if sh.draft().is_some() && !s.mutation_active() { save=save.default_button().on_press(|s: &mut State| s.save_wish()); }
-    else { save=save.disabled(true); }
-    let form=col().w(580.0).padding(24.0).gap(16.0).radius(14.0).fill(p.card)
-        .child(text(if sh.id.is_some() {"Editar deseo"} else {"Nuevo deseo"}).font(type_::TITLE).color(p.ink))
-        .child(body).child(row().justify_between().child(button("Cancelar","wish-cancel",p).on_press(|s: &mut State| if !s.mutation_active() {s.wish_sheet=None;})).child(save));
-    let form=if s.mutation_active() {form.inert()} else {form};
-    el().key("wish-sheet").paint_order(100).raise().absolute(0.0,0.0).w_full().h_full().center().fill(Color::BLACK.alpha(0.4))
-        .modal(false,|s: &mut State| if !s.mutation_active() {s.wish_sheet=None;}).child(form)
+    let busy = s.mutation_active();
+    let title = if sh.id.is_some() { "Editar deseo" } else { "Nuevo deseo" };
+    let description = if sh.step == WishStep::Purchase { "Primero, lo imprescindible." } else { "Revisa la compra y añade contexto si lo necesitas." };
+    let mut steps = row().w_full().gap(16.0);
+    for (step,label) in [(WishStep::Purchase,"1. La compra"),(WishStep::Context,"2. Contexto y revisión")] {
+        let color = if sh.step == step { p.petroleum } else { p.ink };
+        steps = steps.child(col().grow(1.0).min_w(0.0).gap(8.0).child(text(label).font(theme::CARD_TITLE).color(color).wrap().w_full())
+            .child(el().w_full().h(2.0).fill(if sh.step == step { p.petroleum } else { p.border })));
+    }
+    let header = col().w_full().padding(24.0).gap(16.0)
+        .child(row().w_full().justify_between().center_y().gap(12.0).child(text("DESEOS · FLUJO GUIADO").font(theme::CARD_TITLE).color(p.ink))
+            .child(button("×","wish-close",p).label("Cerrar formulario").min_h(44.0).min_w(44.0).on_press_tx(|s: &mut State,tx| s.request_wish_close(tx))))
+        .child(steps).child(text(title).font(theme::HEADLINE).color(p.ink)).child(help(description,p));
+    let mut actions = row().wrap().w_full().justify_between().gap(12.0)
+        .child(button("Cancelar","wish-cancel",p).min_h(44.0).on_press_tx(|s: &mut State,tx| s.request_wish_close(tx)));
+    let mut right = row().wrap().gap(8.0);
+    if sh.step == WishStep::Context {
+        right = right.child(button("Volver","wish-back",p).min_h(44.0).on_press_tx(|s: &mut State,tx| {
+            if !s.mutation_active() && let Some(sh) = &mut s.wish_sheet { sh.step = WishStep::Purchase; tx.focus("wish-name",true); }
+        })).child(primary(if busy { "Guardando…" } else { "Guardar deseo" },"wish-save",p).disabled(busy).default_button().on_press_tx(|s: &mut State,tx| s.save_wish(tx)));
+    } else {
+        right = right.child(primary("Continuar","wish-next",p).default_button().on_press_tx(|s: &mut State,tx| s.next_wish(tx)));
+    }
+    actions = actions.child(right);
+    let mut footer = col().w_full().padding(24.0).gap(12.0);
+    if let Some(error) = &s.mutation_error {
+        footer = footer.child(text(format!("No se pudo guardar. Conservamos tus datos. {error}")).key("wish-save-error").role("alert").font(type_::BODY).color(p.coral).wrap().w_full());
+    }
+    if busy { footer = footer.child(text("Guardando deseo…").key("wish-saving").role("status").font(type_::BODY).color(p.ink)); }
+    footer = footer.child(actions).child(help("Después podrás apartar fondos. Guardar no registra un gasto.",p));
+    let form = col().w_full().max_w(580.0).h_full().max_h(760.0).radius(14.0).fill(p.card).border(1.0,p.border)
+        .child(header).child(separator(p)).child(editor_body(s,p)).child(separator(p)).child(footer);
+    let form = if busy || sh.discard_confirm { form.inert() } else { form };
+    let mut root = el().key("wish-sheet").role("dialog").label(title).description(description).focus_return(sh.trigger())
+        .paint_order(100).raise().absolute(0.0,0.0).w_full().h_full().padding(24.0).center().fill(Color::BLACK.alpha(0.4))
+        .modal_tx(false,|s: &mut State,tx| s.request_wish_close(tx)).child(form);
+    if sh.discard_confirm { root = root.child(discard_dialog(p)); }
+    root
 }
 
 fn demo(s: &mut State,dark: bool) {
@@ -210,4 +374,17 @@ fn demo(s: &mut State,dark: bool) {
 }
 pub fn light_scene(s: &mut State) {demo(s,false);}
 pub fn dark_scene(s: &mut State) {demo(s,true);}
-pub fn sheet_scene(s: &mut State) {demo(s,false);s.open_wish(Some(1));}
+fn wizard_scene(s: &mut State, dark: bool, step: WishStep, discard: bool) {
+    demo(s,dark);
+    s.open_wish(None);
+    if let Some(sh) = &mut s.wish_sheet {
+        sh.name.replace_text("PlayStation 5");
+        sh.price.replace_text(if step == WishStep::Purchase { "11,000" } else { "11,000.00" });
+        sh.step = step;
+        sh.discard_confirm = discard;
+    }
+}
+pub fn sheet_scene(s: &mut State) { wizard_scene(s,false,WishStep::Purchase,false); }
+pub fn sheet_dark_scene(s: &mut State) { wizard_scene(s,true,WishStep::Purchase,false); }
+pub fn review_scene(s: &mut State) { wizard_scene(s,true,WishStep::Context,false); }
+pub fn discard_scene(s: &mut State) { wizard_scene(s,true,WishStep::Purchase,true); }

@@ -1,6 +1,7 @@
 //! SQLite storage.
 
 mod crud;
+mod wishes;
 mod records;
 mod entries;
 pub use entries::{EntryFilter, EntryRow};

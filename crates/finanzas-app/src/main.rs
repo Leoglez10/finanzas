@@ -52,6 +52,7 @@ struct State {
     wishes_latest: Latest<WishesResult>,
     wishes_key: Option<WishesKey>,
     wish_sheet: Option<wishes::WishSheet>,
+    wish_saved: bool,
     wish_inputs: std::collections::HashMap<Id, TextEdit>,
     wishes_archived: bool,
     route: Route,
@@ -146,7 +147,7 @@ struct State {
 impl State {
     fn empty() -> Self {
         let today = month::month_of(Local::now().date_naive());
-        Self { wishes: None, wishes_latest: Latest::default(), wishes_key: None, wish_sheet: None, wish_inputs: Default::default(), wishes_archived: false, route: Route::Resumen, logo: None, accounts: Vec::new(), dark: None, error: None,
+        Self { wishes: None, wishes_latest: Latest::default(), wishes_key: None, wish_sheet: None, wish_saved: false, wish_inputs: Default::default(), wishes_archived: false, route: Route::Resumen, logo: None, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
@@ -420,7 +421,7 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         match result {
             Ok(()) => {
                 match target {
-                    Some(MutationTarget::WishSheet) => s.wish_sheet = None,
+                    Some(MutationTarget::WishSheet) => { s.wish_sheet = None; s.wish_saved = true; }
                     Some(MutationTarget::WishRow) => s.wish_inputs.clear(),
                     Some(MutationTarget::Sheet) => s.sheet = None,
                     Some(MutationTarget::Account) => s.account_sheet = None,
@@ -546,9 +547,9 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     tx.wake_at(if s.next_poll <= now { now + 0.25 } else { s.next_poll });
     changed
 }
-fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
+fn on_key(s: &mut State, ev: &KeyEvent, tx: &mut Tx) -> bool {
     if s.mutation_active() { return true; }
-    if s.wish_sheet.is_some() { if ev.key == Key::Escape { s.wish_sheet = None; return true; } return false; }
+    if s.wish_sheet.is_some() { if ev.key == Key::Escape { s.request_wish_close(tx); return true; } return false; }
     if s.sheet.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.sheet = None; } return true; } return false; }
     if s.confirm.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.confirm = None; } return true; } return false; }
     if s.schedule_sheet.is_some() { if ev.key == Key::Escape { s.schedule_sheet = None; return true; } return false; }
@@ -665,7 +666,7 @@ fn main() {
     // Dock / taskbar icon; the installers also set it on the bundle, executable shortcut and desktop entry.
     let _ = rune::set_app_icon(include_bytes!("../../../packaging/linux/finanzas.png").to_vec());
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("deseos-light", wishes::light_scene), ("deseos-dark", wishes::dark_scene), ("deseo-sheet", wishes::sheet_scene), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("deseos-light", wishes::light_scene), ("deseos-dark", wishes::dark_scene), ("deseo-sheet", wishes::sheet_scene), ("deseo-sheet-dark", wishes::sheet_dark_scene), ("deseo-review", wishes::review_scene), ("deseo-discard", wishes::discard_scene), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });

@@ -257,7 +257,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Always run tests with `FINANZAS_DB` pointing at a scratch file. The app also renders headless with
 in-memory demo data, for example `target/release/finanzas --scene demo-light --size 1440x900 --snap resumen.png`
-(scenes include `demo-dark`, `presupuesto-light`, `proximos-dark`, `movimientos-light`, `ajustes-light`).
+(scenes include `demo-dark`, `presupuesto-light`, `proximos-dark`, `movimientos-light`, `ajustes-light`,
+`deseo-sheet`, `deseo-sheet-dark`, `deseo-review`, and `deseo-discard`). The wish-editor scenes use
+synthetic data and show the two-step editor, price interpretation, and dirty-dismiss confirmation.
+See [the wish-editor flow and amount format](docs/wishes.md#create-or-edit-a-wish-in-the-app).
 
 | Path | Contents |
 |---|---|

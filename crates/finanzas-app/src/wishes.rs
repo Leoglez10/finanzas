@@ -200,7 +200,7 @@ fn wish_card(s: &State, v: &WishView, p: Palette) -> El {
     }
     if !w.archived {
         let input = s.wish_inputs.get(&id).expect("inputs prepared with list");
-        card = card.child(field("Importe total que quieres apartar (0 libera fondos)",text_input(input,type_::BODY).key(format!("wish-reserve-input-{id}")).label("Importe a apartar").single_line().color(p.ink)
+        card = card.child(field("Importe total que quieres apartar (0 libera fondos)",text_input(input,type_::BODY).key(format!("wish-reserve-input-{id}")).label("Importe a apartar").single_line().color(p.ink).caret(p.petroleum,p.selected)
             .on_edit(move |s: &mut State| {
                 if s.mutation_active() || !s.wishes_fresh() { return &mut s.blocked_edit; }
                 s.wish_inputs.get_mut(&id).expect("visible wish input")
@@ -237,25 +237,33 @@ fn edit(s: &mut State, pick: fn(&mut WishSheet)->&mut TextEdit) -> &mut TextEdit
     if s.mutation_active() || s.wish_sheet.as_ref().is_none_or(|sh| sh.discard_confirm) { return &mut s.blocked_edit; }
     pick(s.wish_sheet.as_mut().expect("wish sheet present"))
 }
-fn help(value: &str, p: Palette) -> El { text(value.to_owned()).font(type_::LABEL).color(p.ink).wrap().w_full() }
+fn help(value: &str, p: Palette) -> El { text(value.to_owned()).font(theme::HINT).color(p.ink).wrap().w_full() }
 fn separator(p: Palette) -> El { el().w_full().h(1.0).fill(p.border) }
 fn editor_field(key: &'static str, label: &str, value: &TextEdit,
     pick: fn(&mut WishSheet)->&mut TextEdit, error: Option<&str>, hint: &str, p: Palette) -> El {
     let mut input = text_input(value, if key == "wish-price" { theme::AMOUNT } else { type_::BODY })
-        .key(key).label(label).description(error.unwrap_or(hint)).invalid(error.is_some()).color(p.ink)
+        .key(key).label(label).description(error.unwrap_or(hint)).invalid(error.is_some()).color(p.ink).caret(p.petroleum,p.selected)
         .on_edit(move |s: &mut State| edit(s, pick));
     if key == "wish-notes" { input = input.h(96.0); }
     else { input = input.single_line().on_submit(|s: &mut State, tx| s.save_wish(tx)); }
     if key == "wish-name" { input = input.autofocus(); }
+    // Rune draws input text from the content box's top edge, so only equal vertical padding
+    // centres it: the artboard's 9pt band around a 13pt line inside a 44pt control is 13pt.
+    let (pad_y, pad_x) = match key { "wish-notes" => (9.0, 12.0), "wish-price" => (5.0, 12.0), _ => (13.0, 12.0) };
     let mut field = col().w_full().gap(5.0).child(text(label.to_owned()).font(type_::BODY).color(p.ink))
-        .child(input.w_full().min_h(44.0).padding(9.0).radius(8.0).fill(p.canvas).border(1.0, if error.is_some() { p.coral } else { p.border }));
+        .child(input.w_full().min_h(44.0).px(pad_x).py(pad_y).radius(8.0).fill(p.canvas).border(1.0, if error.is_some() { p.coral } else { p.border }));
     if !hint.is_empty() { field = field.child(help(hint,p)); }
     if let Some(error) = error { field = field.child(text(error.to_owned()).key(format!("{key}-error")).role("alert").font(type_::BODY).color(p.coral).wrap().w_full()); }
     field
 }
 fn primary(label: &str, key: &str, p: Palette) -> El {
-    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum)
+    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum).center_y()
         .child(text(label.to_owned()).font(type_::BODY).color(p.canvas))
+}
+/// Square control carrying one glyph, centred on both axes.
+fn glyph_button(glyph: &str, name: &str, key: &'static str, p: Palette, action: fn(&mut State, &mut Tx)) -> El {
+    el().key(key).role("button").label(name).focusable(true).size(44.0, 44.0).radius(10.0).fill(p.selected).hover(p.border).center()
+        .on_press_tx(action).child(text(glyph.to_owned()).font(theme::GLYPH).color(p.ink))
 }
 fn category_picker(s: &State, p: Palette) -> El {
     let sh = s.wish_sheet.as_ref().expect("wish sheet present");
@@ -276,7 +284,7 @@ fn category_picker(s: &State, p: Palette) -> El {
 }
 fn editor_body(s: &State, p: Palette) -> El {
     let sh = s.wish_sheet.as_ref().expect("wish sheet present");
-    let mut body = col().key("wish-editor-body").w_full().grow(1.0).min_h(0.0).scroll(rune::ScrollSpec {stick_bottom:false}).gap(24.0).padding(24.0);
+    let mut body = col().key("wish-editor-body").w_full().min_h(0.0).shrink().scroll(rune::ScrollSpec {stick_bottom:false}).gap(24.0).padding(24.0);
     if sh.step == WishStep::Purchase {
         body = body.child(editor_field("wish-name","¿Qué quieres comprar? · Obligatorio",&sh.name,|sh| &mut sh.name,sh.name_error(),"",p))
             .child(editor_field("wish-price","Precio objetivo · Obligatorio",&sh.price,|sh| &mut sh.price,sh.price_error(),PRICE_HELP,p));
@@ -319,13 +327,13 @@ pub fn sheet(s: &State,p: Palette) -> El {
     let description = if sh.step == WishStep::Purchase { "Primero, lo imprescindible." } else { "Revisa la compra y añade contexto si lo necesitas." };
     let mut steps = row().w_full().gap(16.0);
     for (step,label) in [(WishStep::Purchase,"1. La compra"),(WishStep::Context,"2. Contexto y revisión")] {
-        let color = if sh.step == step { p.petroleum } else { p.ink };
+        let color = if sh.step == step { p.petroleum } else { p.muted };
         steps = steps.child(col().grow(1.0).min_w(0.0).gap(8.0).child(text(label).font(theme::CARD_TITLE).color(color).wrap().w_full())
             .child(el().w_full().h(2.0).fill(if sh.step == step { p.petroleum } else { p.border })));
     }
     let header = col().w_full().padding(24.0).gap(16.0)
         .child(row().w_full().justify_between().center_y().gap(12.0).child(text("DESEOS · FLUJO GUIADO").font(theme::CARD_TITLE).color(p.ink))
-            .child(button("×","wish-close",p).label("Cerrar formulario").min_h(44.0).min_w(44.0).on_press_tx(|s: &mut State,tx| s.request_wish_close(tx))))
+            .child(glyph_button("×","Cerrar formulario","wish-close",p,|s: &mut State,tx| s.request_wish_close(tx))))
         .child(steps).child(text(title).font(theme::HEADLINE).color(p.ink)).child(help(description,p));
     let mut actions = row().wrap().w_full().justify_between().gap(12.0)
         .child(button("Cancelar","wish-cancel",p).min_h(44.0).on_press_tx(|s: &mut State,tx| s.request_wish_close(tx)));
@@ -338,15 +346,18 @@ pub fn sheet(s: &State,p: Palette) -> El {
         right = right.child(primary("Continuar","wish-next",p).default_button().on_press_tx(|s: &mut State,tx| s.next_wish(tx)));
     }
     actions = actions.child(right);
-    let mut footer = col().w_full().padding(24.0).gap(12.0);
+    let mut footer = col().w_full().px(24.0).py(16.0).gap(12.0);
     if let Some(error) = &s.mutation_error {
         footer = footer.child(text(format!("No se pudo guardar. Conservamos tus datos. {error}")).key("wish-save-error").role("alert").font(type_::BODY).color(p.coral).wrap().w_full());
     }
     if busy { footer = footer.child(text("Guardando deseo…").key("wish-saving").role("status").font(type_::BODY).color(p.ink)); }
     footer = footer.child(actions).child(help("Después podrás apartar fondos. Guardar no registra un gasto.",p));
-    let form = col().w_full().max_w(580.0).h_full().max_h(760.0).radius(14.0).fill(p.card).border(1.0,p.border)
+    let form = col().key("wish-form").w_full().min_h(0.0).shrink().radius(14.0).fill(p.card).border(1.0,p.border)
         .child(header).child(separator(p)).child(editor_body(s,p)).child(separator(p)).child(footer);
     let form = if busy || sh.discard_confirm { form.inert() } else { form };
+    // The dialog hugs its content, like the artboard's `max-height`: the frame alone is definite, so it
+    // caps at 760pt or the window and the body scrolls only when a step outgrows both.
+    let form = col().w_full().max_w(580.0).h_full().max_h(760.0).justify_center().child(form);
     let mut root = el().key("wish-sheet").role("dialog").label(title).description(description).focus_return(sh.trigger())
         .paint_order(100).raise().absolute(0.0,0.0).w_full().h_full().padding(24.0).center().fill(Color::BLACK.alpha(0.4))
         .modal_tx(false,|s: &mut State,tx| s.request_wish_close(tx)).child(form);

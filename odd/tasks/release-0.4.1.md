@@ -12,8 +12,8 @@ S4. "y instala." Check: brew upgrade to 0.4.1 with validated backup of the curre
 T1 | S1 | inline | done | RED job-26 (3 expected failures) then GREEN job-27 11/11; commit f2088dc. Full suite runs in T3.
 T2 | S2 | inline | done | #deseos section + nav link + square capture site/img/deseos-panel{,-700}.webp; verified with real headless Chrome via CDP scroll (1440x900, 390x844, no overflow); commit pending below.
 T3 | S3 | inline + gentle-ai-verify (item5) | done | Commit d405403 (0.4.1); job-30: 215 tests, clippy, build pass; assess base 35bdda6 reviewDue=false under_budget; verifier mwi894a3 S1-S3 PASS, no blockers (advisories: stale local tags, design/ untracked).
-T4 | S3 | inline remote | in_progress | Push, PR, CI, merge, release, cask, pages.
-T5 | S4 | inline + verify | pending | Backup, brew upgrade, verify installed version/signature/isolated run.
+T4 | S3 | inline remote | done | PR #12 CI green; merged f9f344e; Release run 43753277587 success (version, 3 packages, publish, cask); Website run 43753277674 success.
+T5 | S4 | inline + verify | done | Backup target/install-backup-0.4.0-20261115-134317 (hashes + strict signature OK); app quit gracefully, brew upgrade 0.4.0->0.4.1 exit 0; brew/bundle 0.4.1, codesign strict OK, MCP symlink OK, isolated scene OK; app relaunched (PID 83417); independent verifier mwi8tpq6 PASS (brew/bundle 0.4.1, strict signature incl. nested MCP, symlink, backup 0.4.0 valid, release v0.4.1 public with 4 assets, isolated scene shows new editor). Not proven: dmg checksum vs asset, Gatekeeper assess, MCP runtime.
 
 ## Log
 L1. User request verbatim: resuelve, despues sube y instala. y agrega en la pagina de gh pages eso de los deseos.

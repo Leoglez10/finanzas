@@ -22,7 +22,7 @@ pub fn field(label: &str, input: El, p: Palette) -> El {
     col().w_full().gap(5.0).child(text(label.to_owned()).font(type_::BODY).color(p.ink)).child(input.padding(9.0).w_full().fill(p.canvas).border(1.0, p.border).radius(8.0))
 }
 pub fn button(name: &str, key: &str, p: Palette) -> El {
-    el().key(key).role("button").label(name).focusable(true).padding(10.0).radius(8.0).fill(p.selected).hover(p.border).child(text(name.to_owned()).font(type_::BODY).color(p.ink))
+    el().key(key).role("button").label(name).focusable(true).padding(10.0).radius(8.0).fill(p.selected).hover(p.border).center().child(text(name.to_owned()).font(type_::BODY).color(p.ink))
 }
 pub fn confirm(s: &State, p: Palette) -> El {
     let mut content = col().w(420.0).padding(24.0).gap(18.0).radius(18.0).fill(p.card)

@@ -240,3 +240,16 @@ fn wishes_reserve_release_and_archive_use_public_controls() {
     click(&mut rt,"wish-archive-1"); settle(&mut rt);
     assert!(rt.find("wish-empty").is_some());
 }
+
+#[test]
+fn purchase_step_hugs_its_content_instead_of_leaving_a_void() {
+    let mut rt=runtime();editor(&mut rt);animate(&mut rt);
+    let rect=|rt:&Runtime<State>,key:&str| rt.elements().into_iter().find(|e|e.key.as_deref()==Some(key)).unwrap_or_else(||panic!("missing {key}")).rect;
+    let [_,form_y,_,form_h]=rect(&rt,"wish-form");
+    let [_,price_y,_,price_h]=rect(&rt,"wish-price");
+    let [_,next_y,_,_]=rect(&rt,"wish-next");
+    let void=next_y-(price_y+price_h);
+    assert!(void<=90.0,"void under the last purchase field: {void} pt (form {form_h} pt tall)");
+    assert!(form_h<=660.0,"dialog keeps a fixed height instead of hugging its content: {form_h} pt");
+    assert!(form_y>=24.0,"dialog breaks the top safe margin: {form_y}");
+}

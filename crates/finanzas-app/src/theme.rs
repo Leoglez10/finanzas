@@ -8,6 +8,10 @@ pub const AMOUNT: TextStyle = TextStyle::new(26.0, 700.0);
 pub const CENTS_HERO: TextStyle = TextStyle::new(19.0, 500.0);
 pub const CENTS: TextStyle = TextStyle::new(14.0, 500.0);
 pub const CARD_TITLE: TextStyle = TextStyle::new(13.5, 600.0);
+/// Supporting copy under a field or action: 13.5pt regular, never a label.
+pub const HINT: TextStyle = TextStyle::new(13.5, 400.0);
+/// A single glyph used as a control, such as the close cross.
+pub const GLYPH: TextStyle = TextStyle::new(18.0, 400.0);
 
 /// An amount with the cents set smaller, as in "$5,304" + ".28".
 pub fn money_big(cents: i64, hero: bool, color: Color, p: Palette) -> El {

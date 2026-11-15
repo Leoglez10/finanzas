@@ -247,8 +247,11 @@ fn editor_field(key: &'static str, label: &str, value: &TextEdit,
     if key == "wish-notes" { input = input.h(96.0); }
     else { input = input.single_line().on_submit(|s: &mut State, tx| s.save_wish(tx)); }
     if key == "wish-name" { input = input.autofocus(); }
+    // Rune draws input text from the content box's top edge, so only equal vertical padding
+    // centres it: the artboard's 9pt band around a 13pt line inside a 44pt control is 13pt.
+    let (pad_y, pad_x) = match key { "wish-notes" => (9.0, 12.0), "wish-price" => (5.0, 12.0), _ => (13.0, 12.0) };
     let mut field = col().w_full().gap(5.0).child(text(label.to_owned()).font(type_::BODY).color(p.ink))
-        .child(input.w_full().min_h(44.0).padding(9.0).radius(8.0).fill(p.canvas).border(1.0, if error.is_some() { p.coral } else { p.border }));
+        .child(input.w_full().min_h(44.0).px(pad_x).py(pad_y).radius(8.0).fill(p.canvas).border(1.0, if error.is_some() { p.coral } else { p.border }));
     if !hint.is_empty() { field = field.child(help(hint,p)); }
     if let Some(error) = error { field = field.child(text(error.to_owned()).key(format!("{key}-error")).role("alert").font(type_::BODY).color(p.coral).wrap().w_full()); }
     field

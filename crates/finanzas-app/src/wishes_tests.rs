@@ -69,7 +69,7 @@ fn grouped_price_advances_to_review_and_saves_only_after_confirmation() {
 }
 #[test]
 fn supported_target_price_formats_save_exact_cents_without_ledger_changes() {
-    for (input,cents) in [("11000",1_100_000),("11,000.50",1_100_050),("0.01",1)] {
+    for (input,cents) in [("11000",1_100_000),("11,000.50",1_100_050),("0.01",1),("$11,000",1_100_000),("$ 11,000.50",1_100_050)] {
         let mut rt=runtime();
         let before=data::ledger(Arc::clone(&rt.state.worker),None,"").unwrap();
         editor(&mut rt);purchase(&mut rt,input);click(&mut rt,"wish-save");settle(&mut rt);
@@ -77,6 +77,29 @@ fn supported_target_price_formats_save_exact_cents_without_ledger_changes() {
         let after=data::ledger(Arc::clone(&rt.state.worker),None,"").unwrap();
         assert_eq!((after.rows.len(),after.total),(before.rows.len(),before.total));
     }
+}
+#[test]
+fn saved_status_clears_after_other_wish_actions_and_navigation() {
+    let mut rt=runtime();
+    let category=rt.state.categories.iter().find(|c| c.name=="Ocio").unwrap().id;
+    editor(&mut rt);purchase(&mut rt,"100");
+    rt.state.wish_sheet.as_mut().unwrap().category=Some(category);
+    click(&mut rt,"wish-save");settle(&mut rt);
+    assert!(rt.find("wish-saved").is_some());
+    fill(&mut rt,"wish-reserve-input-1","1");click(&mut rt,"wish-reserve-1");settle(&mut rt);
+    assert!(rt.find("wish-saved").is_none(),"stale after reserve");
+    click(&mut rt,"wish-edit-1");fill(&mut rt,"wish-name","PS5");click(&mut rt,"wish-next");click(&mut rt,"wish-save");settle(&mut rt);
+    assert!(rt.find("wish-saved").is_some());
+    click(&mut rt,"resumen");settle(&mut rt);click(&mut rt,"deseos");settle(&mut rt);
+    assert!(rt.find("wish-saved").is_none(),"stale after route change");
+}
+#[test]
+fn primary_actions_use_the_primary_radius_token() {
+    let mut rt=runtime();editor(&mut rt);animate(&mut rt);
+    let radius=|rt:&Runtime<State>,key:&str| rt.elements().into_iter().find(|e| e.key.as_deref()==Some(key)).unwrap().radius;
+    assert_eq!(radius(&rt,"wish-next"),10.0);
+    purchase(&mut rt,"100");animate(&mut rt);
+    assert_eq!(radius(&rt,"wish-save"),10.0);
 }
 #[test]
 fn compact_window_keeps_actions_visible_and_keyboard_focus_in_the_modal() {

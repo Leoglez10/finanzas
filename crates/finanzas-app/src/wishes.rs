@@ -26,6 +26,8 @@ fn parse_amount(text: &str) -> Option<i64> {
 }
 fn parse_price(text: &str) -> Option<i64> {
     let text = text.trim();
+    // Prices are displayed as "$11,000.00"; accept that same shape when pasted back.
+    let text = text.strip_prefix('$').map_or(text, str::trim_start);
     let (whole, fraction) = text.split_once('.').map_or((text, None), |(w, f)| (w, Some(f)));
     let digits = |value: &str| !value.is_empty() && value.bytes().all(|c| c.is_ascii_digit());
     if fraction.is_some_and(|f| !digits(f) || f.len() > 2) { return None; }
@@ -129,6 +131,7 @@ impl State {
     fn wish_mutation(&mut self, mutation: data::Mutation, target: MutationTarget) {
         if self.mutation_active() || !self.wishes_fresh() { return; }
         self.mutation_error = None;
+        self.wish_saved = false;
         self.mutation_target = Some(target);
         let worker = Arc::clone(&self.worker);
         self.mutation.request(mutation, move |m| data::mutate(worker,m));
@@ -136,12 +139,14 @@ impl State {
     fn reserve_wish(&mut self, id: Id, release: bool) {
         if self.visible_wish(id).is_none() { return; }
         let amount = if release { Some(0) } else { self.wish_inputs.get(&id).and_then(|e| parse_amount(&e.text)) };
-        let Some(amount) = amount.filter(|a| *a >= 0) else { self.mutation_error = Some("Escribe un importe de cero o más, con hasta dos decimales.".into()); return };
+        let Some(amount) = amount.filter(|a| *a >= 0) else { self.wish_saved = false; self.mutation_error = Some("Escribe un importe de cero o más, con hasta dos decimales.".into()); return };
         self.wish_mutation(data::Mutation::ReserveWish(id,amount,self.today_date),MutationTarget::WishRow);
     }
 }
 
 pub fn poll(s: &mut State, tx: &mut Tx, changed: &mut bool) {
+    // The "Deseo guardado." status belongs to the save that just happened on this screen.
+    if s.route != Route::Deseos { s.wish_saved = false; }
     if let Some((key,result)) = s.wishes_latest.take() && key == s.wishes_key_now() {
         match result {
             Ok(views) => {
@@ -216,7 +221,7 @@ pub fn render(s: &State,p: Palette) -> El {
         .child(text("Guarda lo que quieres comprar y aparta dinero sin registrar un gasto.").font(type_::BODY).color(p.muted).wrap().w_full())
         .child(row().wrap().w_full().gap(8.0).child(button("Nuevo deseo","wish-new",p).on_press(|s: &mut State| s.open_wish(None)))
             .child(button(if s.wishes_archived { "Ocultar archivados" } else { "Ver archivados" },"wish-history",p).on_press(|s: &mut State| {
-                if !s.mutation_active() { s.wishes_archived = !s.wishes_archived; }
+                if !s.mutation_active() { s.wishes_archived = !s.wishes_archived; s.wish_saved = false; }
             })));
     if s.wish_saved { page = page.child(text("Deseo guardado.").key("wish-saved").role("status").font(type_::BODY).color(p.emerald)); }
     if let Some(error) = &s.mutation_error { page = page.child(text(error.clone()).key("wish-error").font(type_::BODY).color(p.coral).wrap().w_full()); }
@@ -249,7 +254,7 @@ fn editor_field(key: &'static str, label: &str, value: &TextEdit,
     field
 }
 fn primary(label: &str, key: &str, p: Palette) -> El {
-    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(8.0).fill(p.petroleum)
+    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum)
         .child(text(label.to_owned()).font(type_::BODY).color(p.canvas))
 }
 fn category_picker(s: &State, p: Palette) -> El {

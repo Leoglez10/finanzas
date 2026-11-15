@@ -64,6 +64,13 @@
   .mcp-frame { --ratio: 80%; }
   /* the name across the .wrap: room for the display face's tall capitals */
   .close__word { line-height: 1.02; }
+  /* a desktop screen whose content outgrows one screen grows instead of spilling over the next one:
+     at 1440x813 the FAQ holds 1028px of content in 813, so its last rows landed on the close's
+     heading. The tablet and phone rules already grow this way. */
+  @media (min-width: 1280px) {
+    main > section#faq { height: auto; min-height: calc(var(--h, 1) * 100vh); min-height: calc(var(--h, 1) * 100svh); display: flex; flex-direction: column; }
+    main > section#faq > .wrap { flex: 1 0 auto; height: auto; min-height: 0; }
+  }
   /* the download cards: the platform's real mark, what it needs, its file */
   .dl { display: grid; justify-items: start; gap: var(--s-3); }
   .dl__text { display: grid; gap: var(--s-2); }

@@ -7,6 +7,7 @@ pub struct Snapshot { pub accounts: Vec<AccountBalance>, pub overview: Overview,
 pub type WorkerStore = Arc<Mutex<Option<Store>>>;
 
 pub enum Mutation {
+    SaveWish(Option<i64>, finanzas_core::service::WishDraft), ReserveWish(i64, i64, NaiveDate), ArchiveWish(i64),
     Save(Option<i64>, finanzas_core::service::NewEntry), Delete(i64), Budget(i32, i64, String),
     PostSchedule(i64, NaiveDate), SkipSchedule(i64), SaveSchedule(Option<i64>, ScheduleDraft), DeleteSchedule(i64),
     CreateAccount(AccountDraft),
@@ -82,6 +83,9 @@ pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
     let store = guard.as_mut().ok_or("No se pudo abrir la base de datos")?;
     let service_err = |e: finanzas_core::service::ServiceError| e.to_string();
     match mutation {
+        Mutation::SaveWish(id, draft) => { finanzas_core::service::save_wish(store, id, draft).map_err(service_err)?; }
+        Mutation::ReserveWish(id, amount, today) => { finanzas_core::service::reserve_wish(store, id, amount, today).map_err(service_err)?; }
+        Mutation::ArchiveWish(id) => { finanzas_core::service::archive_wish(store, id).map_err(service_err)?; }
         Mutation::PostSchedule(id, today) => { finanzas_core::service::post_schedule(store, id, today).map_err(service_err)?; }
         Mutation::SkipSchedule(id) => { finanzas_core::service::skip_schedule(store, id, None).map_err(service_err)?; }
         Mutation::DeleteSchedule(id) => { finanzas_core::service::delete_schedule(store, id).map_err(service_err)?; }

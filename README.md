@@ -166,6 +166,17 @@ same folder, and settings are shared. Deleting a profile removes its file perman
 `finanzas.db-shm` if present). **Restore:** with the app closed, put the copies back in the same folder.
 The **Ajustes** screen shows which database the app is using.
 
+## Wishes and savings goals
+
+Open **Deseos** to save a purchase with its target price, product link, details and expense category.
+Reserve part or all of the price from available category funds; set the reservation to zero to release it.
+The app explains budget fit, missing funds and recorded upcoming-payment constraints separately.
+Reservations do not create expenses or move account balances, and cannot claim the same category funds twice.
+Archive a wish to release funds and keep its history; record the actual purchase through the existing transaction flow.
+
+See [reservation and evaluation rules](docs/wishes.md), including unknown results, the 30-day horizon,
+and the automatic version 1 → 2 database migration. Back up before upgrading; older binaries cannot open version 2.
+
 ## MCP server
 
 `finanzas-mcp` is a stdio MCP server over the same database. It works while the app is closed.
@@ -194,6 +205,11 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 
 | Tool | Purpose |
 |---|---|
+| `list_wishes` | List active wishes and evaluations (`includeArchived` optional) |
+| `save_wish` | Create or replace details (`id` optional, `name` and `price` required) |
+| `reserve_wish` | Set an absolute reservation (`id`, `amount`; zero releases funds) |
+| `archive_wish` | Archive a wish and release funds (`id`) |
+| `evaluate_wish` | Explain budget fit and 30-day cash shortfalls (`id`) |
 | `list_accounts` | List accounts and balances |
 | `get_transactions` | Query transactions |
 | `list_categories` | List category groups and categories |

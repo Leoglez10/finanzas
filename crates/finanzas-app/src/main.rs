@@ -15,10 +15,13 @@ mod settings;
 mod sheet;
 mod theme;
 mod update;
+mod wishes;
 #[cfg(test)]
 mod t10c_tests;
 #[cfg(test)]
 mod interaction_tests;
+#[cfg(test)]
+mod wishes_tests;
 
 use std::sync::{Arc, Mutex};
 use chrono::{Local, NaiveDate};
@@ -26,14 +29,14 @@ use finanzas_core::{domain::{money, month}, models::Id};
 use rune::{AppSpec, Color, Cx, El, Latest, TextEdit, Tx, Waker, Key, KeyEvent, col, el, icon, row, text, tok::type_};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Route { Resumen, Presupuesto, Proximos, Ajustes, Todas, Cuenta(Id) }
+enum Route { Resumen, Presupuesto, Proximos, Deseos, Ajustes, Todas, Cuenta(Id) }
 
 type LedgerKey = (Option<Id>, String, Option<i64>);
 type LedgerResult = (LedgerKey, Result<data::Ledger, String>);
 type Suggestions = Vec<(String, Option<Id>)>;
 type SuggestionResult = (String, Result<Suggestions, String>);
 #[derive(Clone, Copy)]
-enum MutationTarget { Account, Sheet, Confirmation(Id), Budget(Id), ScheduleSheet, ScheduleConfirm(Id), ScheduleRow }
+enum MutationTarget { WishSheet, WishRow, Account, Sheet, Confirmation(Id), Budget(Id), ScheduleSheet, ScheduleConfirm(Id), ScheduleRow }
 type ProximosKey = (Option<i64>, u64, NaiveDate);
 type ProximosResult = (ProximosKey, Result<data::Proximos, String>);
 type BudgetKey = (i32, Option<i64>, u64);
@@ -41,7 +44,16 @@ type BudgetResult = (BudgetKey, Result<finanzas_core::service::BudgetView, Strin
 type RemindersKey = (Option<i64>, u64, bool, i64, u32, NaiveDate);
 type RemindersResult = (RemindersKey, Result<Vec<finanzas_core::service::ReminderView>, String>);
 
+type WishesKey = (Option<i64>, u64, NaiveDate, bool);
+type WishesResult = (WishesKey, Result<Vec<finanzas_core::service::WishView>, String>);
+
 struct State {
+    wishes: Option<Vec<finanzas_core::service::WishView>>,
+    wishes_latest: Latest<WishesResult>,
+    wishes_key: Option<WishesKey>,
+    wish_sheet: Option<wishes::WishSheet>,
+    wish_inputs: std::collections::HashMap<Id, TextEdit>,
+    wishes_archived: bool,
     route: Route,
     logo: Option<(rune::ImageCache, rune::Image)>,
     accounts: Vec<data::AccountBalance>,
@@ -134,7 +146,7 @@ struct State {
 impl State {
     fn empty() -> Self {
         let today = month::month_of(Local::now().date_naive());
-        Self { route: Route::Resumen, logo: None, accounts: Vec::new(), dark: None, error: None,
+        Self { wishes: None, wishes_latest: Latest::default(), wishes_key: None, wish_sheet: None, wish_inputs: Default::default(), wishes_archived: false, route: Route::Resumen, logo: None, accounts: Vec::new(), dark: None, error: None,
             month: today, today, chart_months: 6, overview: None, version: None,
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
@@ -400,7 +412,7 @@ fn entry_dark(s: &mut State) { entry_scene(s, true); }
 
 fn setup(s: &mut State, waker: Waker) {
     if s.logo.is_none() { let cache = rune::ImageCache::new(waker.clone()); let logo = cache.load(&include_bytes!("../../../packaging/linux/finanzas.png")[..]); s.logo = Some((cache, logo)); }
-    s.waker = Some(waker.clone()); s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.update_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
+    s.wishes_latest.set_waker(waker.clone()); s.waker = Some(waker.clone()); s.latest.set_waker(waker.clone()); s.ledger_latest.set_waker(waker.clone()); s.mutation.set_waker(waker.clone()); s.budget_latest.set_waker(waker.clone()); s.proximos_latest.set_waker(waker.clone()); s.auto_latest.set_waker(waker.clone()); s.import_latest.set_waker(waker.clone()); s.reminders_latest.set_waker(waker.clone()); s.update_latest.set_waker(waker.clone()); s.suggestion_latest.set_waker(waker); }
 fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
     if let Some(result) = s.mutation.take() {
@@ -408,6 +420,8 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         match result {
             Ok(()) => {
                 match target {
+                    Some(MutationTarget::WishSheet) => s.wish_sheet = None,
+                    Some(MutationTarget::WishRow) => s.wish_inputs.clear(),
                     Some(MutationTarget::Sheet) => s.sheet = None,
                     Some(MutationTarget::Account) => s.account_sheet = None,
                     Some(MutationTarget::Budget(id)) => { s.budget_inputs.remove(&id); s.budget_error = None; s.budget_gen += 1; }
@@ -473,6 +487,7 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
         let worker = Arc::clone(&s.worker);
         s.budget_latest.request_if_changed(&key, move |key| { let result = data::budget(worker, key.0); (key, result) });
     }
+    wishes::poll(s, tx, &mut changed);
     if let Some((key, result)) = s.proximos_latest.take() {
         match result { Ok(view) => { s.proximos = Some(view); s.proximos_key = Some(key); } Err(error) => s.upcoming_error = Some(error) }
         tx.instant(); changed = true;
@@ -533,6 +548,7 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
 }
 fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
     if s.mutation_active() { return true; }
+    if s.wish_sheet.is_some() { if ev.key == Key::Escape { s.wish_sheet = None; return true; } return false; }
     if s.sheet.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.sheet = None; } return true; } return false; }
     if s.confirm.is_some() { if ev.key == Key::Escape { if !s.mutation_active() { s.confirm = None; } return true; } return false; }
     if s.schedule_sheet.is_some() { if ev.key == Key::Escape { s.schedule_sheet = None; return true; } return false; }
@@ -542,6 +558,7 @@ fn on_key(s: &mut State, ev: &KeyEvent, _: &mut Tx) -> bool {
     if s.profile_delete.is_some() { if ev.key == Key::Escape { s.profile_delete = None; return true; } return false; }
     if s.profile_edit.is_some() && ev.key == Key::Escape { s.profile_edit = None; s.profile_error = None; return true; }
     if (ev.mods.cmd || ev.mods.ctrl) && !ev.mods.shift && !ev.mods.alt && matches!(ev.key, Key::Command(',')) { s.route = Route::Ajustes; return true; }
+    if s.route == Route::Deseos && (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_wish(None); return true; }
     if s.route == Route::Proximos {
         if (ev.mods.cmd || ev.mods.ctrl) && matches!(ev.key, Key::Command('n')) { s.open_schedule_sheet(None); return true; }
         if matches!(ev.key, Key::Delete | Key::Backspace) && let Some(id) = s.schedule_selected { s.request_schedule_delete(id); return true; }
@@ -602,6 +619,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .child(perfiles::sidebar(s, p))
         .child(section_label("MENÚ", p).pt(8.0))
         .child(nav("Resumen", "resumen".into(), Route::Resumen, s.route == Route::Resumen, None, &theme::GRID, p))
+        .child(nav("Deseos", "deseos".into(), Route::Deseos, s.route == Route::Deseos, None, &theme::LIST, p))
         .child(nav("Presupuesto", "presupuesto".into(), Route::Presupuesto, s.route == Route::Presupuesto, None, &theme::PIE, p))
         .child(nav("Próximos pagos", "proximos".into(), Route::Proximos, s.route == Route::Proximos, None, &theme::CALENDAR, p))
         .child(section_label("CUENTAS", p))
@@ -619,19 +637,20 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     }
     sidebar = sidebar.child(el().grow(1.0)).child(nav("Ajustes", "ajustes".into(), Route::Ajustes, s.route == Route::Ajustes, None, &theme::GEAR, p));
     let title = match s.route {
-        Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Ajustes => "Ajustes", Route::Todas => "Todas las cuentas",
+        Route::Deseos => "Deseos", Route::Resumen => "Resumen", Route::Presupuesto => "Presupuesto", Route::Proximos => "Próximos pagos", Route::Ajustes => "Ajustes", Route::Todas => "Todas las cuentas",
         Route::Cuenta(id) => s.accounts.iter().find(|a| a.account.id == id).map_or("Cuenta", |a| a.account.name.as_str()),
     };
-    let detail = if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if s.route == Route::Proximos { proximos::render(s, p, dark) } else if s.route == Route::Ajustes { ajustes::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
+    let detail = if s.route == Route::Deseos { wishes::render(s, p) } else if s.route == Route::Resumen { overview::render(s, p) } else if s.route == Route::Presupuesto { budget::render(s, p) } else if s.route == Route::Proximos { proximos::render(s, p, dark) } else if s.route == Route::Ajustes { ajustes::render(s, p) } else if matches!(s.route, Route::Todas | Route::Cuenta(_)) { ledger::render(s, p, title) } else {
         col().grow(1.0).h_full().padding(48.0).gap(12.0)
             .child(text(title.to_owned()).font(type_::TITLE).color(p.ink))
             .child(text("Tu espacio de finanzas").font(type_::BODY).color(p.muted))
     };
-    let modal_open = s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some() || s.account_sheet.is_some() || s.import_confirm.is_some() || s.profile_delete.is_some();
+    let modal_open = s.wish_sheet.is_some() || s.sheet.is_some() || s.confirm.is_some() || s.schedule_sheet.is_some() || s.schedule_confirm.is_some() || s.account_sheet.is_some() || s.import_confirm.is_some() || s.profile_delete.is_some();
     let sidebar = if modal_open { sidebar.inert() } else { sidebar };
     let detail = if modal_open { detail.inert() } else { detail };
     let mut root = row().w_full().h_full().fill(p.canvas)
         .child(sidebar).child(el().w(1.0).h_full().fill(p.border)).child(detail);
+    if s.wish_sheet.is_some() { root = root.child(wishes::sheet(s, p)); }
     if s.sheet.is_some() { root = root.child(sheet::render(s, p, dark)); }
     if s.confirm.is_some() { root = root.child(sheet::confirm(s, p)); }
     if s.schedule_sheet.is_some() { root = root.child(schedule_sheet::render(s, p, dark)); }
@@ -646,7 +665,7 @@ fn main() {
     // Dock / taskbar icon; the installers also set it on the bundle, executable shortcut and desktop entry.
     let _ = rune::set_app_icon(include_bytes!("../../../packaging/linux/finanzas.png").to_vec());
     rune::run(AppSpec::<State> {
-        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
+        scenes: &[("demo-light", demo_light), ("demo-dark", demo_dark), ("deseos-light", wishes::light_scene), ("deseos-dark", wishes::dark_scene), ("deseo-sheet", wishes::sheet_scene), ("empty", empty_scene), ("movimientos-light", movements_light), ("movimientos-dark", movements_dark), ("entry-sheet", entry_light), ("entry-sheet-dark", entry_dark), ("presupuesto-light", budget_light), ("presupuesto-dark", budget_dark), ("proximos-light", proximos_light), ("proximos-dark", proximos_dark), ("schedule-sheet", schedule_sheet_scene), ("ajustes-light", ajustes_light), ("ajustes-dark", ajustes_dark), ("nueva-cuenta", nueva_cuenta_scene), ("recordatorios", reminders_scene)],
         setup: Some(setup), poll: Some(poll), on_key: Some(on_key),
         ..AppSpec::new("Finanzas", (1200.0, 800.0), State::load, view)
     });

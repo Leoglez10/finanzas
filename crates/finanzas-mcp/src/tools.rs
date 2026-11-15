@@ -30,6 +30,11 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("set_budget_amount", "Set the amount assigned to an expense category for a month. Income categories cannot be budgeted. Returns the resulting assigned amount.", json!({"month":month,"categoryId":{"type":"string","description":"Expense category id (see list_categories)"},"amount":{"type":"number","minimum":0,"description":"Decimal currency units, 0 or more, max 2 decimals"}}), &["month","categoryId","amount"], false, false),
         spec("list_schedules", "List scheduled payments with id, name, payee, account, amount, frequency, interval, next date, completed and auto-post flags.", json!({}), &[], true, false),
         spec("skip_schedule", "Skip the next occurrence of a scheduled payment once, or with `through` keep skipping every occurrence dated on or before that day (max 500 skips per call). Completed schedules cannot be skipped.", json!({"id":{"type":"string","description":"Schedule id (see list_schedules)"},"through":{"type":"string","description":"YYYY-MM-DD; skip all occurrences up to and including this date"}}), &["id"], false, false),
+        spec("list_wishes", "List wishes and current-month affordability evaluations. Amounts are decimal currency units.", json!({"includeArchived":{"type":"boolean","description":"Include archived wishes (default false)"}}), &[], true, false),
+        spec("save_wish", "Create a wish or replace details when id is supplied. Changing category releases funds. Does not record a purchase.", json!({"id":{"type":"string"},"name":{"type":"string"},"price":{"type":"number","exclusiveMinimum":0},"url":{"type":"string","description":"HTTP(S) link; default empty"},"notes":{"type":"string"},"categoryId":{"type":["string","null"],"description":"Expense category; omitted/null clears it"}}), &["name","price"], false, false),
+        spec("reserve_wish", "Set absolute reserved amount, not a delta. Zero releases funds. Partial reservations allowed; increases require unreserved current-month category funds. Does not move money or create expenses.", json!({"id":{"type":"string"},"amount":{"type":"number","minimum":0}}), &["id","amount"], false, false),
+        spec("archive_wish", "Archive a wish and release its reservation. Keeps history and does not create or delete transactions.", json!({"id":{"type":"string"}}), &["id"], false, false),
+        spec("evaluate_wish", "Evaluate current-month budget and outgoing payments for 30 days including overdue ones. Reports budget/cash shortfalls and unknown data. No future income or off-budget/closed accounts; not a guarantee.", json!({"id":{"type":"string"}}), &["id"], true, false),
         spec("get_upcoming", "Upcoming scheduled payments from overdue ones through the next `days` days (default 30), oldest first, with each account's projected balance after the payment.", json!({"days":{"type":"integer","minimum":0,"maximum":365,"description":"Days ahead (default 30)"}}), &[], true, false),
     ]
 }
@@ -56,9 +61,40 @@ fn category(a: &Args<'_>, store: &Store) -> Result<Option<i64>, ToolError> {
     if let Some(n) = category { if store.get_category(n).map_err(err)?.is_none() { return Err(ToolError("categoryId: not found".into())); } }
     Ok(category)
 }
+fn wish_json(w: service::Wish) -> Value {
+    json!({"id":id("Wish",w.id),"name":w.name,"price":dec(w.price),"url":w.url,"notes":w.notes,
+        "categoryId":oid("Category",w.category_id),"reserved":dec(w.reserved),"archived":w.archived})
+}
+fn evaluation_json(e: service::WishEvaluation) -> Value {
+    json!({"status":e.status,"asOf":e.as_of.to_string(),"horizonDays":e.horizon_days,
+        "categoryAvailable":e.category_available.map(dec),"availableForWish":e.available_for_wish.map(dec),
+        "budgetShortfall":e.budget_shortfall.map(dec),"reservationDeficit":dec(e.reservation_deficit),
+        "cashBalance":e.cash_balance.map(dec),"upcomingOutflows":dec(e.upcoming_outflows),
+        "cashShortfall":e.cash_shortfall.map(dec),"reasons":e.reasons})
+}
 pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Result<Value, ToolError> {
     let a = Args(args);
     Ok(match name {
+        "list_wishes" => json!(service::list_wishes(store, today, a.bool("includeArchived")?.unwrap_or(false)).map_err(err)?.into_iter()
+            .map(|v| json!({"wish":wish_json(v.wish),"evaluation":evaluation_json(v.evaluation)})).collect::<Vec<_>>()),
+        "save_wish" => {
+            let draft = service::WishDraft { name:a.required_string("name")?.into(), price:a.cents("price")?,
+                url:a.optional_string("url")?.unwrap_or("").into(), notes:a.optional_string("notes")?.unwrap_or("").into(),
+                category_id:category(&a,store)? };
+            wish_json(service::save_wish(store,a.id("id","Wish")?,draft).map_err(err)?)
+        }
+        "reserve_wish" => {
+            let n = required_id(&a,"id","Wish")?;
+            wish_json(service::reserve_wish(store,n,a.cents("amount")?,today).map_err(err)?)
+        }
+        "archive_wish" => {
+            let n = required_id(&a,"id","Wish")?;
+            wish_json(service::archive_wish(store,n).map_err(err)?)
+        }
+        "evaluate_wish" => {
+            let n = required_id(&a,"id","Wish")?;
+            evaluation_json(service::evaluate_wish(store,n,today).map_err(err)?)
+        }
         "list_accounts" => {
             let balances = store.account_balances().map_err(err)?;
             json!(store.list_accounts().map_err(err)?.into_iter().map(|v| json!({"id":id("Account",v.id),"name":v.name,"offBudget":v.off_budget,"closed":v.closed,"balance":dec(*balances.get(&v.id).unwrap_or(&0))})).collect::<Vec<_>>())

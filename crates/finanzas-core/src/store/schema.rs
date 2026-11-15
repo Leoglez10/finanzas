@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 1;
+pub(super) const CURRENT_VERSION: i64 = 2;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -23,6 +23,21 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
              CREATE INDEX entry_category_date_idx ON entry(category_id, date);
              CREATE INDEX entry_payee_date_idx ON entry(payee_id, date);",
 
+        )?;
+        tx.pragma_update(None, "user_version", 1)?;
+        tx.commit()?;
+    }
+    if version < 2 {
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish (
+                id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL CHECK(price > 0),
+                url TEXT NOT NULL, notes TEXT NOT NULL,
+                category_id INTEGER REFERENCES category(id) ON DELETE SET NULL,
+                reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0 AND reserved <= price),
+                archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))
+            );
+            CREATE INDEX IF NOT EXISTS wish_category_idx ON wish(category_id);"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

@@ -254,7 +254,7 @@ fn editor_field(key: &'static str, label: &str, value: &TextEdit,
     field
 }
 fn primary(label: &str, key: &str, p: Palette) -> El {
-    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum).center()
+    el().key(key).role("button").label(label).focusable(true).min_h(44.0).padding(10.0).radius(10.0).fill(p.petroleum).center_y()
         .child(text(label.to_owned()).font(type_::BODY).color(p.canvas))
 }
 /// Square control carrying one glyph, centred on both axes.

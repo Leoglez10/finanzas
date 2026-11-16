@@ -1,0 +1,127 @@
+<!doctype html><html lang="es" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Finanzas · Sistema observado</title><style>
+:root {
+  color-scheme: dark;
+  --canvas:#151D27; --card:#1E2936; --border:#354453;
+  --petroleum:#67C6DF; --emerald:#6DDBAD; --coral:#FF9A8F;
+  --amber:#F5C46B; --ink:#F3F7F9; --muted:#A9BAC6; --selected:#304657;
+  --font:system-ui; --body:16px; --headline:22px; --amount:26px;
+  --dialog-width:580px; --dialog-radius:14px; --control-radius:8px;
+  --overlay:rgb(0 0 0 / .4);
+}
+:root[data-theme="light"] {
+  color-scheme:light;
+  --canvas:#F4F7FA; --card:#FFFFFF; --border:#DEE7ED;
+  --petroleum:#155E75; --emerald:#147D59; --coral:#BE493D;
+  --amber:#986000; --ink:#202F3A; --muted:#6C7E8A; --selected:#E2F0F4;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--canvas); color:var(--ink); font:var(--body)/1.5 var(--font); }
+button,input,select,textarea { font:inherit; }
+button { min-height:44px; border:1px solid var(--border); border-radius:var(--control-radius); padding:10px 16px; color:var(--ink); background:var(--selected); cursor:pointer; }
+button:hover { border-color:var(--petroleum); }
+button:disabled { cursor:wait; }
+:focus-visible { outline:2px solid var(--petroleum); outline-offset:4px; }
+button.primary { color:var(--canvas); background:var(--petroleum); border-color:var(--petroleum); font-weight:650; }
+[data-theme="light"] button.primary { color:var(--card); }
+button.quiet { background:transparent; }
+button.danger { color:var(--coral); }
+button.icon { padding:8px 12px; font-size:22px; }
+h1,h2,h3,p { margin:0; }
+h1 { font-size:var(--headline); font-weight:650; line-height:1.3; }
+h2 { font-size:var(--headline); font-weight:650; }
+h3 { font-size:16px; font-weight:650; }
+.muted,.hint,.eyebrow { color:var(--muted); }
+.eyebrow { font-size:13.5px; font-weight:600; letter-spacing:.04em; }
+.app-shell { display:grid; grid-template-columns:240px 1fr; min-height:100dvh; }
+.sidebar { border-right:1px solid var(--border); padding:32px 24px; }
+.brand { display:flex; align-items:center; gap:12px; margin-bottom:48px; font-weight:700; font-size:22px; }
+.brand-mark { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; background:var(--petroleum); color:var(--canvas); }
+[data-theme="light"] .brand-mark { color:var(--card); }
+.sidebar p { margin:24px 0 12px; font-size:13.5px; color:var(--muted); }
+.sidebar ul { list-style:none; padding:0; margin:0; }
+.sidebar li { padding:12px; margin:4px 0; color:var(--muted); border-radius:8px; }
+.sidebar li.active { background:var(--selected); color:var(--petroleum); }
+.workspace { padding:48px; }
+.workspace h2 { margin-bottom:8px; }
+.workspace button { margin:24px 0; }
+.empty-state { border:1px dashed var(--border); border-radius:14px; padding:48px; max-width:720px; }
+.preview-note { margin-top:24px; max-width:580px; color:var(--muted); }
+[hidden] { display:none !important; }
+dialog { color:var(--ink); background:var(--card); width:min(var(--dialog-width),calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 48px); padding:0; border:1px solid var(--border); border-radius:var(--dialog-radius); overflow:hidden; }
+dialog::backdrop { background:var(--overlay); }
+#editor { display:flex; flex-direction:column; max-height:calc(100dvh - 48px); }
+.dialog-header { padding:24px; border-bottom:1px solid var(--border); }
+.header-line { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.header-actions { display:flex; gap:8px; }
+.theme-toggle { min-height:44px; padding:8px 12px; font-size:13.5px; }
+.dialog-header .muted { margin-top:8px; }
+.form-body { overflow:auto; overscroll-behavior:contain; padding:24px; display:grid; gap:24px; }
+.field { display:grid; gap:5px; min-width:0; }
+label { font-weight:600; }
+.optional { color:var(--muted); font-size:13.5px; font-weight:400; }
+input,select,textarea { min-height:44px; width:100%; min-width:0; border:1px solid var(--border); border-radius:8px; padding:9px 12px; background:var(--canvas); color:var(--ink); }
+textarea { min-height:96px; resize:vertical; }
+input[aria-invalid="true"],textarea[aria-invalid="true"] { border-color:var(--coral); }
+.hint { font-size:13.5px; overflow-wrap:anywhere; }
+.error { color:var(--coral); font-size:13.5px; }
+.confirmed { color:var(--emerald); font-size:13.5px; }
+.money-wrap { position:relative; }
+.money-wrap span { position:absolute; top:9px; left:12px; font-size:26px; color:var(--muted); }
+.money-wrap input { padding-left:32px; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+.field-pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+details { border-top:1px solid var(--border); padding-top:16px; }
+summary { cursor:pointer; min-height:44px; display:list-item; padding:8px 0; color:var(--petroleum); font-weight:600; }
+.details-content { display:grid; gap:16px; margin-top:12px; }
+.dialog-footer { padding:16px 24px; border-top:1px solid var(--border); display:grid; gap:12px; background:var(--card); }
+.footer-actions { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.actions-right { display:flex; gap:8px; flex-wrap:wrap; }
+.error-summary { border-left:2px solid var(--coral); padding:8px 12px; background:var(--canvas); }
+.context-callout { padding:16px; background:var(--canvas); border-left:2px solid var(--petroleum); border-radius:8px; display:grid; gap:8px; }
+.context-callout strong { color:var(--petroleum); }
+#saved-status { color:var(--emerald); margin-bottom:16px; }
+#discard-dialog { width:min(440px,calc(100vw - 32px)); padding:24px; }
+#discard-dialog p { margin:12px 0 24px; }
+#discard-dialog .footer-actions { gap:16px; }
+body[data-direction="panel"] #wish-dialog { margin:16px 16px 16px auto; height:calc(100dvh - 32px); max-height:calc(100dvh - 32px); }
+body[data-direction="panel"] #editor { height:100%; max-height:100%; }
+body[data-direction="panel"] .form-body { flex:1; align-content:start; }
+.panel-context { display:flex; align-items:center; gap:12px; padding:16px; border:1px solid var(--border); border-radius:10px; }
+.panel-context .glyph { color:var(--petroleum); font-size:26px; }
+.stepper { display:flex; list-style:none; padding:0; margin:0 0 16px; gap:16px; font-size:13.5px; }
+.stepper li { color:var(--muted); border-bottom:2px solid var(--border); padding-bottom:8px; flex:1; }
+.stepper li[aria-current="step"] { color:var(--petroleum); border-color:var(--petroleum); }
+.review { border-bottom:1px solid var(--border); padding-bottom:16px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.review strong { font-size:26px; font-variant-numeric:tabular-nums; }
+.system { width:min(1440px,100%); margin:auto; padding:48px; display:grid; gap:32px; }
+.swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:16px; }
+.swatch { border:1px solid var(--border); border-radius:8px; padding:12px; }
+.swatch div { height:64px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); }
+@media (max-width:760px) {
+  .app-shell { grid-template-columns:1fr; }
+  .sidebar { display:none; }
+  .workspace { padding:24px; }
+  .empty-state { padding:24px; }
+  dialog { max-height:calc(100dvh - 32px); }
+  #editor { max-height:calc(100dvh - 32px); }
+  .dialog-header,.form-body { padding:16px; }
+  .dialog-footer { padding:16px; }
+  .field-pair { grid-template-columns:1fr; }
+  body[data-direction="panel"] #wish-dialog { margin:auto; height:auto; max-height:calc(100dvh - 32px); }
+  .header-line { align-items:flex-start; }
+  .header-actions { flex-shrink:0; }
+  .footer-actions { align-items:stretch; }
+  .footer-actions > button,.actions-right { flex:1; }
+  .actions-right > button { flex:1; }
+  .system { padding:24px; }
+}
+
+:root[data-theme="light"] .muted,
+:root[data-theme="light"] .hint,
+:root[data-theme="light"] .eyebrow,
+:root[data-theme="light"] .optional { color:var(--ink); }
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea { border-color:var(--muted); }
+
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+</style></head><body><main class="system"><header><p class="eyebrow">FINANZAS · SISTEMA OBSERVADO</p><h1>La misma app, con mejores decisiones de formulario.</h1><p class="muted">Paleta nativa capturada de main.rs. Prototipos en system-ui; no se modifica el tema de producción.</p></header><section class="swatches"><section class="swatch"><div style="background:var(--canvas)"></div><strong>canvas</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--card)"></div><strong>card</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--border)"></div><strong>border</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--petroleum)"></div><strong>petroleum</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--emerald)"></div><strong>emerald</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--coral)"></div><strong>coral</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--amber)"></div><strong>amber</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--ink)"></div><strong>ink</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--muted)"></div><strong>muted</strong><p class="hint">Token nativo</p></section><section class="swatch"><div style="background:var(--selected)"></div><strong>selected</strong><p class="hint">Token nativo</p></section></section><section><h2>Jerarquía</h2><p style="font-size:38px;font-weight:700">Un deseo, un plan.</p><p style="font-size:26px;font-weight:700">$11,000.00</p><p>Cuerpo de 16px para la maqueta. Headline nativo 22/650; importe 26/700.</p></section><section><h2>Controles y feedback</h2><div class="field-pair"><div class="field"><label for="sample-price">Precio objetivo</label><input id="sample-price" value="11,000"><p class="confirmed">Importe reconocido: $11,000.00</p></div><div class="field"><label for="sample-error">Ejemplo de error</label><input id="sample-error" value="11,00" aria-invalid="true" aria-describedby="sample-error-help"><p class="error" id="sample-error-help">Revisa la agrupación de miles. Ejemplo: 11,000.</p></div></div><p class="hint">Borde 1px · campo radio8/padding9 · modal radio14/padding24 · sin sombra inventada.</p></section><section><button type="button" class="primary" id="theme-system">Comparar tema claro</button></section></main><script>document.querySelector('#theme-system').onclick=()=>{const l=document.documentElement.dataset.theme!=='light';document.documentElement.dataset.theme=l?'light':'dark';document.querySelector('#theme-system').textContent=l?'Comparar tema oscuro':'Comparar tema claro';};</script></body></html>

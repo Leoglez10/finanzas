@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "comments": [
+    {
+      "id": "radjmca2",
+      "file": "03-guided-steps.html",
+      "selector": "#theme",
+      "excerpt": "Tema claro",
+      "comment": "quita ese boton",
+      "createdAt": "2026-11-15T18:30:57.996Z",
+      "status": "resolved",
+      "sentAt": "2026-11-15T18:30:58.006Z",
+      "resolvedAt": "2026-11-15T18:33:24.821Z",
+      "resolution": "Eliminé el botón Tema claro de Compra en dos pasos; las otras propuestas permanecen intactas."
+    }
+  ]
+}

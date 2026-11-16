@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "chosen": "03-guided-steps.html",
+  "handoffs": {
+    "03-guided-steps.html": {
+      "status": "implemented",
+      "queued": true,
+      "sentAt": "2026-11-15T18:31:12.242Z",
+      "startedAt": "2026-11-15T18:37:25.064Z",
+      "implementedAt": "2026-11-15T19:20:11.273Z",
+      "note": "Implementado en la app nativa Rust/Rune (commit 35bdda6, rama feat/wish-wizard). Sin URL loopback: app de escritorio; capturas en target/wish-wizard-proof/. Sin botón Tema claro."
+    }
+  }
+}

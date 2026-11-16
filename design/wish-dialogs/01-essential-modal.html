@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="es" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Modal esencial · Finanzas</title><style>
+:root {
+  color-scheme: dark;
+  --canvas:#151D27; --card:#1E2936; --border:#354453;
+  --petroleum:#67C6DF; --emerald:#6DDBAD; --coral:#FF9A8F;
+  --amber:#F5C46B; --ink:#F3F7F9; --muted:#A9BAC6; --selected:#304657;
+  --font:system-ui; --body:16px; --headline:22px; --amount:26px;
+  --dialog-width:580px; --dialog-radius:14px; --control-radius:8px;
+  --overlay:rgb(0 0 0 / .4);
+}
+:root[data-theme="light"] {
+  color-scheme:light;
+  --canvas:#F4F7FA; --card:#FFFFFF; --border:#DEE7ED;
+  --petroleum:#155E75; --emerald:#147D59; --coral:#BE493D;
+  --amber:#986000; --ink:#202F3A; --muted:#6C7E8A; --selected:#E2F0F4;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--canvas); color:var(--ink); font:var(--body)/1.5 var(--font); }
+button,input,select,textarea { font:inherit; }
+button { min-height:44px; border:1px solid var(--border); border-radius:var(--control-radius); padding:10px 16px; color:var(--ink); background:var(--selected); cursor:pointer; }
+button:hover { border-color:var(--petroleum); }
+button:disabled { cursor:wait; }
+:focus-visible { outline:2px solid var(--petroleum); outline-offset:4px; }
+button.primary { color:var(--canvas); background:var(--petroleum); border-color:var(--petroleum); font-weight:650; }
+[data-theme="light"] button.primary { color:var(--card); }
+button.quiet { background:transparent; }
+button.danger { color:var(--coral); }
+button.icon { padding:8px 12px; font-size:22px; }
+h1,h2,h3,p { margin:0; }
+h1 { font-size:var(--headline); font-weight:650; line-height:1.3; }
+h2 { font-size:var(--headline); font-weight:650; }
+h3 { font-size:16px; font-weight:650; }
+.muted,.hint,.eyebrow { color:var(--muted); }
+.eyebrow { font-size:13.5px; font-weight:600; letter-spacing:.04em; }
+.app-shell { display:grid; grid-template-columns:240px 1fr; min-height:100dvh; }
+.sidebar { border-right:1px solid var(--border); padding:32px 24px; }
+.brand { display:flex; align-items:center; gap:12px; margin-bottom:48px; font-weight:700; font-size:22px; }
+.brand-mark { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; background:var(--petroleum); color:var(--canvas); }
+[data-theme="light"] .brand-mark { color:var(--card); }
+.sidebar p { margin:24px 0 12px; font-size:13.5px; color:var(--muted); }
+.sidebar ul { list-style:none; padding:0; margin:0; }
+.sidebar li { padding:12px; margin:4px 0; color:var(--muted); border-radius:8px; }
+.sidebar li.active { background:var(--selected); color:var(--petroleum); }
+.workspace { padding:48px; }
+.workspace h2 { margin-bottom:8px; }
+.workspace button { margin:24px 0; }
+.empty-state { border:1px dashed var(--border); border-radius:14px; padding:48px; max-width:720px; }
+.preview-note { margin-top:24px; max-width:580px; color:var(--muted); }
+[hidden] { display:none !important; }
+dialog { color:var(--ink); background:var(--card); width:min(var(--dialog-width),calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 48px); padding:0; border:1px solid var(--border); border-radius:var(--dialog-radius); overflow:hidden; }
+dialog::backdrop { background:var(--overlay); }
+#editor { display:flex; flex-direction:column; max-height:calc(100dvh - 48px); }
+.dialog-header { padding:24px; border-bottom:1px solid var(--border); }
+.header-line { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.header-actions { display:flex; gap:8px; }
+.theme-toggle { min-height:44px; padding:8px 12px; font-size:13.5px; }
+.dialog-header .muted { margin-top:8px; }
+.form-body { overflow:auto; overscroll-behavior:contain; padding:24px; display:grid; gap:24px; }
+.field { display:grid; gap:5px; min-width:0; }
+label { font-weight:600; }
+.optional { color:var(--muted); font-size:13.5px; font-weight:400; }
+input,select,textarea { min-height:44px; width:100%; min-width:0; border:1px solid var(--border); border-radius:8px; padding:9px 12px; background:var(--canvas); color:var(--ink); }
+textarea { min-height:96px; resize:vertical; }
+input[aria-invalid="true"],textarea[aria-invalid="true"] { border-color:var(--coral); }
+.hint { font-size:13.5px; overflow-wrap:anywhere; }
+.error { color:var(--coral); font-size:13.5px; }
+.confirmed { color:var(--emerald); font-size:13.5px; }
+.money-wrap { position:relative; }
+.money-wrap span { position:absolute; top:9px; left:12px; font-size:26px; color:var(--muted); }
+.money-wrap input { padding-left:32px; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+.field-pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+details { border-top:1px solid var(--border); padding-top:16px; }
+summary { cursor:pointer; min-height:44px; display:list-item; padding:8px 0; color:var(--petroleum); font-weight:600; }
+.details-content { display:grid; gap:16px; margin-top:12px; }
+.dialog-footer { padding:16px 24px; border-top:1px solid var(--border); display:grid; gap:12px; background:var(--card); }
+.footer-actions { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.actions-right { display:flex; gap:8px; flex-wrap:wrap; }
+.error-summary { border-left:2px solid var(--coral); padding:8px 12px; background:var(--canvas); }
+.context-callout { padding:16px; background:var(--canvas); border-left:2px solid var(--petroleum); border-radius:8px; display:grid; gap:8px; }
+.context-callout strong { color:var(--petroleum); }
+#saved-status { color:var(--emerald); margin-bottom:16px; }
+#discard-dialog { width:min(440px,calc(100vw - 32px)); padding:24px; }
+#discard-dialog p { margin:12px 0 24px; }
+#discard-dialog .footer-actions { gap:16px; }
+body[data-direction="panel"] #wish-dialog { margin:16px 16px 16px auto; height:calc(100dvh - 32px); max-height:calc(100dvh - 32px); }
+body[data-direction="panel"] #editor { height:100%; max-height:100%; }
+body[data-direction="panel"] .form-body { flex:1; align-content:start; }
+.panel-context { display:flex; align-items:center; gap:12px; padding:16px; border:1px solid var(--border); border-radius:10px; }
+.panel-context .glyph { color:var(--petroleum); font-size:26px; }
+.stepper { display:flex; list-style:none; padding:0; margin:0 0 16px; gap:16px; font-size:13.5px; }
+.stepper li { color:var(--muted); border-bottom:2px solid var(--border); padding-bottom:8px; flex:1; }
+.stepper li[aria-current="step"] { color:var(--petroleum); border-color:var(--petroleum); }
+.review { border-bottom:1px solid var(--border); padding-bottom:16px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.review strong { font-size:26px; font-variant-numeric:tabular-nums; }
+.system { width:min(1440px,100%); margin:auto; padding:48px; display:grid; gap:32px; }
+.swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:16px; }
+.swatch { border:1px solid var(--border); border-radius:8px; padding:12px; }
+.swatch div { height:64px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); }
+@media (max-width:760px) {
+  .app-shell { grid-template-columns:1fr; }
+  .sidebar { display:none; }
+  .workspace { padding:24px; }
+  .empty-state { padding:24px; }
+  dialog { max-height:calc(100dvh - 32px); }
+  #editor { max-height:calc(100dvh - 32px); }
+  .dialog-header,.form-body { padding:16px; }
+  .dialog-footer { padding:16px; }
+  .field-pair { grid-template-columns:1fr; }
+  body[data-direction="panel"] #wish-dialog { margin:auto; height:auto; max-height:calc(100dvh - 32px); }
+  .header-line { align-items:flex-start; }
+  .header-actions { flex-shrink:0; }
+  .footer-actions { align-items:stretch; }
+  .footer-actions > button,.actions-right { flex:1; }
+  .actions-right > button { flex:1; }
+  .system { padding:24px; }
+}
+
+:root[data-theme="light"] .muted,
+:root[data-theme="light"] .hint,
+:root[data-theme="light"] .eyebrow,
+:root[data-theme="light"] .optional { color:var(--ink); }
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea { border-color:var(--muted); }
+
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+</style></head><body data-direction="essential"><div class="app-shell"><aside class="sidebar" aria-label="Vista previa de navegación"><div class="brand"><span class="brand-mark" aria-hidden="true">F</span>Finanzas</div><p>ESPACIO PERSONAL</p><ul><li>Resumen</li><li class="active">Deseos</li><li>Presupuesto</li><li>Próximos pagos</li></ul></aside><main class="workspace"><h2>Deseos</h2><p class="muted">Un lugar para lo que quieres comprar.</p><button id="open-form" class="primary">Nuevo deseo</button><p id="saved-status" role="status" hidden></p><div class="empty-state"><h3>Primero el deseo. Después, el plan.</h3><p class="muted">Guarda una compra y luego decide cuánto apartar.</p></div><p class="preview-note">Maqueta interactiva · datos de ejemplo. No se conecta a tus cuentas ni guarda información real.</p></main></div><dialog id="wish-dialog" aria-labelledby="dialog-title" aria-describedby="step-description"><form id="editor" novalidate><header class="dialog-header"><div class="header-line"><span class="eyebrow">01 · RECOMENDADO</span><div class="header-actions"><button type="button" id="theme" class="quiet theme-toggle">Tema claro</button><button type="button" class="quiet icon" aria-label="Cerrar formulario" data-close>×</button></div></div><h1 id="dialog-title">Nuevo deseo</h1><p class="muted" id="step-description">Solo lo necesario, sin bloquearte.</p></header><div class="form-body"><div class="field"><label for="wish-name">¿Qué quieres comprar? <span class="optional">Obligatorio</span></label><input id="wish-name" name="name" value="PlayStation 5" required maxlength="200" aria-describedby="wish-name-error"><p class="error" id="wish-name-error" hidden></p></div><div class="field"><label for="wish-price">Precio objetivo <span class="optional">Obligatorio</span></label><div class="money-wrap"><span aria-hidden="true">$</span><input id="wish-price" name="price" value="11,000" inputmode="decimal" required aria-describedby="price-format price-recognized wish-price-error"></div><p class="hint" id="price-format">Ej. 11,000.50 · coma para miles, punto para decimales.</p><p class="confirmed" id="price-recognized" aria-live="polite"></p><p class="error" id="wish-price-error" hidden></p></div><div class="field"><label for="wish-category">Categoría del presupuesto <span class="optional">Opcional</span></label><select id="wish-category" name="category" aria-describedby="category-help"><option value="">Elegir después</option><option value="technology" selected>Tecnología</option><option value="leisure">Ocio</option><option value="home">Hogar</option></select><p class="hint" id="category-help">Sirve para evaluar si la compra cabe en tu presupuesto. No mueve dinero.</p></div><details id="optional-details"><summary>Enlace y detalles <span class="optional">Opcionales</span></summary><div class="details-content"><div class="field"><label for="wish-url">Enlace del producto</label><input id="wish-url" name="url" type="url" placeholder="https://tienda.com/producto" aria-describedby="url-help wish-url-error"><p class="hint" id="url-help">Déjalo vacío si todavía no tienes un enlace.</p><p class="error" id="wish-url-error" hidden></p></div><div class="field"><label for="wish-notes">Detalles</label><textarea id="wish-notes" name="notes" placeholder="Modelo, accesorios o algo que quieras recordar…"></textarea></div></div></details></div><footer class="dialog-footer"><div id="form-error" class="error-summary error" role="alert" hidden></div><p id="save-progress" class="hint" role="status"></p><div class="footer-actions"><button type="button" class="quiet" data-close>Cancelar</button><div class="actions-right"><button id="save" class="primary" type="submit">Guardar deseo</button></div></div><p class="hint">Después podrás apartar fondos. Guardar no registra un gasto.</p></footer></form></dialog><dialog id="discard-dialog" aria-labelledby="discard-title" aria-describedby="discard-description"><h2 id="discard-title">¿Descartar los cambios?</h2><p id="discard-description" class="muted">Tienes cambios sin guardar en este deseo.</p><div class="footer-actions"><button type="button" id="keep-editing" class="primary">Seguir editando</button><button type="button" id="discard-changes" class="quiet danger">Descartar</button></div></dialog><script>
+const dialog=document.querySelector('#wish-dialog');
+const form=document.querySelector('#editor');
+const opener=document.querySelector('#open-form');
+const discard=document.querySelector('#discard-dialog');
+const nameInput=document.querySelector('#wish-name');
+const priceInput=document.querySelector('#wish-price');
+const urlInput=document.querySelector('#wish-url');
+const save=document.querySelector('#save');
+let dirty=false, busy=false, step=1;
+const isWizard=document.body.dataset.direction==='steps';
+const initialValues=()=>JSON.stringify([...form.querySelectorAll('input,select,textarea')].map(x=>[x.id,x.value]));
+let baseline=initialValues();
+function priceValue(value) {
+  const text=value.trim();
+  if(!/^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]{1,2})?$/.test(text)) return null;
+  const amount=Number(text.replaceAll(',',''));
+  return amount>0 && Number.isSafeInteger(Math.round(amount*100)) ? amount : null;
+}
+function money(value) {return '$'+new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(value);}
+function setError(input,message) {
+  const target=document.querySelector('#'+input.id+'-error');
+  input.setAttribute('aria-invalid',message?'true':'false');
+  target.textContent=message; target.hidden=!message;
+  if(message) {const parent=input.closest('details'); if(parent) parent.open=true;}
+}
+function updatePrice() {
+  const amount=priceValue(priceInput.value);
+  const helper=document.querySelector('#price-recognized');
+  helper.textContent=amount===null?'': 'Importe reconocido: '+money(amount);
+  helper.hidden=amount===null;
+  document.querySelectorAll('[data-review-price]').forEach(x=>x.textContent=amount===null?'Revisa el precio':money(amount));
+  document.querySelectorAll('[data-review-name]').forEach(x=>x.textContent=nameInput.value.trim()||'Tu compra');
+}
+function validate(onlyPurchase=false) {
+  const errors=[];
+  function check(input,message) {setError(input,message); if(message) errors.push(input);}
+  check(nameInput,nameInput.value.trim()?'':'Escribe el nombre de lo que quieres comprar.');
+  check(priceInput,priceValue(priceInput.value)!==null?'':'Escribe un precio mayor que cero. Usa 11,000 o 11,000.50; coma para miles y punto para decimales.');
+  if(!onlyPurchase) {
+    let valid=!urlInput.value.trim();
+    if(!valid) {try {const parsed=new URL(urlInput.value); valid=['http:','https:'].includes(parsed.protocol)&&Boolean(parsed.hostname);}catch{valid=false;}}
+    check(urlInput,valid?'':'Usa un enlace completo que empiece por https:// o deja este campo vacío.');
+  }
+  if(errors.length) {
+    const summary=document.querySelector('#form-error');
+    summary.textContent='Revisa '+(errors.length===1?'el campo señalado.': 'los '+errors.length+' campos señalados.'); summary.hidden=false;
+    if(isWizard && (errors[0]===nameInput||errors[0]===priceInput)) showStep(1);
+    errors[0].focus();
+  } else document.querySelector('#form-error').hidden=true;
+  return errors.length===0;
+}
+function showStep(value) {
+  step=value;
+  document.querySelectorAll('[data-step]').forEach(x=>x.hidden=Number(x.dataset.step)!==step);
+  document.querySelectorAll('.stepper li').forEach((x,i)=>{if(i+1===step)x.setAttribute('aria-current','step');else x.removeAttribute('aria-current');});
+  save.hidden=step===1; document.querySelector('#next').hidden=step!==1; document.querySelector('#back').hidden=step!==2;
+  document.querySelector('#step-description').textContent=step===1?'Primero, lo imprescindible.':'Revisa la compra y añade contexto si lo necesitas.';
+  updatePrice();
+}
+function closeEditor() {dialog.close();opener.focus();}
+function requestClose() {
+  if(busy)return;
+  dirty=initialValues()!==baseline;
+  if(dirty) {discard.showModal();document.querySelector('#keep-editing').focus();} else closeEditor();
+}
+form.addEventListener('input',event=>{dirty=true;updatePrice();if(event.target.getAttribute('aria-invalid')==='true')setError(event.target,'');});
+form.addEventListener('change',()=>{dirty=true;});
+priceInput.addEventListener('blur',()=>{
+  const value=priceValue(priceInput.value);
+  if(value!==null) priceInput.value=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
+  updatePrice();
+});
+document.querySelectorAll('[data-close]').forEach(x=>x.addEventListener('click',requestClose));
+dialog.addEventListener('cancel',event=>{event.preventDefault();requestClose();});
+discard.addEventListener('cancel',event=>{event.preventDefault();discard.close();});
+document.querySelector('#keep-editing').addEventListener('click',()=>{discard.close();nameInput.focus();});
+document.querySelector('#discard-changes').addEventListener('click',()=>{discard.close();form.reset();updatePrice();baseline=initialValues();closeEditor();});
+document.querySelector('#theme').addEventListener('click',()=>{
+  const light=document.documentElement.dataset.theme!=='light';
+  document.documentElement.dataset.theme=light?'light':'dark';
+  document.querySelector('#theme').textContent=light?'Tema oscuro':'Tema claro';
+});
+if(isWizard) {
+  document.querySelector('#next').addEventListener('click',()=>{if(validate(true)){showStep(2);document.querySelector('#wish-category').focus();}});
+  document.querySelector('#back').addEventListener('click',()=>{showStep(1);nameInput.focus();});
+  showStep(1);
+}
+form.addEventListener('submit',event=>{
+  event.preventDefault();
+  if(busy)return;
+  if(isWizard && step===1) {if(validate(true))showStep(2);return;}
+  if(!validate())return;
+  busy=true;form.setAttribute('aria-busy','true');
+  save.textContent='Guardando…';
+  form.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=true);
+  document.querySelector('#save-progress').textContent='Simulación de guardado en curso.';
+  setTimeout(()=>{
+    busy=false;form.removeAttribute('aria-busy');
+    form.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=false);
+    save.textContent='Guardar deseo';document.querySelector('#save-progress').textContent='';
+    if(new URLSearchParams(location.search).get('state')==='error') {
+      const summary=document.querySelector('#form-error');summary.hidden=false;
+      summary.textContent='No se pudo guardar (error simulado). Conservamos tus datos para que puedas intentarlo de nuevo.';
+      save.focus();return;
+    }
+    const status=document.querySelector('#saved-status');
+    status.textContent='Simulación completada: '+nameInput.value.trim()+' · '+money(priceValue(priceInput.value))+'. No se han modificado datos de la app.';
+    status.hidden=false;
+    baseline=initialValues();dirty=false;closeEditor();
+  },450);
+});
+opener.addEventListener('click',()=>{dialog.showModal();if(isWizard)showStep(1);nameInput.focus();});
+updatePrice();dialog.showModal();nameInput.focus();
+</script></body></html>

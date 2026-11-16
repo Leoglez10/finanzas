@@ -1,0 +1,28 @@
+{
+  "title": "Deseos · guardar sin adivinar",
+  "brief": "Rediseñar el modal de deseos ante el caso 11,000: formato de precio comprensible, errores junto al campo, opcionales claros y guardado con feedback. Diseños interactivos, no implementación de la app.",
+  "feature": "odd/tasks/wish-wizard.md",
+  "artboards": [
+    {
+      "file": "01-essential-modal.html",
+      "title": "Modal esencial",
+      "tradeoff": "Menos ruido y una corrección directa; el presupuesto sigue fuera del formulario.",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "02-context-panel.html",
+      "title": "Panel con contexto",
+      "tradeoff": "Conserva el contexto de la lista; ocupa más altura y requiere desplazamiento en ventanas bajas.",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "03-guided-steps.html",
+      "title": "Compra en dos pasos",
+      "tradeoff": "Separa captura y revisión del importe; añade un paso para una compra sencilla.",
+      "width": 1440,
+      "height": 900
+    }
+  ]
+}

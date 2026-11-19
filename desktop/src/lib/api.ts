@@ -20,6 +20,11 @@ export interface Wish { id: number; name: string; price: number; url: string; no
 export interface WishView { wish: Wish; evaluation: { status: string; budgetShortfall: number | null; cashShortfall: number | null; reasons: string[] } }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
+export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
+export interface Recurrence { start: string; frequency: Frequency; interval: number; skipWeekend: boolean; weekendMode: string; endDate: string | null }
+export interface Schedule { id: number; name: string; amount: number; autoPost: boolean; completed: boolean; nextDate: string | null; recurrence: Recurrence | null; accountId: number | null; categoryId: number | null; payeeId: number | null }
+export interface ScheduleView { schedule: Schedule; nextDate: string | null; label: string; payee: string | null; account: string | null }
+export interface ScheduleDraft { name: string; amount: number; accountId: number; categoryId: number | null; payee: string; frequency: Frequency; interval: number; start: string; skipWeekend: boolean; autoPost: boolean }
 export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean }
 
 export const startupError = () => invoke<string | null>("startup_error");
@@ -39,6 +44,13 @@ export const budget = (month: number) => invoke<BudgetView>("budget", { month })
 /** Accepts "800", "+100", "-50" or arithmetic like "550*2"; returns the new cents or null when the text is invalid. */
 export const assignBudget = (month: number, categoryId: number, text: string) => invoke<number | null>("assign_budget", { month, categoryId, text });
 export const upcoming = () => invoke<UpcomingItem[]>("upcoming");
+export const schedules = () => invoke<ScheduleView[]>("schedules");
+export const saveSchedule = (id: number | null, draft: ScheduleDraft) => invoke<number>("save_schedule", { id, draft });
+export const postSchedule = (id: number) => invoke<{ entry: EntryRow; before: Schedule }>("post_schedule", { id });
+export const skipSchedule = (id: number) => invoke<Schedule>("skip_schedule", { id });
+export const deleteSchedule = (id: number) => invoke<Schedule>("delete_schedule", { id });
+export const restoreSchedule = (schedule: Schedule) => invoke<number>("restore_schedule", { schedule });
+export const refreshTray = () => invoke<void>("refresh_tray");
 export const wishes = () => invoke<WishView[]>("wishes");
 export const today = () => invoke<string>("today");
 export const getSettings = () => invoke<Settings>("get_settings");

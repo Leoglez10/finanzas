@@ -1,5 +1,5 @@
 // Which dialog is open and with what. Dialog components watch this and call showModal().
-import type { EntryRow } from "./api";
+import type { EntryRow, ScheduleView } from "./api";
 
 export interface EntryDraft { cents?: number | null; payee?: string; categoryId?: number | null; accountId?: number | null; date?: Date }
 export const entryDialog = $state({ open: false, kind: "gasto" as "gasto" | "ingreso", row: null as EntryRow | null, draft: null as EntryDraft | null });
@@ -7,3 +7,6 @@ export const entryDialog = $state({ open: false, kind: "gasto" as "gasto" | "ing
 export function openEntry(kind: "gasto" | "ingreso", row: EntryRow | null = null, draft: EntryDraft | null = null) {
   Object.assign(entryDialog, { open: true, kind, row, draft });
 }
+
+export const scheduleDialog = $state({ open: false, view: null as ScheduleView | null });
+export function openSchedule(view: ScheduleView | null = null) { Object.assign(scheduleDialog, { open: true, view }); }

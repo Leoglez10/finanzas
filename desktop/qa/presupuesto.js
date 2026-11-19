@@ -1,10 +1,10 @@
 // Presupuesto: assign with +N, undo, invalid text, copy from previous month.
 (async () => {
-  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const wait = ms => window.__TAURI_INTERNALS__.invoke('qa_sleep', { ms }); // webview timers stop when the window is covered
   const log = document.createElement('pre');
   log.style.cssText = 'position:fixed;left:270px;bottom:10px;z-index:99999;background:#000c;color:#7f7;font:12px monospace;padding:8px;max-width:640px;white-space:pre-wrap;border-radius:8px';
   document.body.append(log);
-  const say = (ok, msg) => { log.textContent += (ok ? 'PASS ' : 'FAIL ') + msg + '\n'; };
+  const say = (ok, msg) => { const line = (ok ? 'PASS ' : 'FAIL ') + msg; log.textContent += line + '\n'; window.__TAURI_INTERNALS__.invoke('qa_log', { line }); };
   const $ = s => document.querySelector(s);
   const input = name => $(`input[aria-label="Asignado a ${name}"]`);
   const change = (el, v) => { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -29,4 +29,5 @@
     say(input('Ocio')?.value === '350.00' && input('Vivienda')?.value === '800.00', `copy from previous month: Ocio ${input('Ocio')?.value}, Vivienda ${input('Vivienda')?.value}`);
     $('.month button[aria-label="Mes anterior"]').click(); await wait(800);
   } catch (e) { say(false, 'exception: ' + e); }
+  window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

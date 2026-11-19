@@ -6,6 +6,7 @@ export const app = $state({
   version: "",
   error: null as string | null,
   accounts: [] as api.AccountOverview[],
+  overdue: 0,
   settings: null as api.Settings | null,
   today: new Date(),
 });
@@ -20,11 +21,14 @@ export function applyAppearance(settings: api.Settings) {
   root.dataset.palette = settings.palette;
 }
 
-async function refreshAccounts() { app.accounts = await api.accountsOverview(); }
+async function refreshAccounts() {
+  const [accounts, upcoming] = await Promise.all([api.accountsOverview(), api.upcoming()]);
+  app.accounts = accounts; app.overdue = upcoming.filter(u => u.overdue).length;
+}
 async function tick() {
   try {
     const version = await api.dataVersion();
-    if (version !== app.version) { await refreshAccounts(); app.version = version; }
+    if (version !== app.version) { await refreshAccounts(); app.version = version; void api.refreshTray(); }
   } catch (e) { console.error(e); }
 }
 /** Call after a write so screens reload now instead of on the next poll. */

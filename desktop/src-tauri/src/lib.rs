@@ -1,6 +1,7 @@
 mod features;
 mod reminder_window;
 mod settings;
+mod tray;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
@@ -103,6 +104,22 @@ fn categories_grouped(state: State<'_, AppState>) -> Result<Vec<CategoryGroupVie
 fn wishes(state: State<'_, AppState>) -> Result<Vec<service::WishView>, String> {
     state.with_store(|s| service::list_wishes(s, Local::now().date_naive(), false).map_err(|e| e.to_string()))
 }
+/// QA scripts (desktop/qa) report through this; only debug builds print.
+#[tauri::command]
+fn qa_log(line: String) {
+    #[cfg(debug_assertions)]
+    eprintln!("QA {line}");
+    #[cfg(not(debug_assertions))]
+    let _ = line;
+}
+/// QA scripts wait through Rust: a hidden or covered webview suspends its own timers.
+#[tauri::command(async)]
+fn qa_sleep(ms: u64) {
+    #[cfg(debug_assertions)]
+    std::thread::sleep(Duration::from_millis(ms.min(10_000)));
+    #[cfg(not(debug_assertions))]
+    let _ = ms;
+}
 #[tauri::command(async)]
 fn today() -> String { Local::now().date_naive().to_string() }
 #[tauri::command(async)]
@@ -166,6 +183,7 @@ fn spawn_reminders(app: tauri::AppHandle) {
                 }
             }
             previous = now;
+            tray::refresh(&app);
             std::thread::sleep(Duration::from_secs(60));
         }
     });
@@ -176,13 +194,38 @@ pub fn run() {
     let state = open_state();
     if let Some(store) = &state.store { spawn_auto_post(Arc::clone(store), Arc::clone(&state.revision)); }
     tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
-        .setup(|app| { spawn_reminders(app.handle().clone()); Ok(()) })
+        .setup(|app| {
+            // The window comes from tauri.conf.json ("create": false) so QA runs can keep a covered window alive.
+            let config = app.config().app.windows.first().cloned().ok_or("falta la ventana principal en tauri.conf.json")?;
+            #[allow(unused_mut)]
+            let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+            #[cfg(debug_assertions)]
+            if std::env::var_os("FINANZAS_DEV_EVAL").is_some() { window = window.background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled); }
+            window.build()?;
+            tray::refresh(app.handle());
+            spawn_reminders(app.handle().clone());
+            Ok(())
+        })
+        // With the menu-bar icon on, closing the window only hides it so reminders keep arriving.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event && window.app_handle().tray_by_id("finanzas").is_some() {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         // Debug builds only: FINANZAS_DEV_EVAL runs a script after the page loads, to drive the real UI in checks.
         .on_page_load(|_webview, _payload| {
             #[cfg(debug_assertions)]
             if _payload.event() == tauri::webview::PageLoadEvent::Finished && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
         })
-        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, today, parse_amount,
-            features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::create_schedule, features::schedule_action, features::get_settings, features::save_settings, features::import_availability, features::import_data])
-        .run(tauri::generate_context!()).expect("error al iniciar la aplicación");
+        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, today, parse_amount, qa_log, qa_sleep,
+            features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, features::get_settings, features::save_settings, features::import_availability, features::import_data, tray::refresh_tray])
+        .build(tauri::generate_context!()).expect("error al iniciar la aplicación")
+        .run(|app, event| {
+            // Clicking the Dock icon brings a hidden window back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event { tray::show(app, None); }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

@@ -1,7 +1,6 @@
 use super::AppState;
 use chrono::Local;
-use finanzas_core::{service, store::{self, Store}, Account, Category, CategoryGroup, Recurrence, Schedule};
-use serde::Deserialize;
+use finanzas_core::{service, store::{self, Store}, Account, Category, CategoryGroup, Schedule};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use crate::settings::Settings;
@@ -47,17 +46,45 @@ pub fn create_category(state: State<'_, AppState>, group_id: i64, name: String) 
 pub fn upcoming(state: State<'_, AppState>) -> Result<Vec<service::UpcomingView>, String> { state.with_store(|s| service::upcoming(s, Local::now().date_naive(), 30).map_err(|e| e.to_string())) }
 #[tauri::command(async)]
 pub fn schedules(state: State<'_, AppState>) -> Result<Vec<service::ScheduleView>, String> { state.with_store(|s| service::schedule_views(s).map_err(|e| e.to_string())) }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NewSchedule { name: String, amount: i64, auto_post: bool, recurrence: Recurrence, account_id: i64, category_id: Option<i64>, payee: String }
 #[tauri::command(async)]
-pub fn create_schedule(state: State<'_, AppState>, input: NewSchedule) -> Result<(), String> {
-    if input.name.trim().is_empty() || !(1..=52).contains(&input.recurrence.interval) { return Err("Datos inválidos".into()); }
-    state.with_store(|s| { let payee_id = s.find_or_create_payee(&input.payee).map_err(|e| e.to_string())?; let schedule = Schedule { id: 0, name: input.name.trim().into(), amount: input.amount, auto_post: input.auto_post, completed: false, next_date: None, recurrence: Some(input.recurrence), account_id: Some(input.account_id), category_id: input.category_id, payee_id }; service::create_schedule(s, &schedule).map_err(|e| e.to_string())?; service::auto_post_due(s, Local::now().date_naive()).map_err(|e| e.to_string())?; Ok(()) })?; state.changed(); Ok(())
+pub fn save_schedule(state: State<'_, AppState>, id: Option<i64>, draft: service::ScheduleDraft) -> Result<i64, String> {
+    if draft.name.trim().is_empty() { return Err("Ponle un nombre".into()); }
+    if draft.amount == 0 { return Err("Escribe un monto mayor a cero".into()); }
+    if !(1..=52).contains(&draft.interval) { return Err("La frecuencia debe estar entre 1 y 52".into()); }
+    let id = state.with_store(|s| { let id = service::save_schedule(s, id, &draft).map_err(|e| e.to_string())?; service::auto_post_due(s, Local::now().date_naive()).map_err(|e| e.to_string())?; Ok(id) })?;
+    state.changed(); Ok(id)
+}
+#[derive(serde::Serialize)]
+pub struct Posted { entry: store::EntryRow, before: Schedule }
+/// Registers the next occurrence; returns the movement and the schedule as it was, for undo.
+#[tauri::command(async)]
+pub fn post_schedule(state: State<'_, AppState>, id: i64) -> Result<Posted, String> {
+    let posted = state.with_store(|s| {
+        let before = s.get_schedule(id).map_err(|e| e.to_string())?.ok_or("El pago programado ya no existe")?;
+        let entry = service::post_schedule(s, id, Local::now().date_naive()).map_err(|e| e.to_string())?;
+        Ok(Posted { entry, before })
+    })?;
+    state.changed(); Ok(posted)
+}
+/// Skips the next occurrence; returns the schedule as it was, for undo.
+#[tauri::command(async)]
+pub fn skip_schedule(state: State<'_, AppState>, id: i64) -> Result<Schedule, String> {
+    let before = state.with_store(|s| { let before = s.get_schedule(id).map_err(|e| e.to_string())?.ok_or("El pago programado ya no existe")?; service::skip_schedule(s, id, None).map_err(|e| e.to_string())?; Ok(before) })?;
+    state.changed(); Ok(before)
 }
 #[tauri::command(async)]
-pub fn schedule_action(state: State<'_, AppState>, id: i64, action: String) -> Result<(), String> {
-    state.with_store(|s| { match action.as_str() { "post" => { service::post_schedule(s, id, Local::now().date_naive()).map_err(|e| e.to_string())?; }, "skip" => { service::skip_schedule(s, id, None).map_err(|e| e.to_string())?; }, "delete" => service::delete_schedule(s, id).map_err(|e| e.to_string())?, _ => return Err("Acción desconocida".into()) }; Ok(()) })?; state.changed(); Ok(())
+pub fn delete_schedule(state: State<'_, AppState>, id: i64) -> Result<Schedule, String> {
+    let before = state.with_store(|s| { let before = s.get_schedule(id).map_err(|e| e.to_string())?.ok_or("El pago programado ya no existe")?; service::delete_schedule(s, id).map_err(|e| e.to_string())?; Ok(before) })?;
+    state.changed(); Ok(before)
+}
+/// Undo for the three above: puts the schedule back exactly (a deleted one comes back with a new id).
+#[tauri::command(async)]
+pub fn restore_schedule(state: State<'_, AppState>, schedule: Schedule) -> Result<i64, String> {
+    let id = state.with_store(|s| {
+        if s.get_schedule(schedule.id).map_err(|e| e.to_string())?.is_some() { s.update_schedule(&schedule).map_err(|e| e.to_string())?; Ok(schedule.id) }
+        else { s.insert_schedule(&Schedule { id: 0, ..schedule }).map_err(|e| e.to_string()) }
+    })?;
+    state.changed(); Ok(id)
 }
 #[tauri::command(async)]
 pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> { state.settings.lock().map(|s| s.clone()).map_err(|e| e.to_string()) }

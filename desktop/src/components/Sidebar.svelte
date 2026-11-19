@@ -3,7 +3,6 @@
   import { app, go } from "../lib/app.svelte";
   import { money } from "../lib/format";
 
-  let { overdue = 0 }: { overdue?: number } = $props();
   const current = (id: string) => app.route === id || app.route.startsWith(id + "/") || app.route.startsWith(id + "?");
   let open = $derived(app.accounts.filter(a => !a.closed));
   let closed = $derived(app.accounts.filter(a => a.closed));
@@ -18,7 +17,7 @@
   {#each menu as [id, label, icon] (id)}
     <button class="nav" aria-current={current(id) ? "page" : undefined} onclick={() => go(id)}>
       <Icon name={icon} /><span>{label}</span>
-      {#if id === "proximos" && overdue}<span class="count" aria-label="{overdue} vencidos">{overdue}</span>{/if}
+      {#if id === "proximos" && app.overdue}<span class="count" aria-label="{app.overdue} vencidos">{app.overdue}</span>{/if}
     </button>
   {/each}
   <div class="section">Cuentas</div>

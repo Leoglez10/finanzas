@@ -17,7 +17,9 @@ export interface Overview {
 export interface EntriesResult { rows: EntryRow[]; total: number; sum: number }
 export interface UpcomingItem { scheduleId: number; name: string; date: string; amount: number; accountId: number | null; account: string | null; autoPost: boolean; overdue: boolean; projectedBalance: number | null }
 export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean }
-export interface WishView { wish: Wish; evaluation: { status: string; budgetShortfall: number | null; cashShortfall: number | null; reasons: string[] } }
+export interface WishEvaluation { status: string; availableForWish: number | null; budgetShortfall: number | null; reservationDeficit: number; cashBalance: number | null; upcomingOutflows: number; cashShortfall: number | null; reasons: string[] }
+export interface WishView { wish: Wish; evaluation: WishEvaluation }
+export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -51,6 +53,25 @@ export const skipSchedule = (id: number) => invoke<Schedule>("skip_schedule", { 
 export const deleteSchedule = (id: number) => invoke<Schedule>("delete_schedule", { id });
 export const restoreSchedule = (schedule: Schedule) => invoke<number>("restore_schedule", { schedule });
 export const refreshTray = () => invoke<void>("refresh_tray");
-export const wishes = () => invoke<WishView[]>("wishes");
+export const wishes = (archived = false) => invoke<WishView[]>("wishes", { archived });
+export const saveWish = (id: number | null, draft: WishDraft) => invoke<Wish>("save_wish", { id, draft });
+/** `amount` is the new total set aside (0 releases it), not a delta. */
+export const reserveWish = (id: number, amount: number) => invoke<Wish>("reserve_wish", { id, amount });
+export const archiveWish = (id: number) => invoke<Wish>("archive_wish", { id });
+export const restoreWish = (wish: Wish) => invoke<void>("restore_wish", { wish });
 export const today = () => invoke<string>("today");
 export const getSettings = () => invoke<Settings>("get_settings");
+
+// finanzas-core reports wish rules in English; show them in Spanish.
+const MESSAGES: Record<string, string> = {
+  "Not enough unreserved category funds": "No hay suficiente dinero libre en esa categoría del presupuesto.",
+  "Choose an expense category before reserving": "Elige una categoría de gasto antes de apartar dinero.",
+  "Reservation must be between zero and the wish price": "Lo apartado debe estar entre cero y el precio.",
+  "Release reserved funds before reducing the price": "Libera lo apartado antes de bajar el precio.",
+  "Wish link must use http:// or https://": "El enlace debe empezar con http:// o https://",
+  "Wish name must not be empty": "Ponle un nombre.",
+  "Wish price must be greater than zero": "El precio debe ser mayor a cero.",
+  "Archived wishes cannot be edited": "Un deseo archivado no se puede editar.",
+  "Income categories cannot be budgeted": "Elige una categoría de gasto, no de ingreso.",
+};
+export const errorText = (e: unknown) => MESSAGES[String(e)] ?? String(e);

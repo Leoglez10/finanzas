@@ -101,8 +101,26 @@ fn categories_grouped(state: State<'_, AppState>) -> Result<Vec<CategoryGroupVie
     })
 }
 #[tauri::command(async)]
-fn wishes(state: State<'_, AppState>) -> Result<Vec<service::WishView>, String> {
-    state.with_store(|s| service::list_wishes(s, Local::now().date_naive(), false).map_err(|e| e.to_string()))
+fn wishes(state: State<'_, AppState>, archived: Option<bool>) -> Result<Vec<service::WishView>, String> {
+    state.with_store(|s| service::list_wishes(s, Local::now().date_naive(), archived.unwrap_or(false)).map_err(|e| e.to_string()))
+}
+#[tauri::command(async)]
+fn save_wish(state: State<'_, AppState>, id: Option<i64>, draft: service::WishDraft) -> Result<finanzas_core::service::Wish, String> {
+    let wish = state.with_store(|s| service::save_wish(s, id, draft).map_err(|e| e.to_string()))?; state.changed(); Ok(wish)
+}
+/// `amount` is the new total set aside, not a delta (0 releases everything).
+#[tauri::command(async)]
+fn reserve_wish(state: State<'_, AppState>, id: i64, amount: i64) -> Result<finanzas_core::service::Wish, String> {
+    let wish = state.with_store(|s| service::reserve_wish(s, id, amount, Local::now().date_naive()).map_err(|e| e.to_string()))?; state.changed(); Ok(wish)
+}
+#[tauri::command(async)]
+fn archive_wish(state: State<'_, AppState>, id: i64) -> Result<finanzas_core::service::Wish, String> {
+    let wish = state.with_store(|s| service::archive_wish(s, id).map_err(|e| e.to_string()))?; state.changed(); Ok(wish)
+}
+/// Undo for archive/buy: writes the wish back exactly as it was a moment ago.
+#[tauri::command(async)]
+fn restore_wish(state: State<'_, AppState>, wish: finanzas_core::service::Wish) -> Result<(), String> {
+    state.with_store(|s| service::restore_wish(s, &wish).map(|_| ()).map_err(|e| e.to_string()))?; state.changed(); Ok(())
 }
 /// QA scripts (desktop/qa) report through this; only debug builds print.
 #[tauri::command]
@@ -193,7 +211,7 @@ fn spawn_reminders(app: tauri::AppHandle) {
 pub fn run() {
     let state = open_state();
     if let Some(store) = &state.store { spawn_auto_post(Arc::clone(store), Arc::clone(&state.revision)); }
-    tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
+    tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
         .setup(|app| {
             // The window comes from tauri.conf.json ("create": false) so QA runs can keep a covered window alive.
             let config = app.config().app.windows.first().cloned().ok_or("falta la ventana principal en tauri.conf.json")?;
@@ -218,7 +236,7 @@ pub fn run() {
             #[cfg(debug_assertions)]
             if _payload.event() == tauri::webview::PageLoadEvent::Finished && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
         })
-        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, today, parse_amount, qa_log, qa_sleep,
+        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, save_wish, reserve_wish, archive_wish, restore_wish, today, parse_amount, qa_log, qa_sleep,
             features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, features::get_settings, features::save_settings, features::import_availability, features::import_data, tray::refresh_tray])
         .build(tauri::generate_context!()).expect("error al iniciar la aplicación")
         .run(|app, event| {

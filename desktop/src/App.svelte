@@ -9,12 +9,14 @@
   import Movimientos from "./screens/Movimientos.svelte";
   import Presupuesto from "./screens/Presupuesto.svelte";
   import Proximos from "./screens/Proximos.svelte";
+  import Deseos from "./screens/Deseos.svelte";
+  import WishDialog from "./components/WishDialog.svelte";
   import ScheduleDialog from "./components/ScheduleDialog.svelte";
   import Pending from "./screens/Pending.svelte";
 
   onMount(() => { start().catch(e => app.error = String(e)); });
   let screen = $derived(app.route.split(/[/?]/)[0]);
-  const titles: Record<string, string> = { deseos: "Deseos", ajustes: "Ajustes" };
+  const titles: Record<string, string> = { ajustes: "Ajustes" };
 
   // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
   function keydown(e: KeyboardEvent) {
@@ -39,6 +41,8 @@
           <p class="muted">Cargando…</p>
         {:else if screen === "resumen"}
           <Resumen />
+        {:else if screen === "deseos"}
+          <Deseos />
         {:else if screen === "proximos"}
           <Proximos />
         {:else if screen === "presupuesto"}
@@ -55,5 +59,6 @@
   </div>
   <EntryDialog />
   <ScheduleDialog />
+  <WishDialog />
   <Toast />
 {/if}

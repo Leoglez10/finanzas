@@ -64,8 +64,11 @@ pub fn save(path: &Path, settings: &Settings) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// One directory per test: tests run in parallel and the clock alone can repeat.
     fn scratch() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("finanzas-desktop-settings-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("finanzas-desktop-settings-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

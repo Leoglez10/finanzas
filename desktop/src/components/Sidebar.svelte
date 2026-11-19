@@ -1,14 +1,15 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
-  import { app, go } from "../lib/app.svelte";
+  import { app, go, profileColor } from "../lib/app.svelte";
   import { money } from "../lib/format";
 
   const current = (id: string) => app.route === id || app.route.startsWith(id + "/") || app.route.startsWith(id + "?");
   let open = $derived(app.accounts.filter(a => !a.closed));
   let closed = $derived(app.accounts.filter(a => a.closed));
   const menu = [["resumen", "Resumen", "home"], ["movimientos", "Movimientos", "list"], ["presupuesto", "Presupuesto", "pie"], ["proximos", "Próximos pagos", "cal"], ["deseos", "Deseos", "gift"]];
-  // ponytail: profile initial/color come from settings in T6 (Ajustes › Perfil).
-  let profile = { name: "Personal", color: "var(--violet)" };
+  let index = $derived(Math.max(0, app.profiles.list.findIndex(p => p.slug === app.profiles.active)));
+  let active = $derived(app.profiles.list[index]);
+  let profile = $derived({ name: active?.label ?? "Personal", color: active ? profileColor(active, index) : "var(--violet)" });
 </script>
 
 <nav class="sidebar" aria-label="Navegación principal">

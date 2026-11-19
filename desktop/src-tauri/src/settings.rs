@@ -23,6 +23,8 @@ pub struct Settings {
     pub autostart: bool,
     pub auto_update: bool,
     pub profile_colors: HashMap<String, String>,
+    /// Profile opened at launch (`personal` is the default database).
+    pub profile: String,
     /// Reminder ids already shown, so a restart never repeats one.
     pub sent: HashSet<String>,
 }
@@ -30,7 +32,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self { enabled: true, days: 2, hour: 9, hidden_profiles: Vec::new(), dark: None, palette: "petroleo".into(),
-            tray: true, autostart: false, auto_update: true, profile_colors: HashMap::new(), sent: HashSet::new() }
+            tray: true, autostart: false, auto_update: true, profile_colors: HashMap::new(), profile: "personal".into(), sent: HashSet::new() }
     }
 }
 

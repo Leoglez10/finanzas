@@ -27,7 +27,10 @@ export interface Recurrence { start: string; frequency: Frequency; interval: num
 export interface Schedule { id: number; name: string; amount: number; autoPost: boolean; completed: boolean; nextDate: string | null; recurrence: Recurrence | null; accountId: number | null; categoryId: number | null; payeeId: number | null }
 export interface ScheduleView { schedule: Schedule; nextDate: string | null; label: string; payee: string | null; account: string | null }
 export interface ScheduleDraft { name: string; amount: number; accountId: number; categoryId: number | null; payee: string; frequency: Frequency; interval: number; start: string; skipWeekend: boolean; autoPost: boolean }
-export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean }
+export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean; profile: string; profile_colors: Record<string, string> }
+export interface ProfileView { slug: string; label: string; hidden: boolean; color: string | null }
+export interface Profiles { active: string; list: ProfileView[] }
+export interface ImportSummary { accounts: number; categories: number; payees: number; entries: number; schedules: number }
 
 export const startupError = () => invoke<string | null>("startup_error");
 export const accountsOverview = () => invoke<AccountOverview[]>("accounts_overview");
@@ -61,6 +64,16 @@ export const archiveWish = (id: number) => invoke<Wish>("archive_wish", { id });
 export const restoreWish = (wish: Wish) => invoke<void>("restore_wish", { wish });
 export const today = () => invoke<string>("today");
 export const getSettings = () => invoke<Settings>("get_settings");
+export const updateSettings = (patch: Partial<Settings>) => invoke<Settings>("update_settings", { patch });
+export const profiles = () => invoke<Profiles>("profiles");
+export const switchProfile = (slug: string) => invoke<void>("switch_profile", { slug });
+export const createProfile = (name: string) => invoke<string>("create_profile", { name });
+export const renameProfile = (from: string, name: string) => invoke<string>("rename_profile", { from, name });
+export const deleteProfile = (slug: string) => invoke<void>("delete_profile", { slug });
+export const testNotification = () => invoke<void>("test_notification");
+/** [store is empty, the old macOS app's data exists] */
+export const importAvailability = () => invoke<[boolean, boolean]>("import_availability");
+export const importData = (source: "actual" | "legacy") => invoke<ImportSummary | null>("import_data", { source });
 
 // finanzas-core reports wish rules in English; show them in Spanish.
 const MESSAGES: Record<string, string> = {

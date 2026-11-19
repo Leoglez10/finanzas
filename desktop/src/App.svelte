@@ -12,11 +12,10 @@
   import Deseos from "./screens/Deseos.svelte";
   import WishDialog from "./components/WishDialog.svelte";
   import ScheduleDialog from "./components/ScheduleDialog.svelte";
-  import Pending from "./screens/Pending.svelte";
+  import Ajustes from "./screens/Ajustes.svelte";
 
   onMount(() => { start().catch(e => app.error = String(e)); });
   let screen = $derived(app.route.split(/[/?]/)[0]);
-  const titles: Record<string, string> = { ajustes: "Ajustes" };
 
   // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
   function keydown(e: KeyboardEvent) {
@@ -51,8 +50,10 @@
           <Movimientos />
         {:else if screen.startsWith("cuenta-")}
           {#key screen}<Movimientos accountId={Number(screen.slice(7))} />{/key}
+        {:else if screen === "ajustes"}
+          <Ajustes />
         {:else}
-          <Pending title={titles[screen] ?? "Finanzas"} />
+          <Resumen />
         {/if}
       </div>
     </main>

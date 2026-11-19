@@ -1,4 +1,5 @@
 mod features;
+mod prefs;
 mod reminder_window;
 mod settings;
 mod tray;
@@ -18,6 +19,9 @@ pub(crate) struct AppState {
     startup_error: Option<String>,
     settings: Arc<Mutex<settings::Settings>>,
     settings_path: Option<PathBuf>,
+    /// The default database; other profiles live beside it.
+    home: Option<PathBuf>,
+    profile: Mutex<String>,
 }
 impl AppState {
     fn with_store<T>(&self, f: impl FnOnce(&mut Store) -> Result<T, String>) -> Result<T, String> {
@@ -155,12 +159,14 @@ fn open_state() -> AppState {
     };
     if let Some(e) = &settings_error { eprintln!("{e}"); }
     let settings = Arc::new(Mutex::new(loaded));
-    let opened = path.ok_or_else(|| "No se pudo determinar la ubicación de la base de datos".to_string())
+    // Reopen the last profile; fall back to Personal if its file is gone.
+    let profile = settings.lock().map(|s| s.profile.clone()).unwrap_or_default();
+    let profile_path = path.as_deref().and_then(|home| Store::profile_path_beside(home, &profile)).filter(|p| p.exists());
+    let (open_path, profile) = match profile_path { Some(p) => (Some(p), profile), None => (path.clone(), "personal".to_owned()) };
+    let opened = open_path.ok_or_else(|| "No se pudo determinar la ubicación de la base de datos".to_string())
         .and_then(|path| Store::open(&path).map_err(|e| format!("{}: {e}", path.display())));
-    match opened {
-        Ok(store) => AppState { store: Some(Arc::new(Mutex::new(store))), revision, startup_error: None, settings, settings_path },
-        Err(error) => AppState { store: None, revision, startup_error: Some(error), settings, settings_path },
-    }
+    let (store, startup_error) = match opened { Ok(store) => (Some(Arc::new(Mutex::new(store))), None), Err(error) => (None, Some(error)) };
+    AppState { store, revision, startup_error, settings, settings_path, home: path, profile: Mutex::new(profile) }
 }
 
 /// Posts automatic payments now and every hour.
@@ -211,7 +217,7 @@ fn spawn_reminders(app: tauri::AppHandle) {
 pub fn run() {
     let state = open_state();
     if let Some(store) = &state.store { spawn_auto_post(Arc::clone(store), Arc::clone(&state.revision)); }
-    tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
+    tauri::Builder::default().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None)).plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
         .setup(|app| {
             // The window comes from tauri.conf.json ("create": false) so QA runs can keep a covered window alive.
             let config = app.config().app.windows.first().cloned().ok_or("falta la ventana principal en tauri.conf.json")?;
@@ -237,7 +243,7 @@ pub fn run() {
             if _payload.event() == tauri::webview::PageLoadEvent::Finished && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
         })
         .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, save_wish, reserve_wish, archive_wish, restore_wish, today, parse_amount, qa_log, qa_sleep,
-            features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, features::get_settings, features::save_settings, features::import_availability, features::import_data, tray::refresh_tray])
+            features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, prefs::get_settings, prefs::update_settings, prefs::profiles, prefs::switch_profile, prefs::create_profile, prefs::rename_profile, prefs::delete_profile, prefs::test_notification, features::import_availability, features::import_data, tray::refresh_tray])
         .build(tauri::generate_context!()).expect("error al iniciar la aplicación")
         .run(|app, event| {
             // Clicking the Dock icon brings a hidden window back.

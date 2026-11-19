@@ -7,6 +7,7 @@ export const app = $state({
   error: null as string | null,
   accounts: [] as api.AccountOverview[],
   overdue: 0,
+  profiles: { active: "personal", list: [] } as api.Profiles,
   settings: null as api.Settings | null,
   today: new Date(),
 });
@@ -22,8 +23,8 @@ export function applyAppearance(settings: api.Settings) {
 }
 
 async function refreshAccounts() {
-  const [accounts, upcoming] = await Promise.all([api.accountsOverview(), api.upcoming()]);
-  app.accounts = accounts; app.overdue = upcoming.filter(u => u.overdue).length;
+  const [accounts, upcoming, profiles] = await Promise.all([api.accountsOverview(), api.upcoming(), api.profiles()]);
+  app.accounts = accounts; app.overdue = upcoming.filter(u => u.overdue).length; app.profiles = profiles;
 }
 async function tick() {
   try {
@@ -31,6 +32,15 @@ async function tick() {
     if (version !== app.version) { await refreshAccounts(); app.version = version; void api.refreshTray(); }
   } catch (e) { console.error(e); }
 }
+/** Saves preference fields and applies the look right away. */
+export async function updateSettings(patch: Partial<api.Settings>) {
+  const settings = await api.updateSettings(patch);
+  app.settings = settings; applyAppearance(settings);
+  // Hidden profiles and colors live in settings, which do not bump the data version.
+  app.profiles = await api.profiles();
+}
+export const PROFILE_COLORS = ["var(--violet)", "var(--c-vivienda)", "var(--c-transporte)", "var(--c-ocio)", "var(--c-alimentacion)", "var(--c-salud)"];
+export const profileColor = (p: api.ProfileView, index: number) => p.color ?? PROFILE_COLORS[index % PROFILE_COLORS.length];
 /** Call after a write so screens reload now instead of on the next poll. */
 export const refresh = tick;
 

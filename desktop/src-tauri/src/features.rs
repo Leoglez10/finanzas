@@ -3,7 +3,6 @@ use chrono::Local;
 use finanzas_core::{service, store::{self, Store}, Account, Category, CategoryGroup, Schedule};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
-use crate::settings::Settings;
 
 #[tauri::command(async)]
 pub fn budget(state: State<'_, AppState>, month: i32) -> Result<service::BudgetView, String> {
@@ -85,13 +84,6 @@ pub fn restore_schedule(state: State<'_, AppState>, schedule: Schedule) -> Resul
         else { s.insert_schedule(&Schedule { id: 0, ..schedule }).map_err(|e| e.to_string()) }
     })?;
     state.changed(); Ok(id)
-}
-#[tauri::command(async)]
-pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> { state.settings.lock().map(|s| s.clone()).map_err(|e| e.to_string()) }
-#[tauri::command(async)]
-pub fn save_settings(state: State<'_, AppState>, enabled: bool, days: i64) -> Result<(), String> {
-    if !(0..=14).contains(&days) { return Err("Días inválidos".into()); }
-    let mut settings = state.settings.lock().map_err(|e| e.to_string())?; settings.enabled = enabled; settings.days = days; state.save_settings(&settings)
 }
 #[tauri::command(async)]
 pub fn import_availability(state: State<'_, AppState>) -> Result<(bool, bool), String> {

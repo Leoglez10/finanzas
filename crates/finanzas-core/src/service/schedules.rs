@@ -1,8 +1,8 @@
 use super::{Result, ServiceError};
-use crate::{Entry, Id, Schedule, domain::schedule, store::{EntryRow, Store}};
+use crate::{Entry, Frequency, Id, Recurrence, Schedule, WeekendMode, domain::schedule, store::{EntryRow, Store}};
 use chrono::{NaiveDate, NaiveDateTime};
 use std::collections::HashMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,6 +78,71 @@ pub fn auto_post_due(store: &mut Store, today: NaiveDate) -> Result<usize> {
         Ok(count)
     })
 }
+/// What a schedule editor collects; the sign of `amount` already says expense or income.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleDraft {
+    pub name: String, pub amount: i64, pub account_id: Id, pub category_id: Option<Id>, pub payee: String,
+    pub frequency: Frequency, pub interval: u32, pub start: NaiveDate, pub skip_weekend: bool, pub auto_post: bool,
+}
+/// Builds the row to store. A rule that did not change keeps its progress (`next_date`, `completed`);
+/// a changed rule starts over from its first occurrence.
+pub fn apply_draft(existing: Option<Schedule>, payee_id: Option<Id>, draft: &ScheduleDraft) -> Schedule {
+    let mut schedule = existing.unwrap_or(Schedule { id: 0, name: String::new(), amount: 0, auto_post: false, completed: false, next_date: None, recurrence: None, account_id: None, category_id: None, payee_id: None });
+    let old = schedule.recurrence.take();
+    let rule = Recurrence { start: draft.start, frequency: draft.frequency, interval: draft.interval.max(1), skip_weekend: draft.skip_weekend,
+        weekend_mode: old.as_ref().map_or(WeekendMode::After, |r| r.weekend_mode), end_date: old.as_ref().and_then(|r| r.end_date) };
+    if old.as_ref() != Some(&rule) { schedule.next_date = None; schedule.completed = false; }
+    schedule.recurrence = Some(rule);
+    schedule.name = draft.name.trim().to_owned(); schedule.amount = draft.amount; schedule.auto_post = draft.auto_post;
+    schedule.account_id = Some(draft.account_id); schedule.category_id = draft.category_id; schedule.payee_id = payee_id;
+    schedule
+}
+/// Creates (`id` None) or edits a schedule from a draft; returns its id.
+pub fn save_schedule(store: &mut Store, id: Option<Id>, draft: &ScheduleDraft) -> Result<Id> {
+    store.transaction(|store| {
+        let payee_id = store.find_or_create_payee(&draft.payee)?;
+        let existing = match id { Some(id) => Some(store.get_schedule(id)?.ok_or(ServiceError::NotFound)?), None => None };
+        let schedule = apply_draft(existing, payee_id, draft);
+        match id { Some(id) => { store.update_schedule(&schedule)?; Ok(id) }, None => Ok(store.insert_schedule(&schedule)?) }
+    })
+}
 pub fn create_schedule(store: &Store, schedule: &Schedule) -> Result<Id> { Ok(store.insert_schedule(schedule)?) }
 pub fn update_schedule(store: &Store, schedule: &Schedule) -> Result<()> { store.get_schedule(schedule.id)?.ok_or(ServiceError::NotFound)?; Ok(store.update_schedule(schedule)?) }
 pub fn delete_schedule(store: &Store, id: Id) -> Result<()> { store.get_schedule(id)?.ok_or(ServiceError::NotFound)?; Ok(store.delete_schedule(id)?) }
+
+#[cfg(test)]
+mod draft_tests {
+    use super::*;
+
+    fn draft() -> ScheduleDraft { ScheduleDraft { name: "  Gimnasio ".into(), amount: -35_000, account_id: 1, category_id: None, payee: String::new(), frequency: Frequency::Monthly, interval: 1, start: NaiveDate::from_ymd_opt(2026, 11, 15).unwrap(), skip_weekend: false, auto_post: false } }
+
+    #[test]
+    fn new_schedule_starts_at_its_first_occurrence() {
+        let s = apply_draft(None, None, &draft());
+        assert_eq!((s.name.as_str(), s.amount, s.next_date, s.completed), ("Gimnasio", -35_000, None, false));
+        assert_eq!(s.recurrence.as_ref().map(|r| (r.frequency, r.interval, r.weekend_mode)), Some((Frequency::Monthly, 1, WeekendMode::After)));
+    }
+    #[test]
+    fn editing_keeps_progress_only_while_the_rule_is_unchanged() {
+        let mut s = apply_draft(None, None, &draft());
+        s.next_date = NaiveDate::from_ymd_opt(2026, 12, 15);
+        let kept = apply_draft(Some(s.clone()), Some(7), &ScheduleDraft { amount: -40_000, ..draft() });
+        assert_eq!((kept.next_date, kept.amount, kept.payee_id), (NaiveDate::from_ymd_opt(2026, 12, 15), -40_000, Some(7)));
+        s.completed = true;
+        let reset = apply_draft(Some(s), None, &ScheduleDraft { interval: 2, ..draft() });
+        assert_eq!((reset.next_date, reset.completed), (None, false));
+    }
+    #[test]
+    fn save_schedule_creates_then_edits_and_rejects_a_missing_id() {
+        let mut store = Store::open_in_memory().unwrap();
+        let account = store.insert_account(&crate::Account { id: 0, name: "Cuenta".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+        let id = save_schedule(&mut store, None, &ScheduleDraft { account_id: account, payee: "Gym".into(), ..draft() }).unwrap();
+        let saved = store.get_schedule(id).unwrap().unwrap();
+        assert_eq!((saved.name.as_str(), saved.account_id, saved.payee_id.is_some()), ("Gimnasio", Some(account), true));
+        save_schedule(&mut store, Some(id), &ScheduleDraft { account_id: account, amount: -50_000, ..draft() }).unwrap();
+        assert_eq!(store.get_schedule(id).unwrap().unwrap().amount, -50_000);
+        assert!(matches!(save_schedule(&mut store, Some(id + 99), &ScheduleDraft { account_id: account, ..draft() }), Err(ServiceError::NotFound)));
+        assert_eq!(store.list_schedules().unwrap().len(), 1);
+    }
+}

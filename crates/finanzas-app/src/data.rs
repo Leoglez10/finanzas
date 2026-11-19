@@ -59,25 +59,7 @@ pub fn reminders(worker: WorkerStore, now: chrono::NaiveDateTime, days: i64, hou
     finanzas_core::service::reminders(store, now, days, hour).map_err(|e| e.to_string())
 }
 
-/// What the schedule sheet collects; the sign of `amount` already says expense or income.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ScheduleDraft {
-    pub name: String, pub amount: i64, pub account_id: i64, pub category_id: Option<i64>, pub payee: String,
-    pub frequency: Frequency, pub interval: u32, pub start: NaiveDate, pub skip_weekend: bool, pub auto_post: bool,
-}
-/// Builds the row to store. A rule that did not change keeps its progress (`next_date`, `completed`);
-/// a changed rule starts over from its first occurrence.
-pub fn apply_draft(existing: Option<Schedule>, payee_id: Option<i64>, draft: &ScheduleDraft) -> Schedule {
-    let mut schedule = existing.unwrap_or(Schedule { id: 0, name: String::new(), amount: 0, auto_post: false, completed: false, next_date: None, recurrence: None, account_id: None, category_id: None, payee_id: None });
-    let old = schedule.recurrence.take();
-    let rule = Recurrence { start: draft.start, frequency: draft.frequency, interval: draft.interval.max(1), skip_weekend: draft.skip_weekend,
-        weekend_mode: old.as_ref().map_or(WeekendMode::After, |r| r.weekend_mode), end_date: old.as_ref().and_then(|r| r.end_date) };
-    if old.as_ref() != Some(&rule) { schedule.next_date = None; schedule.completed = false; }
-    schedule.recurrence = Some(rule);
-    schedule.name = draft.name.trim().to_owned(); schedule.amount = draft.amount; schedule.auto_post = draft.auto_post;
-    schedule.account_id = Some(draft.account_id); schedule.category_id = draft.category_id; schedule.payee_id = payee_id;
-    schedule
-}
+pub use finanzas_core::service::{apply_draft, ScheduleDraft};
 pub fn mutate(worker: WorkerStore, mutation: Mutation) -> Result<(), String> {
     let mut guard = worker.lock().map_err(|e| e.to_string())?;
     let store = guard.as_mut().ok_or("No se pudo abrir la base de datos")?;
@@ -246,25 +228,6 @@ pub fn seed_schedules(worker: &WorkerStore) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn draft() -> ScheduleDraft { ScheduleDraft { name: "  Gimnasio ".into(), amount: -35_000, account_id: 1, category_id: None, payee: String::new(), frequency: Frequency::Monthly, interval: 1, start: NaiveDate::from_ymd_opt(2026, 11, 15).unwrap(), skip_weekend: false, auto_post: false } }
-
-    #[test]
-    fn new_schedule_starts_at_its_first_occurrence() {
-        let s = apply_draft(None, None, &draft());
-        assert_eq!((s.name.as_str(), s.amount, s.next_date, s.completed), ("Gimnasio", -35_000, None, false));
-        assert_eq!(s.recurrence.as_ref().map(|r| (r.frequency, r.interval, r.weekend_mode)), Some((Frequency::Monthly, 1, WeekendMode::After)));
-    }
-    #[test]
-    fn editing_keeps_progress_only_while_the_rule_is_unchanged() {
-        let mut s = apply_draft(None, None, &draft());
-        s.next_date = NaiveDate::from_ymd_opt(2026, 12, 15);
-        let kept = apply_draft(Some(s.clone()), Some(7), &ScheduleDraft { amount: -40_000, ..draft() });
-        assert_eq!((kept.next_date, kept.amount, kept.payee_id), (NaiveDate::from_ymd_opt(2026, 12, 15), -40_000, Some(7)));
-        s.completed = true;
-        let reset = apply_draft(Some(s), None, &ScheduleDraft { interval: 2, ..draft() });
-        assert_eq!((reset.next_date, reset.completed), (None, false));
-    }
 
     #[test]
     fn ledger_filters_and_sums_the_matching_rows() {

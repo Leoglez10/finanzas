@@ -85,6 +85,14 @@ pub fn reserve_wish(store: &mut Store, id: Id, amount: Cents, today: NaiveDate) 
         Ok(wish)
     })
 }
+/// Undo support: puts back a snapshot of an existing wish (archived flag and reservation included).
+pub fn restore_wish(store: &mut Store, snapshot: &Wish) -> Result<Wish> {
+    store.transaction(|store| {
+        find(store, snapshot.id)?;
+        store.put_wish(snapshot)?;
+        Ok(snapshot.clone())
+    })
+}
 pub fn archive_wish(store: &mut Store, id: Id) -> Result<Wish> {
     store.transaction(|store| {
         let mut wish = find(store, id)?;

@@ -10,3 +10,6 @@ target-*/
 /dist
 /site/.taste-skill/
 /site/shots/
+node_modules/
+desktop/dist/
+desktop/src-tauri/gen/

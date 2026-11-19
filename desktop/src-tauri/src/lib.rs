@@ -177,6 +177,11 @@ pub fn run() {
     if let Some(store) = &state.store { spawn_auto_post(Arc::clone(store), Arc::clone(&state.revision)); }
     tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
         .setup(|app| { spawn_reminders(app.handle().clone()); Ok(()) })
+        // Debug builds only: FINANZAS_DEV_EVAL runs a script after the page loads, to drive the real UI in checks.
+        .on_page_load(|_webview, _payload| {
+            #[cfg(debug_assertions)]
+            if _payload.event() == tauri::webview::PageLoadEvent::Finished && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
+        })
         .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, today, parse_amount,
             features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::create_schedule, features::schedule_action, features::get_settings, features::save_settings, features::import_availability, features::import_data])
         .run(tauri::generate_context!()).expect("error al iniciar la aplicación");

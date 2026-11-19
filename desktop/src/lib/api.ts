@@ -25,6 +25,13 @@ export const accountsOverview = () => invoke<AccountOverview[]>("accounts_overvi
 export const dataVersion = () => invoke<string>("data_version");
 export const overview = (month: number, chartMonths: number) => invoke<Overview>("overview", { month, chartMonths });
 export const entries = (filter: { accountId?: number; search?: string; limit?: number }) => invoke<EntriesResult>("entries", { filter });
+export const addEntry = (entry: EntryInput) => invoke<EntryRow>("add_entry", { entry });
+export const updateEntry = (id: number, entry: EntryInput) => invoke<EntryRow>("update_entry", { id, entry });
+export const deleteEntry = (id: number) => invoke<EntryRow>("delete_entry", { id });
+export const payeeSuggestions = (prefix: string) => invoke<string[]>("payee_suggestions", { prefix });
+export const suggestedCategory = (payeeName: string) => invoke<number | null>("suggested_category", { payeeName });
+/** The input that recreates a row exactly: used to undo deletes and edits. */
+export const inputOf = (r: EntryRow): EntryInput => ({ date: r.date, amount: r.amount, accountId: r.accountId ?? 0, payee: r.payeeName ?? "", categoryId: r.categoryId, notes: r.notes });
 export const categoriesGrouped = () => invoke<CategoryGroup[]>("categories_grouped");
 export const upcoming = () => invoke<UpcomingItem[]>("upcoming");
 export const wishes = () => invoke<WishView[]>("wishes");

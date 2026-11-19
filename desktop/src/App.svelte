@@ -1,14 +1,27 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { app, start } from "./lib/app.svelte";
+  import { undo } from "./lib/undo.svelte";
   import Sidebar from "./components/Sidebar.svelte";
+  import EntryDialog from "./components/EntryDialog.svelte";
+  import Toast from "./components/Toast.svelte";
   import Resumen from "./screens/Resumen.svelte";
+  import Movimientos from "./screens/Movimientos.svelte";
   import Pending from "./screens/Pending.svelte";
 
   onMount(() => { start().catch(e => app.error = String(e)); });
   let screen = $derived(app.route.split(/[/?]/)[0]);
-  const titles: Record<string, string> = { movimientos: "Movimientos", presupuesto: "Presupuesto", proximos: "Próximos pagos", deseos: "Deseos", ajustes: "Ajustes" };
+  const titles: Record<string, string> = { presupuesto: "Presupuesto", proximos: "Próximos pagos", deseos: "Deseos", ajustes: "Ajustes" };
+
+  // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
+  function keydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !(e.target as HTMLElement).matches("input, textarea, select") && !document.querySelector("dialog[open]")) {
+      e.preventDefault(); void undo();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={keydown} />
 
 {#if app.error}
   <main class="main" style="display:grid;place-items:center;height:100vh">
@@ -23,12 +36,16 @@
           <p class="muted">Cargando…</p>
         {:else if screen === "resumen"}
           <Resumen />
+        {:else if screen === "movimientos"}
+          <Movimientos />
         {:else if screen.startsWith("cuenta-")}
-          <Pending title={app.accounts.find(a => `cuenta-${a.id}` === screen)?.name ?? "Cuenta"} />
+          {#key screen}<Movimientos accountId={Number(screen.slice(7))} />{/key}
         {:else}
           <Pending title={titles[screen] ?? "Finanzas"} />
         {/if}
       </div>
     </main>
   </div>
+  <EntryDialog />
+  <Toast />
 {/if}

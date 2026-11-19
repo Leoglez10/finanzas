@@ -12,8 +12,8 @@ S6. Data safety: real data stays in the existing per-profile SQLite stores via `
 S7. Open decision (not blocking early tasks): in-app updater vs Homebrew cask as the update channel.
 
 ## Tasks
-- T1 [S1,S2,S4] inline — Shell: restore `desktop/` base, design tokens + themes, sidebar, routing, Resumen with real data. Status: in progress.
-- T2 [S1,S5] inline — Movimientos/cuenta: grouped ledger, search/filters, add/edit dialog, inline edit, delete with undo. Status: pending.
+- T1 [S1,S2,S4] inline — Shell: restore `desktop/` base, design tokens + themes, sidebar, routing, Resumen with real data. Status: done (pnpm check 0 errors, cargo test 4 passed, app launched against demo DB and Resumen screenshot inspected). Commit db7f6f6.
+- T2 [S1,S5] inline — Movimientos/cuenta: grouped ledger, search/filters, add/edit dialog, inline edit, delete with undo. Status: done (desktop/qa/movimientos.js 13/13 PASS on the real debug app with a demo DB; quick-parse 6 tests; pnpm check 0 errors).
 - T3 [S1] inline — Presupuesto. Status: pending.
 - T4 [S1,S5] inline — Próximos pagos (register/skip/schedules) + reminders as native notifications + tray. Status: pending.
 - T5 [S1] inline — Deseos (reserve, release, buy, archive, two-step editor). Status: pending.
@@ -26,3 +26,4 @@ S7. Open decision (not blocking early tasks): in-app updater vs Homebrew cask as
 L1. 2026-11-18 user request verbatim: "ya empieza la implementacion".
 L2. Prior art: Tauri 2 + Svelte app removed in e652984 ("remove Tauri desktop app in favor of the Rune app"); restored `desktop/` from e652984^ as the base for the Rust command layer, icons and config. Frontend components are rewritten to the new design.
 L3. Route: inline; no writer reason (units are sequential and depend on the shell). Risk: item 5 (new JS/Rust dependencies: Tauri plugins, Svelte toolchain) — independent verifier at feature end.
+L4. T2 verification: real app driven through FINANZAS_DEV_EVAL (debug builds only) via desktop/qa/run.sh; System Events accessibility was not permitted, so no permission was requested. Undo of a delete re-adds the movement with a new id (schedule link not restored).

@@ -21,6 +21,14 @@ export function applyAppearance(settings: api.Settings) {
 }
 
 async function refreshAccounts() { app.accounts = await api.accountsOverview(); }
+async function tick() {
+  try {
+    const version = await api.dataVersion();
+    if (version !== app.version) { await refreshAccounts(); app.version = version; }
+  } catch (e) { console.error(e); }
+}
+/** Call after a write so screens reload now instead of on the next poll. */
+export const refresh = tick;
 
 /** Polls the data version so writes from the MCP server or another window show up within ~2 s. */
 export async function start() {
@@ -30,12 +38,6 @@ export async function start() {
   const [y, m, d] = today.split("-").map(Number);
   app.today = new Date(y, m - 1, d);
   app.settings = settings; applyAppearance(settings);
-  const tick = async () => {
-    try {
-      const version = await api.dataVersion();
-      if (version !== app.version) { await refreshAccounts(); app.version = version; }
-    } catch (e) { console.error(e); }
-  };
   await tick();
   setInterval(tick, 2000);
 }

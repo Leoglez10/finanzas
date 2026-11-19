@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as api from "../lib/api";
   import { app, go } from "../lib/app.svelte";
+  import { openEntry } from "../lib/dialogs.svelte";
   import { money, monthKey, monthTitle, monthShort, shiftMonth, change, categoryColor, parseDay, daysBetween, dayNumber, dayMonth, monthDate } from "../lib/format";
   import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
@@ -43,8 +44,8 @@
     </div>
   {/snippet}
   {#snippet actions()}
-    <button class="btn" disabled title="Llega con Movimientos"><Icon name="plus" />Ingreso</button>
-    <button class="btn primary" disabled title="Llega con Movimientos"><Icon name="minus" />Gasto</button>
+    <button class="btn" onclick={() => openEntry("ingreso")}><Icon name="plus" />Ingreso</button>
+    <button class="btn primary" onclick={() => openEntry("gasto")}><Icon name="minus" />Gasto</button>
   {/snippet}
 </Topbar>
 

@@ -18,6 +18,8 @@ export interface EntriesResult { rows: EntryRow[]; total: number; sum: number }
 export interface UpcomingItem { scheduleId: number; name: string; date: string; amount: number; accountId: number | null; account: string | null; autoPost: boolean; overdue: boolean; projectedBalance: number | null }
 export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean }
 export interface WishView { wish: Wish; evaluation: { status: string; budgetShortfall: number | null; cashShortfall: number | null; reasons: string[] } }
+export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
+export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
 export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean }
 
 export const startupError = () => invoke<string | null>("startup_error");
@@ -33,6 +35,9 @@ export const suggestedCategory = (payeeName: string) => invoke<number | null>("s
 /** The input that recreates a row exactly: used to undo deletes and edits. */
 export const inputOf = (r: EntryRow): EntryInput => ({ date: r.date, amount: r.amount, accountId: r.accountId ?? 0, payee: r.payeeName ?? "", categoryId: r.categoryId, notes: r.notes });
 export const categoriesGrouped = () => invoke<CategoryGroup[]>("categories_grouped");
+export const budget = (month: number) => invoke<BudgetView>("budget", { month });
+/** Accepts "800", "+100", "-50" or arithmetic like "550*2"; returns the new cents or null when the text is invalid. */
+export const assignBudget = (month: number, categoryId: number, text: string) => invoke<number | null>("assign_budget", { month, categoryId, text });
 export const upcoming = () => invoke<UpcomingItem[]>("upcoming");
 export const wishes = () => invoke<WishView[]>("wishes");
 export const today = () => invoke<string>("today");

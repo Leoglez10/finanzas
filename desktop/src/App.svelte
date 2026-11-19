@@ -19,7 +19,8 @@
 
   // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
   function keydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !(e.target as HTMLElement).matches("input, textarea, select") && !document.querySelector("dialog[open]")) {
+    const typing = e.target instanceof Element && e.target.matches("input, textarea, select");
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !typing && !document.querySelector("dialog[open]")) {
       e.preventDefault(); void undo();
     }
   }

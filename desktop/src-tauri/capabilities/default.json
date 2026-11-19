@@ -3,13 +3,15 @@
   "identifier": "default",
   "description": "Default desktop capability",
   "windows": [
-    "main"
+    "main",
+    "quick"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "dialog:allow-open",
     "notification:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "core:event:default"
   ]
 }

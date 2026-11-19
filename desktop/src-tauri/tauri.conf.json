@@ -24,6 +24,22 @@
           "y": 24
         },
         "create": false
+      },
+      {
+        "label": "quick",
+        "title": "Captura rápida",
+        "url": "index.html#quick",
+        "create": false,
+        "width": 640,
+        "height": 236,
+        "resizable": false,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true,
+        "shadow": true
       }
     ],
     "security": {

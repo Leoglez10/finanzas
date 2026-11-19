@@ -38,9 +38,10 @@ fn menu(app: &AppHandle, summary: &Summary) -> tauri::Result<Menu<tauri::Wry>> {
         Some((text, overdue)) => MenuItem::with_id(app, "next", if *overdue { format!("⚠︎ {text}") } else { format!("Próximo: {text}") }, true, None::<&str>)?,
         None => MenuItem::with_id(app, "next", "Sin pagos en los próximos 30 días", false, None::<&str>)?,
     };
+    let quick = MenuItem::with_id(app, "quick", "Captura rápida", true, Some(crate::menu::QUICK_SHORTCUT))?;
     let open = MenuItem::with_id(app, "open", "Abrir Finanzas", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Salir de Finanzas", true, Some("CmdOrCtrl+Q"))?;
-    Menu::with_items(app, &[&balance, &next, &PredefinedMenuItem::separator(app)?, &open, &quit])
+    Menu::with_items(app, &[&balance, &next, &PredefinedMenuItem::separator(app)?, &quick, &open, &quit])
 }
 
 /// Creates the icon, or updates it when it already exists. Errors are logged, never fatal.
@@ -58,6 +59,7 @@ pub fn refresh(app: &AppHandle) {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show(app, None),
                     "next" => show(app, Some("proximos")),
+                    "quick" => crate::menu::show_quick_window(app),
                     "quit" => app.exit(0),
                     _ => {},
                 });

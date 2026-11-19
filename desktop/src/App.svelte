@@ -1,7 +1,13 @@
 <script lang="ts">
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
-  import { app, start } from "./lib/app.svelte";
-  import { undo } from "./lib/undo.svelte";
+  import * as api from "./lib/api";
+  import { app, refresh, start } from "./lib/app.svelte";
+  import { runCommand } from "./lib/commands.svelte";
+  import { openEntry } from "./lib/dialogs.svelte";
+  import { remember, undo } from "./lib/undo.svelte";
+  import Palette from "./components/Palette.svelte";
+  import QuickCapture from "./screens/QuickCapture.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import EntryDialog from "./components/EntryDialog.svelte";
   import Toast from "./components/Toast.svelte";
@@ -14,7 +20,20 @@
   import ScheduleDialog from "./components/ScheduleDialog.svelte";
   import Ajustes from "./screens/Ajustes.svelte";
 
-  onMount(() => { start().catch(e => app.error = String(e)); });
+  // The quick-capture window loads this same page at #quick and shows only that.
+  const quickWindow = location.hash === "#quick";
+  onMount(() => {
+    if (quickWindow) return;
+    start().catch(e => app.error = String(e));
+    const offs = [
+      listen<string>("menu", e => runCommand(e.payload)),
+      listen<{ id: number; label: string }>("quick-saved", e => { remember(e.payload.label, () => api.deleteEntry(e.payload.id).then(refresh)); void refresh(); }),
+      listen<{ kind: "gasto" | "ingreso"; cents: number | null; payee: string; categoryId: number | null; accountId: number | null; date: string }>("quick-details", e => {
+        const d = e.payload; openEntry(d.kind, null, { cents: d.cents, payee: d.payee, categoryId: d.categoryId, accountId: d.accountId, date: new Date(d.date) });
+      }),
+    ];
+    return () => offs.forEach(off => void off.then(f => f()));
+  });
   let screen = $derived(app.route.split(/[/?]/)[0]);
 
   // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
@@ -28,7 +47,9 @@
 
 <svelte:window onkeydown={keydown} />
 
-{#if app.error}
+{#if quickWindow}
+  <QuickCapture />
+{:else if app.error}
   <main class="main" style="display:grid;place-items:center;height:100vh">
     <article class="card" style="max-width:520px"><h2>No se pudo abrir la base de datos</h2><p class="muted" style="margin-top:8px">{app.error}</p></article>
   </main>
@@ -62,5 +83,6 @@
   <EntryDialog />
   <ScheduleDialog />
   <WishDialog />
+  <Palette />
   <Toast />
 {/if}

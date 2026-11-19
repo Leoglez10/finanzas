@@ -13,7 +13,7 @@
   let { accountId = 0 }: { accountId?: number } = $props();
   // Filters can arrive in the route: movimientos?mes=202611&categoria=4 (from Resumen).
   let params = $derived(new URLSearchParams(app.route.split("?")[1] ?? ""));
-  let search = $state("");
+  let search = $state(new URLSearchParams(location.hash.split("?")[1] ?? "").get("q") ?? "");
   let kind = $state<"todos" | "gastos" | "ingresos">("todos");
   let month = $derived(Number(params.get("mes")) || 0);
   let categoryFilter = $derived(Number(params.get("categoria")) || 0);

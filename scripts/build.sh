@@ -15,5 +15,8 @@ if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$HOME/.tauri/finanzas-updater.k
   export TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/finanzas-updater.key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
 fi
 pnpm --dir desktop install --frozen-lockfile
-pnpm --dir desktop tauri build --config src-tauri/tauri.release.json "$@"
+# Without a signing key (forks, pull requests) the installers are still built, just not the update bundles.
+extra=()
+[[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]] && extra=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
+pnpm --dir desktop tauri build --config src-tauri/tauri.release.json ${extra[@]+"${extra[@]}"} "$@"
 echo "Bundles: $PWD/target/release/bundle/"

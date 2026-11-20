@@ -8,7 +8,7 @@
 [![Downloads](https://img.shields.io/github/downloads/Leoglez10/finanzas/total)](https://github.com/Leoglez10/finanzas/releases)
 [![Website](https://img.shields.io/badge/web-leoglez10.github.io%2Ffinanzas-155E75)](https://leoglez10.github.io/finanzas/)
 
-Local personal finance app for macOS, Windows and Linux, built in Rust with the [Rune](https://github.com/anomalyco/rune) GPU UI framework.
+Local personal finance app for macOS, Windows and Linux, built with [Tauri](https://tauri.app) (Rust core, Svelte interface).
 See at a glance how much money is left this month, plan envelope budgets, never miss a scheduled
 payment, and let AI assistants read and record your finances through MCP.
 The interface is in Spanish. Website: **[leoglez10.github.io/finanzas](https://leoglez10.github.io/finanzas/)**.
@@ -40,27 +40,28 @@ Everything stays on your computer: no account, cloud or telemetry.
 
 ## Features
 
-- **Resumen** — a card dashboard for the selected month:
-  - **Saldo previsto**: income minus what is already spent and what scheduled payments still take,
-    shown as one stacked bar (Gastado / Por pagar / Sobra) with month-over-month changes and the total account balance.
-  - **Pagos por hacer**: outflows still due this month, overdue ones highlighted, grouped by day chips.
-  - **Gasto por categoría**, **Ingresos vs gastos** (6 or 12 months), **Presupuesto del mes** with a 100% marker,
-    and **Movimientos recientes**.
-  - Payment reminders and a **Primeros pasos** checklist for a new database.
-- **Presupuesto** — monthly envelope budget: assign amounts per category (type a number, `+100` / `-50`
-  to add or subtract, or math such as `550*2`; blank means 0), see activity, availability and how much is left to assign.
-- **Math in amounts** — every amount field (budget, movements, scheduled payments, opening balance) accepts
-  `+ - * x /` and parentheses, e.g. `550*2` or `(200+50)/2`, and a blank amount is 0.
-- **Perfiles** — keep separate data (for example personal and business): switch, create, rename, hide or delete
-  profiles from the sidebar and Ajustes. Personal is the main profile and cannot be deleted.
-- **Próximos pagos** — scheduled payments for the next 30 days with projected account balances;
-  register (Registrar) or skip (Saltar) each occurrence; recurring schedules can register themselves (automatic).
-- **Movimientos** — searchable ledger for all accounts or one account; add, edit and delete income and expenses.
-- **Cuentas** — on-budget and off-budget accounts with balances in the sidebar; closed accounts listed separately.
-- **Ajustes** — payment reminders (days before and hour), import from the old Finanzas app or Actual, profiles,
-  theme, MCP agents and database location.
-- **Tema** — automatic (follows the system), light or dark; the choice is saved.
-- **Agentes MCP** — Claude, Codex and OpenCode with a green dot while connected, and a copy button with each one's setup.
+- **Resumen** — the selected month at a glance: how much is left after scheduled payments (Gastado / Por pagar / Libre),
+  payments due, income and expenses against last month, money set aside for wishes, spending by category and
+  income vs expenses for 6 or 12 months. Every chart column and category opens its movements.
+  A **Primeros pasos** checklist guides a new database.
+- **Movimientos** — all accounts or one, grouped by day, with search, type and month/category filters.
+  Double-click an amount or a category to change it in place.
+- **Presupuesto** — monthly envelope budget: type an amount, `+100` / `-50` to add or subtract, or math such as `550*2`;
+  copy last month's amounts; each category shows its progress and whether it is on track, close or over.
+- **Próximos pagos** — overdue, this week and later payments with projected balances; register or skip each one,
+  and schedule recurring payments that can register themselves.
+- **Deseos** — set money aside for things you want to buy without recording an expense (see [Wishes](#wishes-and-savings-goals)).
+- **Undo instead of "are you sure?"** — deleting, registering, importing or editing shows **Deshacer** (or press ⌘Z).
+  Only deleting a whole profile asks first, because it removes its database.
+- **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
+- **Quick capture (⌥⇧F)** — a small window from any app: type `super 450.50 tarjeta`, press Enter. Payee spelling,
+  category and account come from your own history.
+- **CSV import** — drop a bank CSV on the window (or ⌘I): comma or semicolon files, Spanish or English headers and
+  separate cargo/abono columns, with a preview that marks duplicates and broken rows. All rows or none are imported.
+- **Menu-bar icon and reminders** — balance and next payment in the menu bar; system notifications before each payment
+  arrive while Finanzas runs (closing the window keeps it in the menu bar).
+- **Ajustes** — profiles (separate data, for example personal and business), six color themes with light/dark mode,
+  reminders, import, database location, MCP agents and updates.
 - A local **MCP server** for AI assistants (see [MCP server](#mcp-server)).
 
 <p align="center">
@@ -70,34 +71,20 @@ Everything stays on your computer: no account, cloud or telemetry.
 
 ## Using the app
 
-Almost everything on the Resumen is clickable, shows a tooltip on hover and gives press feedback:
+Keyboard shortcuts (⌘ on macOS, Ctrl on Windows and Linux); they are also listed in **Ajustes › Atajos**:
 
-| Click | Result |
+| Shortcut | Action |
 |---|---|
-| Month name (when not on the current month) or arrows | Go back to the current month / previous / next month |
-| **Ingreso** / **Gasto** | Record an income or expense |
-| Legend items in Saldo previsto | Ingresos and Gastado open Movimientos; Por pagar opens Próximos pagos; Sobra opens Presupuesto |
-| Circle next to a payment in Pagos por hacer | **Registers that payment today** (same as Registrar in Próximos pagos) |
-| Day chip in Pagos por hacer | Show only that day's payments; click again to show all |
-| Category row or bar segment | Movimientos filtered by that category |
-| Chart column | Open that month |
-| Budget card header / category | Open Presupuesto / that category's movements |
-| Recent movement | Movimientos searching that payee |
-| Reminders title | Collapse or expand the reminders |
-
-Elsewhere: double-click a movement or a scheduled payment to edit it; right-click a movement for Editar / Eliminar;
-click a category name in Presupuesto to see its movements. **Todas** in the sidebar clears the search.
-
-Keyboard shortcuts (⌘ on macOS, Ctrl on Windows and Linux):
-
-| Shortcut | Where | Action |
-|---|---|---|
-| ⌘N / ⇧⌘N | Movimientos | New expense / new income |
-| ⌘N | Próximos pagos | New scheduled payment |
-| Delete | Movimientos, Próximos pagos | Delete the selected item (asks first) |
-| ⌘← / ⌘→ | Resumen, Presupuesto | Previous / next month |
-| ⌘, | Anywhere | Ajustes |
-| Esc | Sheets and dialogs | Close |
+| ⌘K | Command palette |
+| ⌥⇧F | Quick capture, from any app |
+| ⌘N / ⇧⌘N | New expense / new income |
+| ⌘1 … ⌘5 | Resumen, Movimientos, Presupuesto, Próximos pagos, Deseos |
+| ⌘, | Ajustes |
+| ⌘F | Search movements |
+| ⌘I | Import a CSV |
+| ⌘Z | Undo the last change |
+| ⇧⌘L | Switch light / dark |
+| Esc | Close a dialog or cancel an edit |
 
 ## Install
 
@@ -106,9 +93,9 @@ These links always download the latest release ([all releases](https://github.co
 | Platform | Download | Notes |
 |---|---|---|
 | macOS 11+ (Apple Silicon) | [Finanzas-macos-arm64.dmg](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-macos-arm64.dmg) | Drag Finanzas to Applications; the first time, right-click the app and choose Open. |
-| Windows 10/11 (x64) | [Finanzas-windows-x64-setup.exe](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-windows-x64-setup.exe) | Installs for the current user in `%LOCALAPPDATA%\Programs\Finanzas`; if SmartScreen appears, choose More info → Run anyway. |
+| Windows 10/11 (x64) | [Finanzas-windows-x64-setup.exe](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-windows-x64-setup.exe) | If SmartScreen appears, choose More info → Run anyway. |
 | Linux (Debian/Ubuntu, x86_64) | [finanzas-linux-amd64.deb](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-amd64.deb) | `sudo apt install ./finanzas-linux-amd64.deb` |
-| Linux (other, x86_64) | [finanzas-linux-x86_64.tar.gz](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-x86_64.tar.gz) | Extract and run `./finanzas`. |
+| Linux (other, x86_64) | [Finanzas-linux-x86_64.AppImage](https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-linux-x86_64.AppImage) | `chmod +x` and run; updates itself. A plain [tar.gz](https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-x86_64.tar.gz) of the binaries is also published. |
 
 **macOS with Homebrew** (this repository is its own tap; also links `finanzas-mcp` into your `PATH`):
 
@@ -116,15 +103,14 @@ These links always download the latest release ([all releases](https://github.co
 brew tap leoglez10/finanzas https://github.com/Leoglez10/finanzas
 brew trust leoglez10/finanzas   # recent Homebrew asks to trust third-party taps
 brew install --cask finanzas
-brew upgrade finanzas   # later, to update
 ```
 
-**Updates:** the app checks GitHub for a newer release when it opens and once a day. When there is one,
-*Resumen* shows a notice with a download link (or `brew upgrade finanzas`), and after updating it shows
-which version you are on with a link to its release notes. *Ajustes › Versión* shows the installed version.
-The check needs `curl` (bundled with macOS and Windows 10+); offline, the app stays quiet.
+**Updates:** Finanzas checks GitHub Releases when it opens (turn it off in *Ajustes › Actualizaciones*). When there is
+a new version, the sidebar offers **Instalar actualización**; it downloads, verifies the signature and asks to restart.
+Homebrew installs the app but leaves updates to it (`auto_updates true`); `brew upgrade --greedy` still works.
+The `.deb` and the tar.gz do not update themselves; reinstall them from this table.
 
-The installers are not signed yet. Each one also ships the MCP server (`finanzas-mcp`).
+The installers are not signed by Apple or Microsoft. Each one also ships the MCP server (`finanzas-mcp`).
 Your data lives outside the app (see below), so reinstalling or upgrading keeps it.
 
 **Uninstall:** macOS, drag `Finanzas.app` to the Trash; Windows, *Settings › Apps*; Debian/Ubuntu,
@@ -132,28 +118,27 @@ Your data lives outside the app (see below), so reinstalling or upgrading keeps 
 
 ### Requirements to build from source
 
-- Rust stable (the app crate uses edition 2024).
+- Rust stable, Node.js 24 and pnpm 11.
 - Platform dependencies:
 
 | Platform | Dependencies |
 |---|---|
 | macOS | Xcode Command Line Tools (`xcode-select --install`) |
-| Windows | Microsoft C++ Build Tools with Desktop development with C++ |
-| Debian/Ubuntu | Build: `libxkbcommon-dev`, `libwayland-dev`. Run: `libxkbcommon-x11-0` and a Vulkan driver (`mesa-vulkan-drivers` without a GPU) |
-
-The file dialogs used by import go through the XDG desktop portal on Linux.
+| Windows | Microsoft C++ Build Tools (Desktop development with C++) and WebView2 (included in Windows 11) |
+| Debian/Ubuntu | `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev` |
 
 ### From source
 
 ```sh
-cargo run --release -p finanzas-app      # or: bash scripts/dev.sh
+bash scripts/dev.sh      # hot reload; FINANZAS_DB=<path> uses another database
+bash scripts/build.sh    # release bundles in target/release/bundle/
 ```
 
 ## Data location and backups
 
 The app and MCP server share one SQLite database (WAL mode). Set `FINANZAS_DB` to use a different file;
 otherwise the default is the platform data directory. That file is the **Personal** profile. Other profiles
-(create, switch, rename, hide or delete them in the sidebar and **Ajustes → Perfiles**) are `<name>.db` files in the
+(create, switch, rename, hide or delete them in **Ajustes › Perfil**) are `<name>.db` files in the
 same folder, and settings are shared. Deleting a profile removes its file permanently; Personal cannot be deleted.
 
 | Platform | Default database |
@@ -164,7 +149,7 @@ same folder, and settings are shared. Deleting a profile removes its file perman
 
 **Backup:** close the app and any MCP client using it, then copy `finanzas.db` (and `finanzas.db-wal` /
 `finanzas.db-shm` if present). **Restore:** with the app closed, put the copies back in the same folder.
-The **Ajustes** screen shows which database the app is using.
+**Ajustes › Datos** shows which database the app is using.
 
 ## Wishes and savings goals
 
@@ -172,7 +157,7 @@ Open **Deseos** to save a purchase with its target price, product link, details 
 Reserve part or all of the price from available category funds; set the reservation to zero to release it.
 The app explains budget fit, missing funds and recorded upcoming-payment constraints separately.
 Reservations do not create expenses or move account balances, and cannot claim the same category funds twice.
-Archive a wish to release funds and keep its history; record the actual purchase through the existing transaction flow.
+Archive a wish to release funds and keep its history; or use **Lo compré** to record the expense and archive it in one step.
 
 See [reservation and evaluation rules](docs/wishes.md), including unknown results, the 30-day horizon,
 and the automatic version 1 → 2 database migration. Back up before upgrading; older binaries cannot open version 2.
@@ -225,10 +210,13 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 
 ## Import
 
-**Ajustes › Importar datos** copies data into an empty database. **Importar desde Finanzas
-(SwiftData)** reads the old app's store (`~/Library/Application Support/Finanzas/Finanzas.store`)
-read-only, without modifying it. **Importar desde Actual** accepts `db.sqlite`, an export zip or a
-server `.blob`. A confirmation names the source file and the destination database first.
+**Bank CSV:** drop the file on the window, press ⌘I, or use *Movimientos › Importar CSV* or *Ajustes › Datos*.
+Pick the account; the preview marks duplicates (same day, payee and amount in that account) and rows that
+cannot be read. Nothing is written until you confirm, and **Deshacer** removes the whole import.
+
+**Another finance app:** *Ajustes › Datos* copies data into an empty profile. **Desde Actual Budget** accepts
+`db.sqlite` or a backup `.zip`; **Desde la app anterior de Mac** reads the old SwiftData store
+(`~/Library/Application Support/Finanzas/Finanzas.store`) read-only.
 
 ## Troubleshooting
 
@@ -236,50 +224,63 @@ server `.blob`. A confirmation names the source file and the destination databas
 |---|---|
 | macOS says the app "cannot be opened" or is from an unidentified developer | Right-click `Finanzas.app` › Open once (the app is not notarized). |
 | Windows SmartScreen blocks the installer | More info › Run anyway. |
-| Linux: the window does not open / Vulkan error | Install `mesa-vulkan-drivers` (and `libxkbcommon-x11-0`). |
+| Linux: the window does not open | Install WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`), or use the AppImage. |
 | "No se pudo abrir la base de datos" | Check that the folder in [Data location](#data-location-and-backups) is writable, or that `FINANZAS_DB` points to a valid path. |
 | Import refuses to run | Import only works into an empty database; use a new `FINANZAS_DB` file or start fresh. |
 | MCP client sees different data than the app | Both must use the same database: set the same `FINANZAS_DB` in both, or neither. |
 
 ## Limitations
 
-- Installers are unsigned; macOS builds are Apple Silicon only and Linux builds are x86_64 only (no AppImage yet).
+- Installers are not signed by Apple or Microsoft; macOS builds are Apple Silicon only and Linux builds are x86_64 only.
+- Reminders and automatic payments run while Finanzas is open (the menu-bar icon keeps it running with the window closed).
 - Single user, single device: there is no sync between computers.
 - The interface is Spanish only; amounts are shown as `$1,234.56`.
 
 ## Development
 
 ```sh
-cargo build --release -p finanzas-app -p finanzas-mcp   # or: bash scripts/build.sh
-FINANZAS_DB=$(mktemp -d)/test.db cargo test --workspace
+FINANZAS_DB=$(mktemp -d)/test.db cargo test --workspace --exclude finanzas-desktop
 cargo clippy --workspace --all-targets -- -D warnings
+pnpm --dir desktop check && pnpm --dir desktop test     # types and the CSV / quick-capture parsers
 ```
 
-Always run tests with `FINANZAS_DB` pointing at a scratch file. The app also renders headless with
-in-memory demo data, for example `target/release/finanzas --scene demo-light --size 1440x900 --snap resumen.png`
-(scenes include `demo-dark`, `presupuesto-light`, `proximos-dark`, `movimientos-light`, `ajustes-light`,
-`deseo-sheet`, `deseo-sheet-dark`, `deseo-review`, and `deseo-discard`). The wish-editor scenes use
-synthetic data and show the two-step editor, price interpretation, and dirty-dismiss confirmation.
-See [the wish-editor flow and amount format](docs/wishes.md#create-or-edit-a-wish-in-the-app).
+Always run tests with `FINANZAS_DB` pointing at a scratch file. To look at the app with demo data:
+
+```sh
+(cd desktop/src-tauri && cargo run --example demo_db -- /tmp/finanzas-demo/finanzas.db)
+FINANZAS_DB=/tmp/finanzas-demo/finanzas.db bash scripts/dev.sh
+```
+
+`desktop/qa/` holds scripts that drive the real app on a throwaway demo database (debug builds only):
+start `pnpm --dir desktop dev`, then run `desktop/qa/run.sh desktop/qa/movimientos.js`; it prints PASS/FAIL
+lines and exits non-zero on a failure. They never touch your data.
 
 | Path | Contents |
 |---|---|
 | `crates/finanzas-core` | Domain, SQLite store, services and importers |
-| `crates/finanzas-app` | Rune desktop app (`overview.rs` Resumen, `budget.rs`, `proximos.rs`, `ledger.rs`, `ajustes.rs`, `theme.rs` shared look and icons) |
 | `crates/finanzas-mcp` | MCP stdio server |
-| `packaging/` | App icon (`icon/finanzas.svg` source), macOS `Info.plist`, Windows Inno Setup script, Linux desktop entry |
-| `scripts/` | `dev.sh`, `build.sh`, `package-macos.sh` |
+| `desktop/src-tauri` | Tauri app: commands over finanzas-core, menu, menu-bar icon, reminders, updater |
+| `desktop/src` | Svelte interface (`screens/`, `components/`, `lib/` state, parsers and formatting) |
+| `desktop/qa` | Scripts that drive the real app |
+| `design/redesign` | The approved interface prototype |
+| `packaging/icon` | App icon source (`finanzas.svg`, `finanzas-1024.png`) |
+| `scripts/` | `dev.sh`, `build.sh` |
 | `site/` | Project website (GitHub Pages), built with the [taste-skill](https://github.com/Leonxlnx/taste-skill) kit (MIT, files in `site/assets/`) |
-| `.github/workflows/` | `rust.yml` tests and builds on every push and PR; `release.yml` installers and releases; `pages.yml` website |
+| `.github/workflows/` | `rust.yml` tests on every push and PR; `release.yml` installers, update feed and releases; `pages.yml` website |
 
 ## Releasing
 
 Releases are automatic: bump `version` in the root `Cargo.toml` and merge to `main`.
-`release.yml` sees that `v<version>` has no release yet, builds the three installers, creates the tag
-and publishes the GitHub Release. Pushing a `v*` tag by hand also works; pull requests that touch
-packaging build the installers as artifacts without publishing.
-`bash scripts/package-macos.sh <version>` builds the `.dmg` locally after a release build.
-The website in `site/` is published by `pages.yml` whenever `site/` changes on `main`.
+`release.yml` sees that `v<version>` has no release yet, builds the installers on macOS, Windows and Linux,
+creates the tag, publishes the GitHub Release with a signed `latest.json` for the in-app updater, and points the
+Homebrew cask at the new `.dmg`. Pushing a `v*` tag by hand also works; pull requests that touch the desktop
+bundle build the installers as artifacts without publishing.
+
+Update signatures need the repository secrets `TAURI_SIGNING_PRIVATE_KEY` (the key file's contents) and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty if the key has none). The public key is in
+`desktop/src-tauri/tauri.conf.json`; losing the private key means existing installs can no longer update.
+`bash scripts/build.sh` makes the same bundles locally. The website in `site/` is published by `pages.yml`
+whenever `site/` changes on `main`.
 
 ## Legacy Swift app
 

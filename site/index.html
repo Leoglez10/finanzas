@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Finanzas: app de finanzas personales para macOS, Windows y Linux</title>
-<meta name="description" content="Presupuesto por sobres, pagos programados y saldo previsto, guardados en un solo archivo en tu computadora. Gratis, de código abierto, sin cuenta ni nube.">
+<meta name="description" content="Presupuesto por sobres, pagos programados y cuánto te sobra del mes, guardados en un solo archivo en tu computadora. Gratis, de código abierto, sin cuenta ni nube.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Finanzas: app de finanzas personales para macOS, Windows y Linux">
-<meta property="og:description" content="Presupuesto, pagos programados y saldo previsto. Local, gratis y de código abierto.">
+<meta property="og:description" content="Presupuesto, pagos programados y cuánto te sobra del mes. Local, gratis y de código abierto.">
 <meta property="og:image" content="share.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.png" type="image/png">
@@ -155,10 +155,10 @@
       <div class="hero__c">
         <a class="pill" href="#descargar"><span id="version">Gratis y de código abierto</span><span class="muted">Licencia MIT</span></a>
         <h1 id="hero-h">App de finanzas personales, sin nube</h1>
-        <p class="hero__lead">Presupuesto por sobres, pagos programados y un saldo previsto del mes, guardados en un archivo SQLite en tu computadora. Gratis para macOS, Windows y Linux.</p>
+        <p class="hero__lead">Presupuesto por sobres, pagos programados y cuánto te sobra del mes, guardados en un archivo SQLite en tu computadora. Gratis para macOS, Windows y Linux.</p>
         <div class="btn-row"><a class="btn btn--primary" id="main-download" href="#descargar" data-download>Descargar Finanzas</a><a class="btn btn--secondary" href="https://github.com/Leoglez10/finanzas">Ver el código</a></div>
       </div>
-      <div class="hero__window" data-fx="grain-gradient" data-fx-seed="7" data-fx-params='{"speed":0.3}' role="img" aria-label="Pantalla Resumen de Finanzas: saldo previsto, pagos por hacer, gasto por categoría y presupuesto del mes">
+      <div class="hero__window" data-fx="grain-gradient" data-fx-seed="7" data-fx-params='{"speed":0.3}' role="img" aria-label="Pantalla Resumen de Finanzas: lo que te sobra del mes, pagos por hacer, gasto por categoría e ingresos contra gastos">
         <div class="ly-piece hero__shot" aria-hidden="true">
           <picture>
             <source media="(max-width: 639px)" srcset="img/resumen-phone.webp" width="700" height="304">
@@ -223,15 +223,15 @@
           <article class="card card--row card--open span-6 m-nolift">
             <h3>Reparte tu ingreso en sobres</h3>
             <p>Escribe cuánto va a cada categoría, usa +100 y −50 o haz cuentas como 550*2. Ves al momento cuánto queda disponible.</p>
-            <div class="panel" role="img" aria-label="Pantalla Presupuesto: 5,720 disponibles para asignar y las categorías con lo asignado y lo gastado">
+            <div class="panel" role="img" aria-label="Pantalla Presupuesto: lo disponible para asignar y cada categoría con su progreso, lo asignado y lo gastado">
               <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:32px;--ay:32px"><img src="img/presupuesto-panel.webp" srcset="img/presupuesto-panel-700.webp 700w, img/presupuesto-panel.webp 1300w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1300" height="800" loading="lazy" data-source="client" data-subject="Finanzas, pantalla Presupuesto"></div></div>
             </div>
           </article>
           <article class="card card--row card--open span-6 m-nolift">
             <h3>Registra un gasto en segundos</h3>
-            <p>Monto, cuenta, comercio y categoría en una sola hoja. El monto acepta cuentas como 550*2. Después lo buscas, lo editas o lo borras.</p>
+            <p>Monto, cuenta, comercio y categoría en una sola hoja, o escríbelo de corrido desde cualquier app con ⌥⇧F: “uber 120 ayer”. Después lo editas con doble clic o lo deshaces.</p>
             <div class="panel" role="img" aria-label="Hoja Nuevo movimiento con monto, cuenta, comercio, categoría, fecha y notas">
-              <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:40px;--ay:24px"><img src="img/movimiento-panel.webp" srcset="img/movimiento-panel-700.webp 700w, img/movimiento-panel.webp 900w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="900" height="929" loading="lazy" data-source="client" data-subject="Finanzas, hoja Nuevo movimiento"></div></div>
+              <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:40px;--ay:24px"><img src="img/movimiento-panel.webp" srcset="img/movimiento-panel-700.webp 700w, img/movimiento-panel.webp 900w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="900" height="975" loading="lazy" data-source="client" data-subject="Finanzas, hoja Nuevo movimiento"></div></div>
             </div>
           </article>
         </div>
@@ -245,9 +245,9 @@
           </div>
         </article>
         <article class="card card--row card--open span-6 m-nolift">
-          <h3>Importa desde Actual Budget</h3>
-          <p>Trae tus cuentas, movimientos y presupuestos desde Actual Budget o desde la app anterior de Finanzas.</p>
-          <div class="panel" role="img" aria-label="Pantalla Ajustes con los recordatorios y los botones para importar datos">
+          <h3>Importa tu banco o Actual Budget</h3>
+          <p>Arrastra el CSV de tu banco: ves una vista previa y los duplicados se marcan solos. También trae tus datos de Actual Budget o de la app anterior de Finanzas.</p>
+          <div class="panel" role="img" aria-label="Pantalla Ajustes, sección Datos: importar el CSV del banco o los datos de Actual Budget">
             <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:40px;--ay:40px"><img src="img/ajustes-panel.webp" srcset="img/ajustes-panel-700.webp 700w, img/ajustes-panel.webp 1100w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1100" height="601" loading="lazy" data-source="client" data-subject="Finanzas, pantalla Ajustes"></div></div>
           </div>
         </article>
@@ -328,10 +328,10 @@ brew install --cask finanzas</code></pre>
             <a class="btn btn--secondary" href="https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-windows-x64-setup.exe">Descargar el .exe</a>
           </div>
           <div class="dl" data-os="linux">
-            <div class="dl__text"><h3 class="t-card dl__name"><span class="ic-tile ic-tile--32"><img class="ic" data-icon="linux-tux" src="assets/icons/linux-tux.svg" alt="" width="32" height="32" loading="lazy"></span>Linux</h3><p>x86_64. En Debian y Ubuntu, el .deb; en otras distribuciones, el <a class="link" href="https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-x86_64.tar.gz">.tar.gz</a>.</p></div>
+            <div class="dl__text"><h3 class="t-card dl__name"><span class="ic-tile ic-tile--32"><img class="ic" data-icon="linux-tux" src="assets/icons/linux-tux.svg" alt="" width="32" height="32" loading="lazy"></span>Linux</h3><p>x86_64. En Debian y Ubuntu, el .deb; en otras distribuciones, el <a class="link" href="https://github.com/Leoglez10/finanzas/releases/latest/download/Finanzas-linux-x86_64.AppImage">.AppImage</a>, que se actualiza sola.</p></div>
             <a class="btn btn--secondary" href="https://github.com/Leoglez10/finanzas/releases/latest/download/finanzas-linux-amd64.deb">Descargar el .deb</a>
           </div>
-          <div class="dl-note"><p>Los instaladores aún no están firmados. La app te avisa cuando hay una versión nueva. <a class="link" href="https://github.com/Leoglez10/finanzas/releases">Ver todas las versiones</a></p></div>
+          <div class="dl-note"><p>Los instaladores aún no están firmados. Una vez instalada, la app se actualiza sola. <a class="link" href="https://github.com/Leoglez10/finanzas/releases">Ver todas las versiones</a></p></div>
         </div>
         <div class="frame frame--lit frame--fill span-6 start-7" role="img" aria-label="Pantalla Movimientos con el saldo de todas las cuentas, la búsqueda y la lista de movimientos">
           <div class="stage stage--fade-br">
@@ -353,12 +353,12 @@ brew install --cask finanzas</code></pre>
         <div class="faq span-6 start-7">
           <div class="faq__item"><h3>¿Cuánto cuesta Finanzas?</h3><p>Nada. Finanzas es gratis y de código abierto, con licencia MIT.</p></div>
           <div class="faq__item"><h3>¿Dónde guarda Finanzas mis datos?</h3><p>En un solo archivo SQLite en tu computadora. No hay cuenta, ni nube, ni telemetría.</p></div>
-          <div class="faq__item"><h3>¿Puedo separar lo personal del negocio?</h3><p>Sí. Crea perfiles como Negocio desde la barra lateral; cada uno guarda sus cuentas, presupuesto y pagos por separado, y puedes renombrarlos, ocultarlos o borrarlos.</p></div>
-          <div class="faq__item"><h3>¿Tiene modo oscuro?</h3><p>Sí. En Ajustes eliges claro, oscuro o automático según el sistema, y la app recuerda tu elección.</p></div>
-          <div class="faq__item"><h3>¿Puedo traer mis datos de otra app?</h3><p>Sí. En Ajustes importas desde Actual Budget o desde la app anterior de Finanzas hecha con SwiftData.</p></div>
+          <div class="faq__item"><h3>¿Puedo separar lo personal del negocio?</h3><p>Sí. Crea perfiles como Negocio en Ajustes › Perfil; cada uno guarda sus cuentas, presupuesto y pagos por separado, y puedes renombrarlos, ocultarlos o borrarlos.</p></div>
+          <div class="faq__item"><h3>¿Tiene modo oscuro?</h3><p>Sí. En Ajustes eliges claro, oscuro o según el sistema, y uno de seis temas de color.</p></div>
+          <div class="faq__item"><h3>¿Puedo traer mis datos de otra app?</h3><p>Sí. Arrastra el CSV de tu banco a la ventana, o en Ajustes importa desde Actual Budget o desde la app anterior de Finanzas hecha con SwiftData.</p></div>
           <div class="faq__item"><h3>¿Finanzas funciona en una Mac con Intel?</h3><p>No. El instalador de macOS es para Apple Silicon, M1 o posterior, con macOS 11 o superior.</p></div>
           <div class="faq__item"><h3>¿Cómo respaldo mis datos?</h3><p>Cierra la app y copia el archivo finanzas.db. Para restaurarlo, ponlo de vuelta en la misma carpeta.</p></div>
-          <div class="faq__item"><h3>¿En qué está hecha la app?</h3><p>En Rust, con la interfaz Rune dibujada por la GPU.</p></div>
+          <div class="faq__item"><h3>¿En qué está hecha la app?</h3><p>Con Tauri: el núcleo en Rust y la interfaz en Svelte.</p></div>
         </div>
       </div>
     </div>

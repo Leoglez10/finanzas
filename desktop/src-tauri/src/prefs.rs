@@ -117,3 +117,24 @@ pub fn test_notification(app: AppHandle) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
     app.notification().builder().title("Así se ven tus avisos").body("Renta: $800.00 de Cuenta principal vence mañana.").show().map_err(|e| e.to_string())
 }
+
+#[derive(Serialize)]
+pub struct AgentView { name: &'static str, connected: bool, instructions: &'static str, config: String }
+/// Ajustes › Agentes IA: which MCP clients are connected (heartbeats from finanzas-mcp) and how to set each one up.
+#[tauri::command(async)]
+pub fn agents(state: State<'_, AppState>) -> Result<Vec<AgentView>, String> {
+    use finanzas_core::agents::{self, Agent};
+    let dir = agents::heartbeat_dir(state.home()?);
+    let name = format!("finanzas-mcp{}", std::env::consts::EXE_SUFFIX);
+    // The MCP server ships next to the app's executable (Contents/MacOS on macOS).
+    let command = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join(&name))).unwrap_or_else(|| name.into());
+    let now = std::time::SystemTime::now();
+    Ok(Agent::ALL.into_iter().map(|a| AgentView { name: a.name(), connected: agents::connected(&dir, a, now), instructions: a.instructions(), config: a.config(&command) }).collect())
+}
+
+/// Ajustes › Datos: where the active profile's database lives.
+#[tauri::command(async)]
+pub fn database_path(state: State<'_, AppState>) -> Result<String, String> {
+    let profile = state.active()?;
+    Store::profile_path_beside(state.home()?, &profile).map(|p| p.display().to_string()).ok_or_else(|| "Ubicación desconocida".into())
+}

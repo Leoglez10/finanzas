@@ -62,6 +62,9 @@ export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
 export const importEntries = (entries: EntryInput[]) => invoke<number[]>("import_entries", { entries });
 /** Returns the new account id; a non-zero `opening` becomes a "Saldo inicial" movement dated `date`. */
 export const createAccount = (name: string, offBudget: boolean, opening: number | null, date: string) => invoke<number>("create_account", { name, offBudget, opening, date });
+export interface AgentView { name: string; connected: boolean; instructions: string; config: string }
+export const agents = () => invoke<AgentView[]>("agents");
+export const databasePath = () => invoke<string>("database_path");
 export const refreshTray = () => invoke<void>("refresh_tray");
 export const wishes = (archived = false) => invoke<WishView[]>("wishes", { archived });
 export const saveWish = (id: number | null, draft: WishDraft) => invoke<Wish>("save_wish", { id, draft });

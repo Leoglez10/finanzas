@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as api from "../lib/api";
   import { app, go } from "../lib/app.svelte";
-  import { openEntry } from "../lib/dialogs.svelte";
+  import { openAccount, openEntry } from "../lib/dialogs.svelte";
   import { money, monthKey, monthTitle, monthShort, shiftMonth, change, categoryColor, parseDay, daysBetween, dayNumber, dayMonth, monthDate } from "../lib/format";
   import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
@@ -51,6 +51,20 @@
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 {#if o && data}
+  {#if !o.firstRun.hasAccount || !o.firstRun.hasCategorizedIncome || !o.firstRun.hasBudget}
+    <article class="card">
+      <div class="card-h"><h2>Primeros pasos</h2></div>
+      <div class="list">
+        {#each [[o.firstRun.hasAccount, "Crea una cuenta", "Tu banco, efectivo o tarjeta.", "Nueva cuenta", openAccount], [o.firstRun.hasCategorizedIncome, "Registra un ingreso con categoría", "Así el presupuesto sabe cuánto puedes asignar.", "Nuevo ingreso", () => openEntry("ingreso")], [o.firstRun.hasBudget, "Asigna tu presupuesto", "Dale un destino a cada peso.", "Ir a Presupuesto", () => go("presupuesto")]] as [done, title, text, label, run] (title)}
+          <div class="row">
+            <span class="ic sm {done ? 'ok' : ''}"><Icon name={done ? "check" : "right"} /></span>
+            <div class="grow"><p class="title" style:text-decoration={done ? "line-through" : "none"}>{title}</p><p class="meta">{text}</p></div>
+            {#if !done}<button class="btn sm primary" onclick={run as () => void}>{label}</button>{/if}
+          </div>
+        {/each}
+      </div>
+    </article>
+  {/if}
   <section class="grid g-3">
     <article class="card hero">
       <p class="label">{free >= 0 ? "Te sobra este mes" : "Te falta este mes"}</p>

@@ -9,7 +9,7 @@
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
 
-  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["datos", "Datos", "upload"], ["actualizaciones", "Actualizaciones", "sparkle"], ["atajos", "Atajos", "command"]];
+  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["atajos", "Atajos", "command"]];
   const PALETTES: [string, string, string][] = [["petroleo", "Petróleo", "El original"], ["bosque", "Bosque", "Verde oliva sobrio"], ["ciruela", "Ciruela", "Violeta profundo"], ["grafito", "Grafito", "Casi sin color"], ["arena", "Arena", "Cálido, tonos café"], ["sistema", "Sistema", "Acento de macOS"]];
   let tab = $derived(TABS.find(t => t[0] === app.route.split("/")[1]) ?? TABS[0]);
   let s = $derived(app.settings);
@@ -21,7 +21,17 @@
   let version = $state("");
   let importable = $state<[boolean, boolean] | null>(null);
   getVersion().then(v => version = v);
-  $effect(() => { void app.version; if (tab[0] === "datos") api.importAvailability().then(v => importable = v).catch(() => importable = null); });
+  let dbPath = $state("");
+  let agentList = $state<api.AgentView[]>([]);
+  let copied = $state("");
+  $effect(() => {
+    void app.version;
+    if (tab[0] === "datos") { api.importAvailability().then(v => importable = v).catch(() => importable = null); api.databasePath().then(p => dbPath = p).catch(() => dbPath = ""); }
+    if (tab[0] === "agentes") api.agents().then(a => agentList = a).catch(e => toast(String(e)));
+  });
+  async function copy(agent: api.AgentView) {
+    try { await navigator.clipboard.writeText(agent.config); copied = agent.name; setTimeout(() => copied = "", 2000); } catch (e) { toast(`No se pudo copiar: ${e}`); }
+  }
 
   async function save(patch: Partial<api.Settings>) { try { await updateSettings(patch); } catch (e) { toast(String(e)); } }
   const mode = $derived(s?.dark === null ? "system" : s?.dark ? "dark" : "light");
@@ -149,6 +159,26 @@
           {#if importable?.[1]}<button class="btn" disabled={!importable[0]} onclick={() => runImport("legacy")}>Desde la app anterior de Mac</button>{/if}
         </div>
         {#if importable && !importable[0]}<p class="muted" style="font-size:13px;margin-top:10px">Este perfil ya tiene datos. Crea un perfil nuevo para importar.</p>{/if}
+      </article>
+      <article class="card">
+        <div class="card-h"><h2>Base de datos</h2></div>
+        <p class="muted" style="font-size:13px">Tus datos viven aquí, fuera de la app: reinstalar o actualizar no los toca. Para un respaldo, copia este archivo con la app cerrada.</p>
+        <pre style="margin:10px 0 0;padding:12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{dbPath}</pre>
+      </article>
+    {:else if tab[0] === "agentes"}
+      <article class="card">
+        <div class="card-h"><h2>Agentes MCP</h2><button class="link" onclick={() => api.agents().then(a => agentList = a)}>Actualizar</button></div>
+        <p class="muted" style="font-size:13px;margin-bottom:6px">Conecta un agente de IA para consultar y registrar tus finanzas. El punto se pone verde mientras el agente tiene Finanzas abierto.</p>
+        {#each agentList as a (a.name)}
+          <div class="setting" style="display:grid;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:{a.connected ? 'var(--income)' : 'var(--border)'}"></span><b>{a.name}</b><span class="muted" style="font-size:13px">{a.connected ? "Conectado" : "Sin conexión"}</span></div>
+            {#if !a.connected}
+              <p>{a.instructions}</p>
+              <pre style="margin:0;padding:12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{a.config}</pre>
+              <div><button class="btn sm" onclick={() => copy(a)}>{copied === a.name ? "Copiado" : "Copiar configuración"}</button></div>
+            {/if}
+          </div>
+        {/each}
       </article>
     {:else if tab[0] === "actualizaciones"}
       <article class="card">

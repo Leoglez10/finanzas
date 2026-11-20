@@ -66,15 +66,26 @@ fn chart_columns_and_legend_navigate() {
 }
 
 #[test]
-fn reminders_banner_collapses_and_expands() {
+fn reminders_open_from_header() {
     let mut state = State::empty(); reminders_scene(&mut state);
-    let mut rt = Runtime::new(state, view, (1440.0, 1800.0), Env::new(false, 1.0));
+    let mut rt = Runtime::new(state, view, (1100.0, 800.0), Env::new(false, 1.0));
     rt.poll = Some(poll); rt.frame(0.0); settle(&mut rt);
-    assert!(!keys(&rt, "reminder-").is_empty());
-    click(&mut rt, "reminders-collapse"); settle(&mut rt);
-    assert!(keys(&rt, "reminder-").is_empty() && rt.find("reminders-banner").is_some());
-    click(&mut rt, "reminders-collapse"); settle(&mut rt);
-    assert!(!keys(&rt, "reminder-").is_empty());
+    let count = rt.state.reminders.len();
+    let (bell_x, bell_y) = rt.find("reminders-toggle").expect("header bell");
+    let (expense_x, expense_y) = rt.find("add-expense").expect("expense button");
+    assert!(bell_x > expense_x && (bell_y - expense_y).abs() < 2.0);
+    assert!(rt.find(&format!("reminders-count-{count}")).is_some());
+    assert!(rt.find("reminders-panel").is_none() && keys(&rt, "reminder-").is_empty());
+    click(&mut rt, "reminders-toggle"); settle(&mut rt);
+    assert!(rt.find("reminders-panel").is_some() && !keys(&rt, "reminder-").is_empty());
+    click(&mut rt, "reminders-toggle"); settle(&mut rt);
+    assert!(rt.find("reminders-panel").is_none() && keys(&rt, "reminder-").is_empty());
+    click(&mut rt, "reminders-toggle"); settle(&mut rt);
+    let id = keys(&rt, "reminder-")[0].trim_start_matches("reminder-").to_owned();
+    click(&mut rt, &format!("open-reminder-{id}"));
+    assert_eq!(rt.state.route, Route::Proximos);
+    click(&mut rt, "resumen");
+    assert!(rt.find("reminders-panel").is_none());
 }
 
 trait Parts { fn clone_parts(&self) -> (Id, String); }

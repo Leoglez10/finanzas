@@ -101,13 +101,13 @@ fn ajustes_controls_change_and_persist_settings() {
     click(&mut rt, "days-plus"); click(&mut rt, "hour-minus");
     assert_eq!((rt.state.settings.days, rt.state.settings.hour), (3, 8));
     assert_eq!(settings::load(&path).unwrap(), rt.state.settings);
-    click(&mut rt, "reminders-toggle");
+    click(&mut rt, "reminders-toggle"); animate(&mut rt);
     assert!(!rt.state.settings.enabled);
     assert!(!settings::load(&path).unwrap().enabled);
     // Disabled: the steppers do nothing.
     click(&mut rt, "days-plus");
     assert_eq!(rt.state.settings.days, 3);
-    click(&mut rt, "reminders-toggle");
+    click(&mut rt, "reminders-toggle"); animate(&mut rt);
     assert!(rt.state.settings.enabled);
     rt.state.settings.days = 14; click(&mut rt, "days-plus"); assert_eq!(rt.state.settings.days, 14);
     rt.state.settings.days = 0; click(&mut rt, "days-minus"); assert_eq!(rt.state.settings.days, 0);
@@ -118,7 +118,7 @@ fn settings_write_failure_is_shown() {
     let mut rt = runtime(demo_light); open_ajustes(&mut rt);
     let blocker = scratch_dir().join("blocker"); std::fs::write(&blocker, "x").unwrap();
     rt.state.settings_path = Some(blocker.join("settings.json"));
-    click(&mut rt, "reminders-toggle");
+    click(&mut rt, "reminders-toggle"); animate(&mut rt);
     assert!(text_of(&rt, "settings-error").is_some_and(|t| t.starts_with("No se pudo guardar los ajustes")));
 }
 #[test]
@@ -194,19 +194,20 @@ fn account_sheet_cancels_with_escape_and_cancel_button() {
 }
 
 // ---- Reminders ----
-fn banner_ids(rt: &Runtime<State>) -> Vec<String> {
+fn reminder_ids(rt: &Runtime<State>) -> Vec<String> {
     rt.elements().into_iter().filter_map(|e| e.key).filter_map(|k| k.strip_prefix("reminder-").map(str::to_owned)).collect()
 }
 #[test]
 fn reminders_appear_when_enabled_and_hide_when_disabled() {
     let mut rt = runtime(reminders_scene); animate(&mut rt);
-    assert!(rt.find("reminders-banner").is_some());
+    assert!(rt.find("reminders-toggle").is_some() && rt.find("reminders-panel").is_none());
+    click(&mut rt, "reminders-toggle"); animate(&mut rt);
     assert!(!rt.state.reminders.is_empty());
-    assert_eq!(banner_ids(&rt).len(), rt.state.reminders.len().min(overview::BANNER_ROWS));
+    assert_eq!(reminder_ids(&rt).len(), rt.state.reminders.len().min(overview::REMINDER_PREVIEW_ROWS));
     assert!(has_text(&rt, "Pago próximo: Netflix"));
     assert!(has_text(&rt, "14/11/2026"), "dd/MM/yyyy dates");
     rt.state.settings.enabled = false; rt.frame(0.0); settle(&mut rt);
-    assert!(rt.find("reminders-banner").is_none());
+    assert!(rt.find("reminders-toggle").is_none() && rt.find("reminders-panel").is_none());
     assert!(rt.state.reminders.is_empty());
 }
 #[test]
@@ -214,9 +215,9 @@ fn enabling_reminders_computes_them_on_the_worker() {
     let mut state = State::empty(); reminders_scene(&mut state);
     state.settings.enabled = false; state.reminders.clear();
     let mut rt = runtime_of(state); settle(&mut rt);
-    assert!(rt.find("reminders-banner").is_none() && rt.state.reminders.is_empty());
+    assert!(rt.find("reminders-toggle").is_none() && rt.state.reminders.is_empty());
     rt.state.settings.enabled = true; settle(&mut rt);
-    assert!(rt.find("reminders-banner").is_some());
+    assert!(rt.find("reminders-toggle").is_some() && rt.find("reminders-panel").is_none());
     // A different lead time moves the alert times, so the list is read again.
     let before: Vec<_> = rt.state.reminders.iter().map(|r| r.fire_at).collect();
     rt.state.settings.days = 0; settle(&mut rt);
@@ -226,15 +227,18 @@ fn enabling_reminders_computes_them_on_the_worker() {
 #[test]
 fn dismissed_reminders_stay_dismissed_after_a_refresh() {
     let mut rt = runtime(reminders_scene); animate(&mut rt);
-    let ids = banner_ids(&rt); assert!(ids.len() >= 2);
+    click(&mut rt, "reminders-toggle"); animate(&mut rt);
+    let ids = reminder_ids(&rt); assert!(ids.len() >= 2);
     let gone = ids[0].clone();
     click(&mut rt, &format!("dismiss-{gone}")); settle(&mut rt);
-    assert!(!banner_ids(&rt).contains(&gone));
-    assert_eq!(banner_ids(&rt).len(), (rt.state.reminders.len() - 1).min(overview::BANNER_ROWS));
+    assert!(!reminder_ids(&rt).contains(&gone));
+    let remaining = rt.state.reminders.len() - 1;
+    assert_eq!(reminder_ids(&rt).len(), remaining.min(overview::REMINDER_PREVIEW_ROWS));
+    assert!(rt.find(&format!("reminders-count-{remaining}")).is_some());
     rt.state.refresh = true; settle(&mut rt);
-    assert!(!banner_ids(&rt).contains(&gone));
+    assert!(!reminder_ids(&rt).contains(&gone));
     click(&mut rt, "dismiss-all"); animate(&mut rt);
-    assert!(rt.find("reminders-banner").is_none());
+    assert!(rt.find("reminders-toggle").is_none() && rt.find("reminders-panel").is_none());
 }
 #[test]
 fn only_load_enables_the_hourly_reminder_timer() {

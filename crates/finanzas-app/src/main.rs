@@ -133,7 +133,7 @@ struct State {
     waker: Option<Waker>,
     /// Resumen: the day chip picked in "Pagos por hacer", if any.
     payment_day: Option<NaiveDate>,
-    reminders_collapsed: bool,
+    reminders_open: bool,
     /// Update notices: the real app asks GitHub at launch and daily; scenes and tests never do.
     check_updates: bool,
     next_update_check: f64,
@@ -152,7 +152,7 @@ impl State {
             worker: Arc::new(Mutex::new(None)), open_default: false, latest: Latest::default(), refresh: true, next_poll: 0.0,
             search: TextEdit::new(""), ledger: None, ledger_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), ledger_key: None, groups: Vec::new(), categories: Vec::new(), sheet: None, blocked_edit: TextEdit::new(""), selected: None, confirm: None, mutation: Latest::default(), mutation_target: None, mutation_error: None, suggestions: Vec::new(), suggestion_latest: Latest::default().debounce(std::time::Duration::from_millis(150)), budget: None, budget_latest: Latest::default(), budget_gen: 0, budget_inputs: Default::default(), budget_error: None,
             today_date: Local::now().date_naive(), proximos: None, proximos_latest: Latest::default(), proximos_key: None, proximos_gen: 0, schedule_sheet: None, schedule_selected: None, schedule_confirm: None, upcoming_error: None, auto_post: false, auto_latest: Latest::default(), next_auto: 0.0,
-            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), db_path: None, profile: "personal".into(), home_db: None, profiles: vec!["personal".into()], profile_edit: None, profile_error: None, profile_delete: None, agents_connected: [false; 3], next_agents: 0.0, agent_copied: None, waker: None, payment_day: None, reminders_collapsed: false,
+            settings: settings::Settings::default(), settings_path: None, settings_error: None, hourly: false, reminders: Vec::new(), reminders_gen: 0, account_sheet: None, import_confirm: None, import_latest: Latest::default(), importing: false, import_outcome: None, reminders_latest: Latest::default(), next_reminders: 0.0, dismissed: Default::default(), db_label: "base de datos en memoria".into(), db_path: None, profile: "personal".into(), home_db: None, profiles: vec!["personal".into()], profile_edit: None, profile_error: None, profile_delete: None, agents_connected: [false; 3], next_agents: 0.0, agent_copied: None, waker: None, payment_day: None, reminders_open: false,
             check_updates: false, next_update_check: 0.0, update_latest: Latest::default(), update_available: None, updated_to: None, update_dismissed: false }
     }
     fn load() -> Self { Self::load_home(finanzas_core::store::Store::default_path()) }
@@ -181,6 +181,9 @@ impl State {
     }
     /// The clock reminders are planned against; scenes and tests keep theirs fixed.
     fn now(&self) -> chrono::NaiveDateTime { if self.open_default { Local::now().naive_local() } else { self.today_date.and_hms_opt(8, 0, 0).expect("valid time") } }
+    fn active_reminders(&self) -> impl Iterator<Item = &finanzas_core::service::ReminderView> {
+        self.reminders.iter().filter(|r| self.settings.enabled && !self.dismissed.contains(&r.id))
+    }
     fn reminders_key(&self) -> RemindersKey { (self.version, self.reminders_gen, self.settings.enabled, self.settings.days, self.settings.hour, self.today_date) }
     fn change_settings(&mut self, change: impl FnOnce(&mut settings::Settings)) {
         change(&mut self.settings);
@@ -534,6 +537,10 @@ fn poll(s: &mut State, now: f64, tx: &mut Tx) -> bool {
     } else if s.version.is_some() {
         let (key, worker, at) = (s.reminders_key(), Arc::clone(&s.worker), s.now());
         s.reminders_latest.request_if_changed(&key, move |key| { let result = data::reminders(worker, at, key.3, key.4); (key, result) });
+    }
+    if s.reminders_open && (s.route != Route::Resumen || s.active_reminders().next().is_none()) {
+        s.reminders_open = false;
+        changed = true;
     }
     if s.check_updates && now >= s.next_update_check {
         s.next_update_check = now + 86_400.0;

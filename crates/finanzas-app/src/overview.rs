@@ -32,19 +32,20 @@ fn marked_bar(fraction: f32, reference: f32, color: Color, p: Palette) -> El {
     col().w_full().gap(2.0).child(tick(8.0)).child(track)
 }
 
-fn header(s: &State, p: Palette) -> El {
+fn header(s: &State, reminder_count: usize, p: Palette) -> El {
     let title = text(month::spanish_title(s.month)).key("month-title").font(theme::HEADLINE).color(p.ink);
     let title = if s.month == s.today { title.pl(6.0) } else {
         tappable(title.px(6.0).py(2.0), p).label("Ir al mes actual").help("Volver al mes actual").on_press(|s: &mut State| s.set_month(s.today))
     };
-    row().w_full().px(18.0).py(14.0).gap(10.0).radius(18.0).fill(p.card).border(1.0, p.border).center_y().window_drag()
+    let bar = row().w_full().px(18.0).py(14.0).gap(10.0).radius(18.0).fill(p.card).border(1.0, p.border).center_y().window_drag()
         .child(icon_button(&theme::LEFT, "Mes anterior", "previous-month", |s| s.set_month(month::previous(s.month)), p).help("Mes anterior"))
         .child(icon_button(&theme::RIGHT, "Mes siguiente", "next-month", |s| s.set_month(month::next(s.month)), p).help("Mes siguiente"))
         .child(title)
         .child(el().grow(1.0))
         .child(if s.month == s.today { el() } else { button("Hoy", "today", |s| s.set_month(s.today), p) })
         .child(secondary(&theme::PLUS, "Ingreso", "add-income", |s| s.open_sheet(false, None), p).help("Registrar un ingreso"))
-        .child(primary(&theme::MINUS, "Gasto", "add-expense", |s| s.open_sheet(true, None), p).help("Registrar un gasto"))
+        .child(primary(&theme::MINUS, "Gasto", "add-expense", |s| s.open_sheet(true, None), p).help("Registrar un gasto"));
+    if reminder_count > 0 { bar.child(reminders_toggle(reminder_count, s.reminders_open, p)) } else { bar }
 }
 
 /// Scheduled outflows still owed in the month on screen; overdue ones count only for the current month.
@@ -286,36 +287,47 @@ fn update_banner(s: &State, p: Palette) -> Option<El> {
             .child(row().gap(8.0).child(action).child(button("Cerrar", "update-dismiss", |s| s.update_dismissed = true, p)))))
 }
 /// Payment reminders planned by the worker; each one can be dismissed for this session.
-pub const BANNER_ROWS: usize = 3;
-fn reminders_banner(s: &State, p: Palette) -> Option<El> {
-    if !s.settings.enabled { return None; }
-    let pending: Vec<_> = s.reminders.iter().filter(|r| !s.dismissed.contains(&r.id)).collect();
-    if pending.is_empty() { return None; }
-    let collapsed = s.reminders_collapsed;
-    let title = if collapsed { format!("Recordatorios de pagos · {}", pending.len()) } else { "Recordatorios de pagos".to_owned() };
-    let mut banner = card(p).key("reminders-banner").fill(p.amber.alpha(0.12)).border(1.0, p.amber)
-        .child(row().w_full().center_y().justify_between()
-            .child(tappable(row().key("reminders-collapse").gap(8.0).px(4.0).py(2.0).center_y().child(icon(&theme::CLOCK, 16.0).color(p.amber)).child(card_title(&title, p))
-                .child(icon(if collapsed { &theme::RIGHT } else { &theme::LEFT }, 12.0).color(p.muted)), p)
-                .label(if collapsed { "Mostrar recordatorios" } else { "Ocultar recordatorios" }).help(if collapsed { "Mostrar" } else { "Ocultar" })
-                .on_press(|s: &mut State| s.reminders_collapsed = !s.reminders_collapsed))
-            .child(button("Descartar todos", "dismiss-all", |s| { let ids: Vec<_> = s.reminders.iter().map(|r| r.id.clone()).collect(); s.dismissed.extend(ids); }, p)));
-    if collapsed { return Some(banner); }
-    for r in pending.iter().take(BANNER_ROWS) {
+pub const REMINDER_PREVIEW_ROWS: usize = 3;
+fn reminders_toggle(count: usize, open: bool, p: Palette) -> El {
+    let action = if open { "Ocultar recordatorios" } else { "Mostrar recordatorios" };
+    let fill = if open { p.selected } else { p.amber.alpha(0.12) };
+    tappable(row().key("reminders-toggle").h(32.0).px(9.0).gap(5.0).center_y().fill(fill), p)
+        .label(format!("{action} ({count})")).help(action)
+        .on_press(|s: &mut State| s.reminders_open = !s.reminders_open)
+        .child(icon(&theme::BELL, 16.0).color(p.amber))
+        .child(text(count.to_string()).key(format!("reminders-count-{count}")).font(type_::LABEL).color(p.ink))
+}
+fn reminders_panel(pending: &[&finanzas_core::service::ReminderView], p: Palette) -> El {
+    let mut panel = col().key("reminders-panel").w_full().max_w(440.0).padding(14.0).gap(8.0)
+        .radius(14.0).fill(p.card).border(1.0, p.border)
+        .child(row().w_full().center_y().justify_between().gap(8.0)
+            .child(card_title("Recordatorios de pagos", p))
+            .child(button("Descartar todos", "dismiss-all", |s| {
+                s.dismissed.extend(s.reminders.iter().map(|r| r.id.clone()));
+                s.reminders_open = false;
+            }, p)));
+    for r in pending.iter().take(REMINDER_PREVIEW_ROWS) {
         let id = r.id.clone();
-        banner = banner.child(row().w_full().center_y().justify_between().gap(12.0).key(format!("reminder-{}", r.id))
-            .child(tappable(col().gap(2.0).padding(4.0).child(label(r.title.clone(), p)).child(muted(r.body.clone(), p)).child(muted(format!("Aviso: {}", r.fire_at.format("%d/%m/%Y %H:%M")), p)), p)
-                .help("Ver en próximos pagos").on_press(|s: &mut State| s.route = Route::Proximos))
-            .child(el().key(format!("dismiss-{}", r.id)).role("button").label("Descartar").focusable(true).padding(8.0).radius(8.0).fill(p.card).hover(p.selected).press_scale(0.96)
+        panel = panel.child(row().w_full().center_y().justify_between().gap(8.0).key(format!("reminder-{}", r.id))
+            .child(tappable(col().key(format!("open-reminder-{}", r.id)).grow(1.0).min_w(0.0).gap(2.0).padding(4.0)
+                .child(label(r.title.clone(), p)).child(muted(r.body.clone(), p))
+                .child(muted(format!("Aviso: {}", r.fire_at.format("%d/%m/%Y %H:%M")), p)), p)
+                .label(format!("{}: ver en próximos pagos", r.title)).help("Ver en próximos pagos")
+                .on_press(|s: &mut State| { s.reminders_open = false; s.route = Route::Proximos; }))
+            .child(el().key(format!("dismiss-{}", r.id)).role("button").label(format!("Descartar: {}", r.title)).focusable(true)
+                .padding(8.0).radius(8.0).fill(p.card).hover(p.selected).press_scale(0.96)
                 .on_press(move |s: &mut State| { s.dismissed.insert(id.clone()); }).child(label("Descartar", p))));
     }
-    if pending.len() > BANNER_ROWS { banner = banner.child(muted(format!("y {} más", pending.len() - BANNER_ROWS), p)); }
-    Some(banner)
+    if pending.len() > REMINDER_PREVIEW_ROWS { panel = panel.child(muted(format!("y {} más", pending.len() - REMINDER_PREVIEW_ROWS), p)); }
+    panel
 }
 pub fn render(s: &State, p: Palette) -> El {
-    let mut content = col().w_full().padding(24.0).gap(16.0).child(header(s, p));
+    let reminders: Vec<_> = s.active_reminders().collect();
+    let mut content = col().w_full().padding(24.0).gap(16.0).child(header(s, reminders.len(), p));
+    if s.reminders_open && !reminders.is_empty() {
+        content = content.child(row().w_full().justify_end().child(reminders_panel(&reminders, p)));
+    }
     if let Some(banner) = update_banner(s, p) { content = content.child(banner); }
-    if let Some(banner) = reminders_banner(s, p) { content = content.child(banner); }
     if let Some(o) = &s.overview {
         let first = &o.first_run;
         if !(first.has_account && first.has_categorized_income && first.has_budget) {

@@ -54,7 +54,7 @@
     <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
     <div class="grow">
       <p class="title">{u.name}</p>
-      <p class="meta">{u.account ?? "Sin cuenta"} · {#if u.overdue}<span class="chip bad">Vencido hace {-n} d</span>{:else if n === 0}<span class="chip warn">Hoy</span>{:else}en {n} días{/if}{#if u.autoPost} · se registra solo{/if}</p>
+      <p class="meta">{u.account ?? "Sin cuenta"} · {#if u.overdue}<span class="chip bad">Vencido hace {-n} d</span>{:else if n === 0}<span class="chip warn">Hoy</span>{:else}en {n} días{/if}{#if u.autoPost}{" · se registra solo"}{/if}</p>
     </div>
     <div style="display:grid;justify-items:end;gap:2px">
       <b class="num" class:pos={u.amount > 0}>{money(u.amount, true)}</b>
@@ -85,10 +85,8 @@
   <Kpi icon="wallet" tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
 </section>
 {#if overdue.length}{@render section("Vencidos", overdue, "")}{/if}
-<section class="grid g-2">
-  {@render section("Esta semana", week, "Nada esta semana.")}
-  {@render section("Más adelante", later, "Nada más en los próximos 30 días.")}
-</section>
+{@render section("Esta semana", week, "Nada esta semana.")}
+{@render section("Más adelante", later, "Nada más en los próximos 30 días.")}
 
 <article class="card">
   <div class="card-h"><h2>Pagos programados</h2>{#if app.settings?.enabled}<span class="chip brand"><Icon name="bell" />Te aviso {app.settings.days} días antes</span>{/if}</div>

@@ -88,7 +88,7 @@
           <div class="row">
             <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
             <div class="grow"><p class="title">{u.name}</p>
-              <p class="meta">{#if u.overdue}<span class="chip bad">Vencido hace {-days} d</span>{:else if days === 0}<span class="chip warn">Hoy</span>{:else}en {days} días{/if}{#if u.autoPost} · automático{/if}</p></div>
+              <p class="meta">{#if u.overdue}<span class="chip bad">Vencido hace {-days} d</span>{:else if days === 0}<span class="chip warn">Hoy</span>{:else}en {days} días{/if}{#if u.autoPost}{" · automático"}{/if}</p></div>
             <b class="num" class:pos={u.amount > 0}>{money(u.amount, true)}</b>
           </div>
         {:else}<p class="muted">Nada programado en los próximos 30 días.</p>{/each}

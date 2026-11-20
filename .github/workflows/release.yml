@@ -10,7 +10,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
-    paths: [".github/workflows/release.yml", "packaging/**", "scripts/package-macos.sh", "crates/finanzas-app/Cargo.toml"]
+    paths: [".github/workflows/release.yml", "desktop/src-tauri/**", "desktop/package.json", "scripts/build.sh"]
   workflow_dispatch:
 
 permissions:
@@ -44,38 +44,54 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # ubuntu-22.04: an older glibc keeps the AppImage and .deb running on more distributions.
+        os: [macos-latest, windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
-      VERSION: ${{ needs.version.outputs.version }}
+      # Signs the update bundles; without it (pull requests, forks) only the installers are built.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p finanzas-app -p finanzas-mcp
+      - run: scripts/build.sh
 
-      - name: macOS .dmg
-        if: runner.os == 'macOS'
-        run: scripts/package-macos.sh "$VERSION"
-
-      - name: Windows installer
-        if: runner.os == 'Windows'
-        shell: pwsh
+      # Stable asset names, so https://github.com/<repo>/releases/latest/download/<name> keeps working.
+      - name: Collect installers
         run: |
-          choco install innosetup -y --no-progress
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VERSION" packaging\windows\finanzas.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Linux .deb and .tar.gz
-        if: runner.os == 'Linux'
-        run: |
-          cargo install cargo-deb --locked
-          mkdir -p dist
-          cargo deb -p finanzas-app --no-build --deb-version "$VERSION" -o dist/finanzas-linux-amd64.deb
-          tar -czf dist/finanzas-linux-x86_64.tar.gz -C target/release finanzas finanzas-mcp -C "$GITHUB_WORKSPACE/packaging/linux" finanzas.desktop finanzas.png
+          b=target/release/bundle; mkdir -p dist
+          copy() { [[ -f "$1" ]] && cp "$1" "$2" && { [[ ! -f "$1.sig" ]] || cp "$1.sig" "$2.sig"; }; }
+          case "$RUNNER_OS" in
+            macOS)
+              cp "$b"/dmg/*.dmg dist/Finanzas-macos-arm64.dmg
+              copy "$b/macos/Finanzas.app.tar.gz" dist/Finanzas-macos-arm64.app.tar.gz || true ;;
+            Windows)
+              setup="$(ls "$b"/nsis/*-setup.exe)"
+              cp "$setup" dist/Finanzas-windows-x64-setup.exe
+              [[ ! -f "$setup.sig" ]] || cp "$setup.sig" dist/Finanzas-windows-x64-setup.exe.sig ;;
+            Linux)
+              cp "$b"/deb/*.deb dist/finanzas-linux-amd64.deb
+              image="$(ls "$b"/appimage/*.AppImage)"
+              cp "$image" dist/Finanzas-linux-x86_64.AppImage
+              [[ ! -f "$image.sig" ]] || cp "$image.sig" dist/Finanzas-linux-x86_64.AppImage.sig
+              tar -czf dist/finanzas-linux-x86_64.tar.gz -C target/release finanzas finanzas-mcp ;;
+          esac
+          ls -l dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -92,6 +108,21 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # The in-app updater reads releases/latest/download/latest.json; each platform needs its .sig.
+      - name: Write latest.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime
+          version, repo = os.environ["VERSION"], os.environ["REPO"]
+          assets = {"darwin-aarch64": "Finanzas-macos-arm64.app.tar.gz", "windows-x86_64": "Finanzas-windows-x64-setup.exe", "linux-x86_64": "Finanzas-linux-x86_64.AppImage"}
+          platforms = {k: {"signature": open(f"dist/{v}.sig").read().strip(), "url": f"https://github.com/{repo}/releases/download/v{version}/{v}"}
+                       for k, v in assets.items() if os.path.exists(f"dist/{v}.sig")}
+          if not platforms: raise SystemExit("No update signatures: is TAURI_SIGNING_PRIVATE_KEY set?")
+          json.dump({"version": version, "notes": f"Finanzas {version}", "pub_date": datetime.datetime.now(datetime.timezone.utc).isoformat(), "platforms": platforms}, open("dist/latest.json", "w"), indent=2)
+          PY
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
@@ -100,10 +131,10 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            Instaladores sin firma.
-            - macOS (Apple Silicon): abre el .dmg y arrastra Finanzas a Aplicaciones. La primera vez, clic derecho sobre la app → Abrir.
+            Instaladores sin firma de Apple ni de Microsoft. Una vez instalada, Finanzas se actualiza sola.
+            - macOS (Apple Silicon): `brew install --cask finanzas`, o abre el .dmg y arrastra Finanzas a Aplicaciones (la primera vez, clic derecho → Abrir).
             - Windows: ejecuta el setup; si aparece SmartScreen, "Más información" → "Ejecutar de todas formas".
-            - Linux: `sudo apt install ./finanzas-linux-amd64.deb`, o descomprime el .tar.gz.
+            - Linux: `sudo apt install ./finanzas-linux-amd64.deb`, o el .AppImage (se actualiza solo).
 
   # Points the Homebrew cask (Casks/finanzas.rb, this repo is its own tap) at the new release.
   # Pushes made with GITHUB_TOKEN start no workflows, so this commit does not release again.

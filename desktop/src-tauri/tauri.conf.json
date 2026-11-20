@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Finanzas",
+  "identifier": "io.github.leoglez10.finanzas",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Finanzas",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 20,
+          "y": 24
+        },
+        "create": false
+      },
+      {
+        "label": "quick",
+        "title": "Captura rápida",
+        "url": "index.html#quick",
+        "create": false,
+        "width": 640,
+        "height": 236,
+        "resizable": false,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true,
+        "shadow": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "category": "Finance",
+    "shortDescription": "Tu dinero, en orden",
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "mainBinaryName": "finanzas",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ0RjQwNjA5RkUwOTU3RUEKUldUcVZ3bitDUWIwMUo5K3lqclROeTNnQnF2ZjJ2VHBOMGNheWVhTkJYOVFZaUp1SUViUm56cTcK",
+      "endpoints": [
+        "https://github.com/Leoglez10/finanzas/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

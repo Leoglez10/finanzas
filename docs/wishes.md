@@ -4,13 +4,13 @@ A wish stores a name, positive target price, optional HTTP(S) link, notes, and a
 
 ## Create or edit a wish in the app
 
-1. In **Deseos**, choose **Nuevo deseo** (or **Editar** on an existing wish). **La compra** collects the name and target price.
-2. Choose **Continuar** to review the interpreted price in **Contexto y revisión**. Select an optional expense category and expand **Enlace y detalles** if needed; notes support multiple lines. **Volver** preserves those values.
-3. Choose **Guardar deseo** to save. Advancing to the second step does not create or modify a wish. A visible saving state prevents duplicate submissions; a failed save keeps the draft for correction/retry.
+1. In **Deseos**, choose **Nuevo deseo** (or the edit button on a wish). Step 1 collects the name, target price, an optional expense category, link and note.
+2. **Continuar** shows the interpreted price before anything is saved; **Atrás** keeps what you typed.
+3. **Guardar deseo** saves. A failed save keeps the draft so you can correct it and retry.
 
-The target-price field accepts `11000`, `11,000`, `11,000.50` and a pasted `$11,000` (comma thousands, period decimal, optional leading `$`). The displayed interpretation makes the monetary unit explicit. Malformed grouping such as `11,00`, non-positive amounts and more than two decimal places produce a field-level error instead of silently disabling the action. Optional links may be empty; otherwise use a complete HTTP(S) product link.
+The target-price field accepts `11000`, `11,000`, `11,000.50` and a pasted `$11,000` (comma thousands, period decimal). Malformed grouping such as `11,00`, non-positive amounts and more than two decimals show an error on the field. Links may be empty; otherwise use a complete HTTP(S) address.
 
-Cancel, close and Escape ask before discarding changed values. Unchanged drafts close without confirmation. Saving does not record a purchase or move money. Reservation fields and MCP numeric amount conventions are unchanged by this editor.
+Esc, the close button and **Cancelar** close the editor without saving and without asking. Saving does not record a purchase or move money. Every change in Deseos (saving, setting money aside, releasing, archiving, buying) can be undone from the **Deshacer** notice or with ⌘Z.
 
 ## Reserve without recording a purchase
 
@@ -18,7 +18,7 @@ A reservation claims money already available in an expense category. It does not
 
 Reservation increases are checked against the current month's category availability minus other active wishes' reservations, inside a SQLite immediate transaction. App and MCP writers cannot claim the same category funds twice. Changing a wish's category releases its reservation. Lowering its price below its reservation is refused until funds are released.
 
-Reservations persist across months. Later spending or budget reductions can leave them underfunded: evaluation reports a reservation deficit, never silently moves money, and still permits reductions/releases. Recording a purchase uses the existing transaction flow; release/archive the wish explicitly afterward. Archiving does not record a transaction.
+Reservations persist across months. Later spending or budget reductions can leave them underfunded: evaluation reports a reservation deficit, never silently moves money, and still permits reductions/releases. When a wish is fully funded, **Lo compré** records the expense (in the first open on-budget account) and archives the wish in one step. Archiving alone does not record a transaction.
 
 ## Read the evaluation
 

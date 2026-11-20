@@ -8,12 +8,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: echo "FINANZAS_DB=$RUNNER_TEMP/finanzas-ci.db" >> "$GITHUB_ENV"
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The desktop crate needs WebKit and a built frontend; it has its own job below.
+      - run: cargo test --workspace --exclude finanzas-desktop
+      - run: cargo clippy --workspace --exclude finanzas-desktop --all-targets -- -D warnings
 
-  build:
+  desktop:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "FINANZAS_DB=$RUNNER_TEMP/finanzas-ci.db" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - run: cargo test -p finanzas-desktop
+      - run: cargo clippy -p finanzas-desktop --all-targets -- -D warnings
+
+  mcp:
     strategy:
       fail-fast: false
       matrix:
@@ -21,17 +45,5 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p finanzas-app -p finanzas-mcp
-      - uses: actions/upload-artifact@v4
-        with:
-          name: finanzas-${{ matrix.os }}
-          path: |
-            target/release/finanzas
-            target/release/finanzas.exe
-            target/release/finanzas-mcp
-            target/release/finanzas-mcp.exe
-          if-no-files-found: error
+      - run: cargo build --release -p finanzas-mcp

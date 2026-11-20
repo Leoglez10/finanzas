@@ -142,3 +142,16 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
+#[test]
+fn restore_wish_undoes_an_archive_including_its_reservation() {
+    let (mut store, _, category) = seed();
+    let wish = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let before = reserve_wish(&mut store, wish.id, 20_000, today()).unwrap();
+    archive_wish(&mut store, wish.id).unwrap();
+    assert!(list_wishes(&mut store, today(), false).unwrap().is_empty());
+    restore_wish(&mut store, &before).unwrap();
+    let views = list_wishes(&mut store, today(), false).unwrap();
+    assert_eq!((views.len(), views[0].wish.reserved, views[0].wish.archived), (1, 20_000, false));
+    let missing = Wish { id: wish.id + 99, ..before };
+    assert!(matches!(restore_wish(&mut store, &missing), Err(ServiceError::NotFound)));
+}

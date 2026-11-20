@@ -108,3 +108,29 @@ pub fn import_data(app: AppHandle, state: State<'_, AppState>, source: String) -
     let summary = state.with_store(|s: &mut Store| { let result = if source == "legacy" { s.import_swiftdata(&path) } else { s.import_actual(&path) }; result.map_err(|e| match e { store::ImportError::StoreNotEmpty => "Ya tienes datos".into(), _ => e.to_string() }) })?;
     state.changed(); Ok(Some(summary))
 }
+
+#[derive(serde::Serialize)]
+pub struct CsvFile { name: String, text: String }
+/// Reads a dropped or picked CSV. Only .csv files up to 5 MB, so a stray drop never loads something huge.
+fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
+    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv")) { return Err("Solo puedo importar archivos .csv".into()); }
+    let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
+    if size > 5 * 1024 * 1024 { return Err("El archivo pesa más de 5 MB".into()); }
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    // Some banks export Latin-1; fall back so accents do not break the whole file.
+    let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| bytes.iter().map(|&b| b as char).collect());
+    Ok(CsvFile { name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), text })
+}
+#[tauri::command(async)]
+pub fn read_csv(path: String) -> Result<CsvFile, String> { read_csv_file(std::path::Path::new(&path)) }
+#[tauri::command(async)]
+pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
+    let Some(file) = app.dialog().file().set_title("Elige el CSV de tu banco").add_filter("CSV", &["csv"]).blocking_pick_file() else { return Ok(None) };
+    read_csv_file(&file.into_path().map_err(|e| e.to_string())?).map(Some)
+}
+/// Adds every row or none: a failure halfway leaves the ledger untouched. Returns the new ids for undo.
+#[tauri::command(async)]
+pub fn import_entries(state: State<'_, AppState>, entries: Vec<service::NewEntry>) -> Result<Vec<i64>, String> {
+    let ids = state.with_store(|s| s.transaction(|s| entries.into_iter().map(|e| service::add_entry(s, e).map(|row| row.id)).collect::<Result<Vec<_>, _>>()).map_err(|e: service::ServiceError| e.to_string()))?;
+    state.changed(); Ok(ids)
+}

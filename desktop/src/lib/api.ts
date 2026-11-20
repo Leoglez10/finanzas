@@ -55,6 +55,11 @@ export const postSchedule = (id: number) => invoke<{ entry: EntryRow; before: Sc
 export const skipSchedule = (id: number) => invoke<Schedule>("skip_schedule", { id });
 export const deleteSchedule = (id: number) => invoke<Schedule>("delete_schedule", { id });
 export const restoreSchedule = (schedule: Schedule) => invoke<number>("restore_schedule", { schedule });
+export interface CsvFile { name: string; text: string }
+export const readCsv = (path: string) => invoke<CsvFile>("read_csv", { path });
+export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
+/** All rows or none; returns the new ids so the import can be undone. */
+export const importEntries = (entries: EntryInput[]) => invoke<number[]>("import_entries", { entries });
 export const refreshTray = () => invoke<void>("refresh_tray");
 export const wishes = (archived = false) => invoke<WishView[]>("wishes", { archived });
 export const saveWish = (id: number | null, draft: WishDraft) => invoke<Wish>("save_wish", { id, draft });

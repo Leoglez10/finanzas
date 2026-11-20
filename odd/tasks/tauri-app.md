@@ -19,7 +19,7 @@ S7. Updates: "si, ambas" — Homebrew installs (`brew install --cask finanzas`) 
 - T5 [S1] inline — Deseos (reserve, release, buy, archive, two-step editor). Status: done (desktop/qa/deseos.js 17/17 PASS; core restore_wish with test). 
 - T6 [S3,S4] inline — Ajustes sub-tabs: Perfil (profiles), General (theme/mode/tray/autostart), Avisos, Datos, Actualizaciones, Atajos; persisted settings. Status: done (desktop/qa/ajustes.js 16/16 PASS three runs in a row; earlier QA scripts re-run).
 - T7 [S5] inline — ⌘K palette, native menu + shortcuts, quick-capture window + global shortcut. Status: done (desktop/qa/comandos.js 20/20; full regression 88/88 with the display awake, incl. proximos 13/13 and deseos 17/17 pending since L9).
-- T8 [S5] inline — CSV drag-and-drop import. Status: pending.
+- T8 [S5] inline — CSV drag-and-drop import. Status: done (desktop/qa/importar.js 14/14 twice; csv parser 6 tests; full regression 102/102).
 - T9 [S6,S7] — Packaging/release/cask switch, retire Rune app (needs user decision). Status: pending.
 
 ## Log
@@ -35,3 +35,4 @@ L9. 2026-11-18 regression after T6: with the user idle ~47 min (display asleep),
 Next: re-run all desktop/qa scripts with the display awake, then T7 (palette, menu, quick capture), T8 (CSV import), T9 (needs user decisions: updater vs cask, retiring Rune).
 L10. 2026-11-18 user: "si, ambas, sigue con T7". Native review of the user's uncommitted Rune changes (4 files) ran with consent granted: 4 lenses, approved and acknowledged (review-a554f22968ca0b0d).
 L11. T7: native menu owns the shortcuts and emits command ids to the webview (one registry in commands.svelte.ts). Quick capture is a separate always-on-top window (#quick) toggled by the global shortcut ⌥⇧F (tauri-plugin-global-shortcut, Risk item 5), hidden on blur; saves are announced to the main window so its toast/⌘Z can undo them. Not verified by QA: physical key presses on menu accelerators and ⌥⇧F (need real keyboard), the quick window at its real size (rendered inside the QA window instead to avoid stealing focus). Transparency was dropped (needs macOSPrivateApi).
+L12. 2026-11-19 user: "haz commits y sigue con t8". Committed the user's reviewed Rune change (8680196, review-b5b3689e5428ea5a approved). T8: CSV parsing in TS (","/";", Spanish/English headers, Cargo/Abono columns, day-first dates), Rust reads only .csv up to 5 MB (Latin-1 fallback) and imports in one transaction; undo deletes the batch. Dev-only window.__finanzas hook (import.meta.env.DEV) lets QA open dialogs with the app's module instance. Not QA-covered: a physical file drag onto the window (needs a real drag); the drop handler reuses read_csv + openImport, both covered.

@@ -12,3 +12,6 @@ export const scheduleDialog = $state({ open: false, view: null as ScheduleView |
 export function openSchedule(view: ScheduleView | null = null) { Object.assign(scheduleDialog, { open: true, view }); }
 export const wishDialog = $state({ open: false, wish: null as Wish | null });
 export function openWish(wish: Wish | null = null) { Object.assign(wishDialog, { open: true, wish }); }
+import type { CsvFile } from "./api";
+export const importDialog = $state({ open: false, file: null as CsvFile | null });
+export function openImport(file: CsvFile) { Object.assign(importDialog, { open: true, file }); }

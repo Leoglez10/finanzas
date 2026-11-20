@@ -3,6 +3,7 @@
   import * as api from "../lib/api";
   import { app, go, refresh, updateSettings, profileColor, PROFILE_COLORS } from "../lib/app.svelte";
   import { SHORTCUTS } from "../lib/shortcuts";
+  import { runCommand } from "../lib/commands.svelte";
   import { toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
@@ -139,7 +140,9 @@
     {:else if tab[0] === "datos"}
       <article class="card">
         <div class="card-h"><h2>Importar</h2></div>
-        <p class="muted" style="margin-bottom:14px">Copia tus datos a una base vacía. El archivo de origen solo se lee, nunca se modifica.</p>
+        <p class="muted" style="margin-bottom:10px">Movimientos de tu banco: arrastra un CSV a cualquier parte de la ventana, o elígelo aquí. Verás una vista previa y los duplicados se detectan solos.</p>
+        <div style="margin-bottom:18px"><button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Elegir CSV…</button></div>
+        <p class="muted" style="margin-bottom:14px">Otra app de finanzas: copia todo a un perfil vacío. El archivo de origen solo se lee, nunca se modifica.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" disabled={importable !== null && !importable[0]} onclick={() => runImport("actual")}><Icon name="upload" />Desde Actual Budget…</button>
           {#if importable?.[1]}<button class="btn" disabled={!importable[0]} onclick={() => runImport("legacy")}>Desde la app anterior de Mac</button>{/if}

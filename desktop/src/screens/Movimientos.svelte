@@ -3,6 +3,7 @@
   import * as api from "../lib/api";
   import { app, go, refresh } from "../lib/app.svelte";
   import { openEntry } from "../lib/dialogs.svelte";
+  import { runCommand } from "../lib/commands.svelte";
   import { categoryColor, money, monthKey, monthDate, parseDay } from "../lib/format";
   import { norm, parseCents } from "../lib/quick-parse";
   import { remember, toast } from "../lib/undo.svelte";
@@ -78,6 +79,7 @@
 
 <Topbar title={account?.name ?? "Movimientos"} sub={account ? "Cuenta" : "Todas las cuentas"}>
   {#snippet actions()}
+    <button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Importar CSV</button>
     <button class="btn" onclick={() => openEntry("ingreso", null, { accountId: accountId || null })}><Icon name="plus" />Ingreso</button>
     <button class="btn primary" onclick={() => openEntry("gasto", null, { accountId: accountId || null })}><Icon name="minus" />Gasto</button>
   {/snippet}

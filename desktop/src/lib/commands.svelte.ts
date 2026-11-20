@@ -2,8 +2,9 @@
 // the ⌘K palette and Ajustes › Atajos.
 import { invoke } from "@tauri-apps/api/core";
 import { app, go, updateSettings } from "./app.svelte";
-import { openEntry, openSchedule, openWish } from "./dialogs.svelte";
-import { undo } from "./undo.svelte";
+import { openEntry, openImport, openSchedule, openWish } from "./dialogs.svelte";
+import { pickCsv } from "./api";
+import { toast, undo } from "./undo.svelte";
 
 export interface Command { id: string; label: string; group: string; icon: string; keys: string; run: () => unknown }
 
@@ -24,6 +25,7 @@ export const COMMANDS: Command[] = [
   { id: "quick", label: "Captura rápida", group: "Acciones", icon: "bolt", keys: "⌥⇧F", run: () => invoke("show_quick") },
   { id: "new-wish", label: "Nuevo deseo", group: "Acciones", icon: "gift", keys: "", run: () => openWish() },
   { id: "new-schedule", label: "Programar pago", group: "Acciones", icon: "repeat", keys: "", run: () => openSchedule() },
+  { id: "import", label: "Importar CSV…", group: "Acciones", icon: "upload", keys: "⌘I", run: () => pickCsv().then(f => f && openImport(f)).catch(e => toast(String(e))) },
   { id: "search", label: "Buscar movimientos", group: "Editar", icon: "search", keys: "⌘F", run: () => { go("movimientos"); setTimeout(() => document.querySelector<HTMLInputElement>("#main input[type=search]")?.focus()); } },
   { id: "undo", label: "Deshacer el último cambio", group: "Editar", icon: "undo", keys: "⌘Z", run: () => undo() },
   { id: "theme", label: "Cambiar entre claro y oscuro", group: "Ver", icon: "moon", keys: "⇧⌘L", run: () => updateSettings({ dark: !isDark() }) },

@@ -60,6 +60,8 @@ export const readCsv = (path: string) => invoke<CsvFile>("read_csv", { path });
 export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
 /** All rows or none; returns the new ids so the import can be undone. */
 export const importEntries = (entries: EntryInput[]) => invoke<number[]>("import_entries", { entries });
+/** Returns the new account id; a non-zero `opening` becomes a "Saldo inicial" movement dated `date`. */
+export const createAccount = (name: string, offBudget: boolean, opening: number | null, date: string) => invoke<number>("create_account", { name, offBudget, opening, date });
 export const refreshTray = () => invoke<void>("refresh_tray");
 export const wishes = (archived = false) => invoke<WishView[]>("wishes", { archived });
 export const saveWish = (id: number | null, draft: WishDraft) => invoke<Wish>("save_wish", { id, draft });

@@ -2,7 +2,7 @@
 // the ⌘K palette and Ajustes › Atajos.
 import { invoke } from "@tauri-apps/api/core";
 import { app, go, updateSettings } from "./app.svelte";
-import { openEntry, openImport, openSchedule, openWish } from "./dialogs.svelte";
+import { openAccount, openEntry, openImport, openSchedule, openWish } from "./dialogs.svelte";
 import { pickCsv } from "./api";
 import { toast, undo } from "./undo.svelte";
 
@@ -24,6 +24,7 @@ export const COMMANDS: Command[] = [
   { id: "new-ingreso", label: "Nuevo ingreso", group: "Acciones", icon: "up", keys: "⇧⌘N", run: () => openEntry("ingreso") },
   { id: "quick", label: "Captura rápida", group: "Acciones", icon: "bolt", keys: "⌥⇧F", run: () => invoke("show_quick") },
   { id: "new-wish", label: "Nuevo deseo", group: "Acciones", icon: "gift", keys: "", run: () => openWish() },
+  { id: "new-account", label: "Nueva cuenta", group: "Acciones", icon: "card", keys: "", run: () => openAccount() },
   { id: "new-schedule", label: "Programar pago", group: "Acciones", icon: "repeat", keys: "", run: () => openSchedule() },
   { id: "import", label: "Importar CSV…", group: "Acciones", icon: "upload", keys: "⌘I", run: () => pickCsv().then(f => f && openImport(f)).catch(e => toast(String(e))) },
   { id: "search", label: "Buscar movimientos", group: "Editar", icon: "search", keys: "⌘F", run: () => { go("movimientos"); setTimeout(() => document.querySelector<HTMLInputElement>("#main input[type=search]")?.focus()); } },

@@ -14,12 +14,19 @@ pub fn assign_budget(state: State<'_, AppState>, month: i32, category_id: i64, t
     if result.is_some() { state.changed(); }
     Ok(result)
 }
+/// New account, with its opening balance as a "Saldo inicial" movement (same as the Rune app). Returns its id.
 #[tauri::command(async)]
-pub fn create_account(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool, opening: Option<i64>, date: chrono::NaiveDate) -> Result<i64, String> {
     let name = name.trim(); if name.is_empty() { return Err("Escribe un nombre".into()); }
-    state.with_store(|s| { let order = s.list_accounts().map_err(|e| e.to_string())?.iter().map(|a| a.sort_order).reduce(f64::max).unwrap_or(0.0) + 1.0;
-        s.insert_account(&Account { id: 0, name: name.into(), off_budget: false, closed: false, sort_order: order }).map_err(|e| e.to_string())?; Ok(()) })?;
-    state.changed(); Ok(())
+    let id = state.with_store(|s| s.transaction(|s| {
+        let order = s.list_accounts()?.iter().map(|a| a.sort_order).fold(0.0, f64::max) + 1.0;
+        let id = s.insert_account(&Account { id: 0, name: name.into(), off_budget, closed: false, sort_order: order })?;
+        if let Some(amount) = opening.filter(|v| *v != 0) {
+            s.insert_entry(&finanzas_core::Entry { id: 0, date, amount, notes: "Saldo inicial".into(), cleared: true, account_id: Some(id), category_id: None, payee_id: None, schedule_id: None })?;
+        }
+        Ok::<_, service::ServiceError>(id)
+    }).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(id)
 }
 #[tauri::command(async)]
 pub fn change_category(state: State<'_, AppState>, id: i64, name: Option<String>, hidden: Option<bool>) -> Result<(), String> {

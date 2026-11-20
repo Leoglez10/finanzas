@@ -218,7 +218,7 @@ fn spawn_reminders(app: tauri::AppHandle) {
 pub fn run() {
     let state = open_state();
     if let Some(store) = &state.store { spawn_auto_post(Arc::clone(store), Arc::clone(&state.revision)); }
-    tauri::Builder::default().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None)).plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_global_shortcut::Builder::new().build()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
+    tauri::Builder::default().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None)).plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_global_shortcut::Builder::new().build()).plugin(tauri_plugin_updater::Builder::new().build()).plugin(tauri_plugin_process::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init()).manage(state)
         .setup(|app| {
             // The window comes from tauri.conf.json ("create": false) so QA runs can keep a covered window alive.
             let config = app.config().app.windows.first().cloned().ok_or("falta la ventana principal en tauri.conf.json")?;

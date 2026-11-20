@@ -1,5 +1,6 @@
 // App-wide state: route, accounts, settings and the data version every screen reloads on.
 import * as api from "./api";
+import { checkUpdates } from "./updates.svelte";
 
 export const app = $state({
   route: location.hash.slice(1) || "resumen",
@@ -54,4 +55,6 @@ export async function start() {
   app.settings = settings; applyAppearance(settings);
   await tick();
   setInterval(tick, 2000);
+  // Dev builds never call GitHub on their own; use Ajustes › Actualizaciones to try it.
+  if (settings.auto_update && !import.meta.env.DEV) void checkUpdates(true);
 }

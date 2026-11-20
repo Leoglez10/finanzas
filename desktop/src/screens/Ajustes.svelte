@@ -4,6 +4,7 @@
   import { app, go, refresh, updateSettings, profileColor, PROFILE_COLORS } from "../lib/app.svelte";
   import { SHORTCUTS } from "../lib/shortcuts";
   import { runCommand } from "../lib/commands.svelte";
+  import { checkUpdates, installUpdate, restart, updates } from "../lib/updates.svelte";
   import { toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
@@ -152,7 +153,15 @@
     {:else if tab[0] === "actualizaciones"}
       <article class="card">
         <div class="card-h"><h2>Actualizaciones</h2></div>
-        <div class="setting" style="border:0;padding-top:0"><div class="grow"><b>Versión {version}</b><p>Por ahora las actualizaciones llegan con Homebrew: <code>brew upgrade --cask finanzas</code></p></div></div>
+        <div class="setting" style="border:0;padding-top:0"><div class="grow"><b>Versión {version}</b>
+          <p>{#if updates.status === "checking"}Buscando…{:else if updates.status === "none"}Estás al día.{:else if updates.status === "available"}Hay una versión nueva: {updates.version}.{:else if updates.status === "downloading"}Descargando {updates.version}… {Math.round(updates.progress * 100)}%{:else if updates.status === "ready"}Lista: reinicia para usar {updates.version}.{:else}La app se actualiza sola; Homebrew solo la instala.{/if}</p></div>
+          {#if updates.status === "available"}<button class="btn sm primary" onclick={installUpdate}>Instalar</button>
+          {:else if updates.status === "ready"}<button class="btn sm primary" onclick={restart}>Reiniciar</button>
+          {:else}<button class="btn sm" disabled={updates.status === "checking" || updates.status === "downloading"} onclick={() => checkUpdates()}>Buscar actualizaciones</button>{/if}
+        </div>
+        {#if updates.status === "error"}<p class="err" role="alert">{updates.error}</p>{/if}
+        {#if updates.notes && updates.status !== "none"}<p class="muted" style="font-size:13px;white-space:pre-line">{updates.notes}</p>{/if}
+        <label class="setting"><div class="grow"><b>Buscar actualizaciones al abrir</b><p>Se descargan solo cuando tú lo pides.</p></div><input type="checkbox" role="switch" class="switch" checked={s.auto_update} onchange={e => save({ auto_update: e.currentTarget.checked })} /></label>
       </article>
     {:else}
       <article class="card">

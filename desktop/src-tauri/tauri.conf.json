@@ -1,8 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Finanzas",
-  "version": "0.1.0",
-  "identifier": "com.leoglez.finanzas",
+  "identifier": "io.github.leoglez10.finanzas",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -55,6 +54,25 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "category": "Finance",
+    "shortDescription": "Tu dinero, en orden",
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "mainBinaryName": "finanzas",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ0RjQwNjA5RkUwOTU3RUEKUldUcVZ3bitDUWIwMUo5K3lqclROeTNnQnF2ZjJ2VHBOMGNheWVhTkJYOVFZaUp1SUViUm56cTcK",
+      "endpoints": [
+        "https://github.com/Leoglez10/finanzas/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

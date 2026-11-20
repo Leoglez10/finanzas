@@ -9,7 +9,7 @@ DB=$(mktemp -d)
 trap 'kill "${PID:-0}" 2>/dev/null || true; rm -rf "$DB"' EXIT
 (cd "$APP" && cargo build -q && cargo run -q --example demo_db -- "$DB/finanzas.db" >/dev/null)
 # __QA__ in a script becomes this folder, so scripts can use desktop/qa/fixtures.
-FINANZAS_DB="$DB/finanzas.db" FINANZAS_DEV_EVAL="$(sed "s#__QA__#$QA#g" "$1")" "$APP/target/debug/finanzas-desktop" >"$DB/app.log" 2>&1 &
+FINANZAS_DB="$DB/finanzas.db" FINANZAS_DEV_EVAL="$(sed "s#__QA__#$QA#g" "$1")" "$APP/../../target/debug/finanzas-desktop" >"$DB/app.log" 2>&1 &
 PID=$!
 for _ in $(seq 1 120); do grep -q "^QA DONE" "$DB/app.log" && break; sleep 1; done
 if [[ -n "${2:-}" ]]; then screencapture -x -o -l"$(swift "$QA/winshot.swift" finanzas-desktop)" "$2" || true; fi

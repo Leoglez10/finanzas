@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/finanzas-core", "crates/finanzas-mcp", "crates/finanzas-app"]
+members = ["crates/finanzas-core", "crates/finanzas-mcp", "crates/finanzas-app", "desktop/src-tauri"]
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
-version = "0.4.2"
+version = "0.5.0"
 
 [workspace.dependencies]
 chrono = { version = "0.4", features = ["serde"] }

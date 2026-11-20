@@ -15,3 +15,5 @@ export function openWish(wish: Wish | null = null) { Object.assign(wishDialog, {
 import type { CsvFile } from "./api";
 export const importDialog = $state({ open: false, file: null as CsvFile | null });
 export function openImport(file: CsvFile) { Object.assign(importDialog, { open: true, file }); }
+export const accountDialog = $state({ open: false });
+export function openAccount() { accountDialog.open = true; }

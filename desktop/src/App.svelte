@@ -7,6 +7,7 @@
   import { runCommand } from "./lib/commands.svelte";
   import { openEntry, openImport } from "./lib/dialogs.svelte";
   import ImportDialog from "./components/ImportDialog.svelte";
+  import AccountDialog from "./components/AccountDialog.svelte";
   import Icon from "./components/Icon.svelte";
   import { remember, toast, undo } from "./lib/undo.svelte";
   import Palette from "./components/Palette.svelte";
@@ -101,6 +102,7 @@
   <WishDialog />
   <Palette />
   <ImportDialog />
+  <AccountDialog />
   {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
   <Toast />
 {/if}

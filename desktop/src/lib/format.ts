@@ -1,9 +1,10 @@
 // Formatting shared by every screen. Amounts arrive as integer cents; dates as "YYYY-MM-DD".
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", currencyDisplay: "narrowSymbol" });
 
-export const money = (cents: number, sign = false) => (sign && cents > 0 ? "+" : "") + currency.format(cents / 100);
+// `|| 0` turns -0 into 0, so an empty total never shows as "-$0.00".
+export const money = (cents: number, sign = false) => (sign && cents > 0 ? "+" : "") + currency.format((cents || 0) / 100);
 /** "$1,234.56" split so the cents can be drawn smaller. */
-export const moneyParts = (cents: number) => { const [whole, decimals = "00"] = currency.format(cents / 100).split("."); return { whole, decimals }; };
+export const moneyParts = (cents: number) => { const [whole, decimals = "00"] = currency.format((cents || 0) / 100).split("."); return { whole, decimals }; };
 
 /** Local date from "YYYY-MM-DD" (Date.parse would read it as UTC and shift the day). */
 export const parseDay = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };

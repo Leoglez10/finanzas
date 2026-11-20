@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/finanzas-core", "crates/finanzas-mcp", "crates/finanzas-app", "desktop/src-tauri"]
+members = ["crates/finanzas-core", "crates/finanzas-mcp", "desktop/src-tauri"]
 
 [workspace.package]
 edition = "2021"

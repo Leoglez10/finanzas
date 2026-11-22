@@ -14,7 +14,7 @@ fn seed() -> (Store, Id, Id) {
     (store, account, category)
 }
 fn draft(category: Option<Id>) -> WishDraft {
-    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category }
+    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category, kind: WishKind::Compra, target_date: None, items: None }
 }
 #[test]
 fn wish_details_and_partial_reservations_do_not_double_allocate() {
@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 2);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 7);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -154,4 +154,254 @@ fn restore_wish_undoes_an_archive_including_its_reservation() {
     assert_eq!((views.len(), views[0].wish.reserved, views[0].wish.archived), (1, 20_000, false));
     let missing = Wish { id: wish.id + 99, ..before };
     assert!(matches!(restore_wish(&mut store, &missing), Err(ServiceError::NotFound)));
+}
+
+fn day(y: i32, m: u32, d: u32) -> NaiveDate { NaiveDate::from_ymd_opt(y, m, d).unwrap() }
+
+#[test]
+fn goal_kind_and_target_date_are_saved_and_listed() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { name: "Cancún".into(), kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    let plain = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let listed = list_wishes(&mut store, today(), false).unwrap();
+    let found = |id| listed.iter().find(|v| v.wish.id == id).unwrap();
+    assert_eq!((found(trip.id).wish.kind, found(trip.id).wish.target_date), (WishKind::Viaje, Some(day(2027, 6, 15))));
+    assert_eq!((found(plain.id).wish.kind, found(plain.id).wish.target_date), (WishKind::Compra, None));
+    assert_eq!(serde_json::to_value(&found(trip.id).wish).unwrap()["kind"], "viaje");
+}
+
+#[test]
+fn a_target_date_gives_the_monthly_amount_to_set_aside() {
+    let (mut store, _, category) = seed();
+    // From Nov 10 2026 to Jun 15 2027 there are 8 monthly set-asides: Nov 10, Dec 10, … Jun 10.
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    let plan = |store: &mut Store| list_wishes(store, today(), false).unwrap().into_iter().find(|v| v.wish.id == trip.id).unwrap().plan.unwrap();
+    let p = plan(&mut store);
+    assert_eq!((p.months_left, p.monthly, p.remaining, p.overdue), (8, 6_250, 50_000, false));
+    reserve_wish(&mut store, trip.id, 10_000, today()).unwrap();
+    assert_eq!((plan(&mut store).monthly, plan(&mut store).remaining), (5_000, 40_000));
+    // The amount rounds up so the goal is reached on time.
+    save_wish(&mut store, Some(trip.id), WishDraft { price: 50_001, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    assert_eq!(plan(&mut store).monthly, 5_001);
+}
+
+#[test]
+fn a_past_target_date_is_overdue_and_no_date_has_no_plan() {
+    let (mut store, _, category) = seed();
+    let late = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 10, 1)), ..draft(Some(category)) }).unwrap();
+    let open = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let views = list_wishes(&mut store, today(), false).unwrap();
+    let late = views.iter().find(|v| v.wish.id == late.id).unwrap().plan.as_ref().unwrap();
+    assert_eq!((late.overdue, late.months_left, late.monthly), (true, 0, 50_000));
+    assert!(views.iter().find(|v| v.wish.id == open.id).unwrap().plan.is_none());
+    // Same month as the target: one last set-aside covers the rest.
+    let soon = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 11, 30)), ..draft(Some(category)) }).unwrap();
+    let soon = list_wishes(&mut store, today(), false).unwrap().into_iter().find(|v| v.wish.id == soon.id).unwrap().plan.unwrap();
+    assert_eq!((soon.months_left, soon.monthly, soon.overdue), (1, 50_000, false));
+}
+
+#[test]
+fn archived_goals_have_no_plan() {
+    let (mut store, _, category) = seed();
+    let late = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 10, 1)), ..draft(Some(category)) }).unwrap();
+    archive_wish(&mut store, late.id).unwrap();
+    assert!(list_wishes(&mut store, today(), true).unwrap()[0].plan.is_none());
+}
+
+fn item(name: &str, amount: Cents) -> WishItemDraft { WishItemDraft { id: None, name: name.into(), amount, paid: false } }
+fn view(store: &mut Store, id: Id) -> WishView { list_wishes(store, today(), true).unwrap().into_iter().find(|v| v.wish.id == id).unwrap() }
+
+#[test]
+fn line_items_set_the_price_and_keep_their_ids_across_edits() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, items: Some(vec![item("Vuelo", 30_000), item("Hotel", 15_000)]), ..draft(Some(category)) }).unwrap();
+    assert_eq!(trip.price, 45_000, "the price is the sum of the items");
+    let v = view(&mut store, trip.id);
+    assert_eq!(v.items.iter().map(|i| (i.name.as_str(), i.amount, i.paid)).collect::<Vec<_>>(), [("Vuelo", 30_000, false), ("Hotel", 15_000, false)]);
+    let flight = v.items[0].id;
+    // Edit: keep the flight (new amount), drop the hotel, add food.
+    let edited = save_wish(&mut store, Some(trip.id), WishDraft { kind: WishKind::Viaje, items: Some(vec![WishItemDraft { id: Some(flight), name: "Vuelo".into(), amount: 32_000, paid: false }, item("Comida", 8_000)]), ..draft(Some(category)) }).unwrap();
+    assert_eq!(edited.price, 40_000);
+    let v = view(&mut store, trip.id);
+    assert_eq!(v.items.iter().map(|i| (i.name.as_str(), i.amount)).collect::<Vec<_>>(), [("Vuelo", 32_000), ("Comida", 8_000)]);
+    assert_eq!(v.items[0].id, flight, "an edited item keeps its id");
+    // No items in the draft (None) keeps them; an empty list removes them and uses the draft price.
+    save_wish(&mut store, Some(trip.id), WishDraft { price: 1, ..draft(Some(category)) }).unwrap();
+    assert_eq!((view(&mut store, trip.id).items.len(), view(&mut store, trip.id).wish.price), (2, 40_000));
+    save_wish(&mut store, Some(trip.id), WishDraft { items: Some(vec![]), ..draft(Some(category)) }).unwrap();
+    assert_eq!((view(&mut store, trip.id).items.len(), view(&mut store, trip.id).wish.price), (0, 50_000));
+}
+
+#[test]
+fn line_items_are_validated() {
+    let (mut store, _, category) = seed();
+    for (items, message) in [(vec![item(" ", 100)], "Line item name must not be empty"), (vec![item("Hotel", 0)], "Line item amount must be greater than zero")] {
+        let err = save_wish(&mut store, None, WishDraft { items: Some(items), ..draft(Some(category)) }).unwrap_err();
+        assert_eq!(err.to_string(), message);
+    }
+    let other = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 100)]), ..draft(Some(category)) }).unwrap();
+    let foreign = view(&mut store, other.id).items[0].id;
+    let mine = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let err = save_wish(&mut store, Some(mine.id), WishDraft { items: Some(vec![WishItemDraft { id: Some(foreign), name: "A".into(), amount: 100, paid: false }]), ..draft(Some(category)) }).unwrap_err();
+    assert!(matches!(err, ServiceError::NotFound), "an item id from another goal is refused");
+    // Items cannot bring the price under what is already set aside.
+    let reserved = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 30_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, reserved.id, 20_000, today()).unwrap();
+    let err = save_wish(&mut store, Some(reserved.id), WishDraft { items: Some(vec![item("A", 10_000)]), ..draft(Some(category)) }).unwrap_err();
+    assert_eq!(err.to_string(), "Release reserved funds before reducing the price");
+}
+
+#[test]
+fn paid_items_count_as_progress_and_release_what_they_cover() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), items: Some(vec![item("Vuelo", 30_000), item("Hotel", 20_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, today()).unwrap();
+    let flight = view(&mut store, trip.id).items[0].id;
+    // Paying the flight: 50,000 - 30,000 paid leaves 20,000 to cover, so 5,000 of the 25,000 set aside is released.
+    let after = set_wish_item_paid(&mut store, flight, true, today()).unwrap();
+    assert_eq!((after.paid, after.reserved), (30_000, 20_000));
+    let v = view(&mut store, trip.id);
+    assert!(v.items[0].paid);
+    assert_eq!(v.plan.unwrap().remaining, 0);
+    assert!(reserve_wish(&mut store, trip.id, 20_001, today()).is_err(), "the reservation limit is what is still unpaid");
+    // Unmarking restores the room to reserve again but does not re-reserve.
+    let back = set_wish_item_paid(&mut store, flight, false, today()).unwrap();
+    assert_eq!((back.paid, back.reserved), (0, 20_000));
+    assert!(matches!(set_wish_item_paid(&mut store, 9_999, true, today()), Err(ServiceError::NotFound)));
+}
+
+#[test]
+fn every_change_to_the_set_aside_amount_is_logged_with_its_date() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { items: Some(vec![item("Vuelo", 30_000), item("Hotel", 20_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, trip.id, 10_000, today()).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, day(2026, 11, 20)).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, day(2026, 11, 21)).unwrap(); // no change: nothing logged
+    reserve_wish(&mut store, trip.id, 22_000, day(2026, 11, 22)).unwrap();
+    // Paying the flight releases 2,000 (50,000 - 30,000 paid leaves 20,000 to cover).
+    let flight = view(&mut store, trip.id).items[0].id;
+    set_wish_item_paid(&mut store, flight, true, day(2026, 11, 23)).unwrap();
+    let log: Vec<_> = view(&mut store, trip.id).contributions.iter().map(|c| (c.date, c.amount)).collect();
+    assert_eq!(log, [(today(), 10_000), (day(2026, 11, 20), 15_000), (day(2026, 11, 22), -3_000), (day(2026, 11, 23), -2_000)]);
+    let other = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    assert!(view(&mut store, other.id).contributions.is_empty(), "each goal has its own log");
+}
+
+#[test]
+fn completing_a_goal_records_its_expense_and_keeps_it_as_an_achievement() {
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, bike.id, 20_000, today()).unwrap();
+    let done = complete_wish(&mut store, bike.id, account, today()).unwrap();
+    assert_eq!((done.wish.archived, done.wish.reserved, done.wish.achieved_date), (true, 0, Some(today())));
+    assert_eq!(done.entries.iter().map(|e| (e.amount, e.category_id, e.payee_name.as_deref(), e.notes.as_str())).collect::<Vec<_>>(),
+        [(-50_000, Some(category), Some("PlayStation"), "Compra de un deseo")]);
+    assert!(matches!(complete_wish(&mut store, bike.id, account, today()), Err(ServiceError::InvalidWish("Archived wishes cannot be edited"))));
+}
+
+#[test]
+fn completing_a_goal_with_items_records_one_expense_per_unpaid_item() {
+    let (mut store, account, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { name: "Cancún".into(), kind: WishKind::Viaje, items: Some(vec![item("Vuelo", 30_000), item("Hotel", 15_000), item("Comida", 5_000)]), ..draft(Some(category)) }).unwrap();
+    let flight = view(&mut store, trip.id).items[0].id;
+    set_wish_item_paid(&mut store, flight, true, today()).unwrap();
+    let done = complete_wish(&mut store, trip.id, account, today()).unwrap();
+    assert_eq!(done.entries.iter().map(|e| (e.amount, e.notes.as_str())).collect::<Vec<_>>(), [(-15_000, "Cancún · Hotel"), (-5_000, "Cancún · Comida")]);
+    assert!(done.entries.iter().all(|e| e.payee_name.as_deref() == Some("Cancún") && e.category_id == Some(category)));
+}
+
+#[test]
+fn completing_fails_without_writing_anything() {
+    let (mut store, _, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let before = store.list_entries().unwrap().len();
+    assert!(matches!(complete_wish(&mut store, bike.id, 9_999, today()), Err(ServiceError::NotFound)));
+    assert_eq!(store.list_entries().unwrap().len(), before);
+    assert!(!view(&mut store, bike.id).wish.archived);
+    // Undo: restoring the snapshot brings the goal back as it was.
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    complete_wish(&mut store, bike.id, account, today()).unwrap();
+    restore_wish(&mut store, &bike).unwrap();
+    let back = view(&mut store, bike.id).wish;
+    assert_eq!((back.archived, back.achieved_date), (false, None));
+}
+
+fn spend(store: &Store, account: Id, amount: Cents) -> Id {
+    add_entry(store, NewEntry { date: today(), amount, account_id: account, payee: Some("Gasto".into()), category_id: None, notes: String::new(), cleared: true }).unwrap().id
+}
+
+#[test]
+fn movements_tagged_to_a_goal_compare_spent_with_planned_per_item() {
+    let (mut store, account, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, items: Some(vec![item("Hotel", 15_000), item("Comida", 5_000)]), ..draft(Some(category)) }).unwrap();
+    let (hotel, food) = { let v = view(&mut store, trip.id); (v.items[0].id, v.items[1].id) };
+    let night1 = spend(&store, account, -8_000);
+    let tacos = spend(&store, account, -1_200);
+    let taxi = spend(&store, account, -600);
+    tag_entry(&mut store, night1, Some(trip.id), Some(hotel)).unwrap();
+    tag_entry(&mut store, tacos, Some(trip.id), Some(food)).unwrap();
+    let row = tag_entry(&mut store, taxi, Some(trip.id), None).unwrap();
+    assert_eq!((row.wish_id, row.wish_item_id), (Some(trip.id), None));
+    let s = view(&mut store, trip.id).spending;
+    assert_eq!((s.total, s.other), (9_800, 600));
+    assert_eq!(s.items, [ItemSpend { item_id: hotel, spent: 8_000 }, ItemSpend { item_id: food, spent: 1_200 }]);
+    // Untagging and deleting a movement both take it out.
+    tag_entry(&mut store, taxi, None, None).unwrap();
+    delete_entry(&store, tacos).unwrap();
+    let s = view(&mut store, trip.id).spending;
+    assert_eq!((s.total, s.other, s.items.len()), (8_000, 0, 1));
+    assert_eq!(store.entry_row(night1).unwrap().unwrap().wish_item_id, Some(hotel));
+}
+
+#[test]
+fn tags_are_validated_and_completion_tags_its_movements() {
+    let (mut store, account, category) = seed();
+    let a = save_wish(&mut store, None, WishDraft { items: Some(vec![item("X", 100)]), ..draft(Some(category)) }).unwrap();
+    let b = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let a_item = view(&mut store, a.id).items[0].id;
+    let entry = spend(&store, account, -100);
+    assert!(matches!(tag_entry(&mut store, entry, Some(b.id), Some(a_item)), Err(ServiceError::NotFound)), "the item must belong to the goal");
+    assert!(matches!(tag_entry(&mut store, entry, None, Some(a_item)), Err(ServiceError::InvalidWish("Choose the goal of the line item"))));
+    assert!(matches!(tag_entry(&mut store, 9_999, Some(a.id), None), Err(ServiceError::NotFound)));
+    assert!(matches!(tag_entry(&mut store, entry, Some(9_999), None), Err(ServiceError::NotFound)));
+    let done = complete_wish(&mut store, a.id, account, today()).unwrap();
+    assert_eq!((done.entries[0].wish_id, done.entries[0].wish_item_id), (Some(a.id), Some(a_item)));
+    assert_eq!(view(&mut store, a.id).spending.total, 100);
+}
+
+fn logged(store: &mut Store, id: Id) -> (Cents, Cents) {
+    let v = view(store, id);
+    (v.contributions.iter().map(|c| c.amount).sum(), v.wish.reserved)
+}
+
+#[test]
+fn the_history_always_adds_up_to_what_is_set_aside() {
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, bike.id, 30_000, today()).unwrap();
+    // Changing the category releases what was set aside.
+    let snapshot = view(&mut store, bike.id).wish;
+    save_wish(&mut store, Some(bike.id), draft(None)).unwrap();
+    let (log, reserved) = logged(&mut store, bike.id);
+    assert_eq!((log, reserved), (0, 0));
+    // Undo (restoring the snapshot) sets it aside again.
+    restore_wish(&mut store, &snapshot).unwrap();
+    assert_eq!(logged(&mut store, bike.id), (30_000, 30_000));
+    // Archiving and completing release it.
+    let other = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, other.id, 10_000, today()).unwrap();
+    archive_wish(&mut store, other.id).unwrap();
+    assert_eq!(logged(&mut store, other.id), (0, 0));
+    let done = complete_wish(&mut store, bike.id, account, today()).unwrap();
+    assert_eq!(logged(&mut store, done.wish.id), (0, 0));
+}
+
+#[test]
+fn duplicate_item_ids_are_refused() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 100)]), ..draft(Some(category)) }).unwrap();
+    let a = view(&mut store, trip.id).items[0].id;
+    let twice = vec![WishItemDraft { id: Some(a), ..item("A", 100) }, WishItemDraft { id: Some(a), ..item("A", 200) }];
+    assert_eq!(save_wish(&mut store, Some(trip.id), WishDraft { items: Some(twice), ..draft(Some(category)) }).unwrap_err().to_string(), "A line item appears twice");
 }

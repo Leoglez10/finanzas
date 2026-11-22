@@ -27,6 +27,10 @@ impl Args<'_> {
         NaiveDate::parse_from_str(text, "%Y-%m-%d").ok().filter(|d| text.len() == 10 && d.format("%Y-%m-%d").to_string() == text)
             .ok_or_else(|| ToolError(format!("{key}: expected YYYY-MM-DD")))
     }
+    pub fn optional_date(&self, key: &str) -> Result<Option<NaiveDate>, ToolError> {
+        if self.present(key).is_none() { return Ok(None); }
+        self.date(key).map(Some)
+    }
     pub fn range(&self) -> Result<(NaiveDate, NaiveDate), ToolError> {
         let (start, end) = (self.date("startDate")?, self.date("endDate")?);
         if start > end { return Err(ToolError("startDate must be on or before endDate".into())); }

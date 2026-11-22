@@ -56,7 +56,7 @@
 <dialog bind:this={dialog} aria-labelledby="schedule-title" onclose={() => scheduleDialog.open = false}>
   <form method="dialog" novalidate onsubmit={save}>
     <div class="dlg-h"><div><h2 id="schedule-title">{scheduleDialog.view ? "Editar pago programado" : "Programar pago"}</h2><p>Te aviso antes de cada fecha.</p></div>
-      <button class="btn icon ghost" value="cancel" formnovalidate aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       <fieldset class="kind"><legend class="sr">Tipo</legend>
         <label><input type="radio" bind:group={kind} value="gasto" /><Icon name="down" />Pago</label>
@@ -82,7 +82,7 @@
       {#if error}<p class="err" role="alert">{error}</p>{/if}
     </div>
     <div class="dlg-f"><span class="left"><kbd>esc</kbd> para cerrar</span>
-      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button>
       <button class="btn primary" value="save" disabled={saving}>{scheduleDialog.view ? "Guardar" : "Programar"}</button></div>
   </form>
 </dialog>

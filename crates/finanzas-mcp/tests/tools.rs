@@ -260,3 +260,53 @@ fn wishes_public_tools_save_evaluate_reserve_edit_and_archive() {
         assert_eq!(tool.read_only, name == "list_wishes" || name == "evaluate_wish");
     }
 }
+
+#[test]
+fn wishes_carry_goal_kind_target_date_and_plan() {
+    let mut s = Seed::new();
+    let plain = s.call("save_wish", json!({"name":"Bici", "price":900}));
+    assert_eq!((plain["kind"].clone(), plain["targetDate"].clone()), (json!("compra"), Value::Null));
+    assert_eq!(plain["achievedDate"], Value::Null);
+    let trip = s.call("save_wish", json!({"name":"Cancún", "price":800, "kind":"viaje", "targetDate":"2027-01-15"}));
+    assert_eq!((trip["kind"].clone(), trip["targetDate"].clone()), (json!("viaje"), json!("2027-01-15")));
+    let listed = s.call("list_wishes", json!({}));
+    let view = listed.as_array().unwrap().iter().find(|v| v["wish"]["id"] == trip["id"]).unwrap();
+    // From Oct 15 to Jan 15: four monthly set-asides of $200.
+    assert_eq!(view["plan"], json!({"targetDate":"2027-01-15","remaining":800.0,"monthsLeft":4,"monthly":200.0,"overdue":false}));
+    assert_eq!(listed.as_array().unwrap().iter().find(|v| v["wish"]["id"] == plain["id"]).unwrap()["plan"], Value::Null);
+    for (args, message) in [(json!({"name":"X","price":1,"kind":"crucero"}), "kind: expected compra, viaje, experiencia or fondo"), (json!({"name":"X","price":1,"targetDate":"15/01/2027"}), "targetDate: expected YYYY-MM-DD")] {
+        assert_eq!(call(&mut s.store, "save_wish", &args, day(10, 15)).unwrap_err().0, message);
+    }
+    let spec = specs().into_iter().find(|t| t.name == "save_wish").unwrap();
+    assert_eq!(spec.input_schema["properties"]["kind"]["enum"], json!(["compra","viaje","experiencia","fondo"]));
+}
+
+#[test]
+fn wishes_take_line_items_and_keep_them_when_omitted() {
+    let mut s = Seed::new();
+    let trip = s.call("save_wish", json!({"name":"Cancún", "price":1, "kind":"viaje", "items":[{"name":"Vuelo","amount":300},{"name":"Hotel","amount":200,"paid":true}]}));
+    assert_eq!((trip["price"].clone(), trip["paid"].clone()), (json!(500.0), json!(200.0)));
+    let items = s.call("list_wishes", json!({}))[0]["items"].clone();
+    assert_eq!(items.as_array().unwrap().iter().map(|i| (i["name"].clone(), i["amount"].clone(), i["paid"].clone())).collect::<Vec<_>>(),
+        [(json!("Vuelo"), json!(300.0), json!(false)), (json!("Hotel"), json!(200.0), json!(true))]);
+    assert!(items[0]["id"].as_str().unwrap().starts_with("WishItem/p"));
+    // Editing without items keeps them (and their sum as the price).
+    let edited = s.call("save_wish", json!({"id":trip["id"], "name":"Cancún 2027", "price":1, "kind":"viaje"}));
+    assert_eq!(edited["price"], 500.0);
+    assert_eq!(s.call("list_wishes", json!({}))[0]["items"].as_array().unwrap().len(), 2);
+    // Keeping one item by id and dropping the other.
+    let kept = s.call("save_wish", json!({"id":trip["id"], "name":"Cancún", "price":1, "kind":"viaje", "items":[{"id":items[0]["id"],"name":"Vuelo","amount":350}]}));
+    assert_eq!((kept["price"].clone(), kept["paid"].clone()), (json!(350.0), json!(0.0)));
+    assert_eq!(call(&mut s.store, "save_wish", &json!({"name":"X","price":1,"items":[{"name":"","amount":1}]}), day(10, 15)).unwrap_err().0, "Line item name must not be empty");
+}
+
+#[test]
+fn list_wishes_returns_the_contribution_log() {
+    let mut s = Seed::new();
+    s.store.set_budget(202610, s.food, 50000).unwrap();
+    let wish = s.call("save_wish", json!({"name":"Bici", "price":300, "categoryId":format!("Category/p{}", s.food)}));
+    s.call("reserve_wish", json!({"id":wish["id"], "amount":100}));
+    s.call("reserve_wish", json!({"id":wish["id"], "amount":40}));
+    assert_eq!(s.call("list_wishes", json!({}))[0]["spending"], json!({"total":0.0,"other":0.0,"items":[]}));
+    assert_eq!(s.call("list_wishes", json!({}))[0]["contributions"], json!([{"date":"2026-10-15","amount":100.0},{"date":"2026-10-15","amount":-60.0}]));
+}

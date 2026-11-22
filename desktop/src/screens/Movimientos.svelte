@@ -4,30 +4,33 @@
   import { app, go, refresh } from "../lib/app.svelte";
   import { openEntry } from "../lib/dialogs.svelte";
   import { runCommand } from "../lib/commands.svelte";
-  import { categoryColor, money, monthKey, monthDate, parseDay } from "../lib/format";
+  import { categoryColor, money, parseDay } from "../lib/format";
+  import { rangeOfParams, inRange, type Range } from "../lib/period";
   import { norm, parseCents } from "../lib/quick-parse";
   import { remember, toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
+  import PeriodPicker from "../components/PeriodPicker.svelte";
   import Topbar from "../components/Topbar.svelte";
 
   let { accountId = 0 }: { accountId?: number } = $props();
-  // Filters can arrive in the route: movimientos?mes=202611&categoria=4 (from Resumen).
+  // Filters live in the route: movimientos?desde=2026-11-01&hasta=2026-11-30&categoria=4 (mes=202611 still works).
   let params = $derived(new URLSearchParams(app.route.split("?")[1] ?? ""));
   let search = $state(new URLSearchParams(location.hash.split("?")[1] ?? "").get("q") ?? "");
   let kind = $state<"todos" | "gastos" | "ingresos">("todos");
-  let month = $derived(Number(params.get("mes")) || 0);
+  let range = $derived(rangeOfParams(params));
   let categoryFilter = $derived(Number(params.get("categoria")) || 0);
   let rows = $state<api.EntryRow[]>([]);
   let groups = $state<api.CategoryGroup[]>([]);
+  let goalNames = $state(new Map<number, string>());
   let editing = $state<{ id: number; field: "amount" | "category" } | null>(null);
   let error = $state("");
 
   $effect(() => {
     void app.version; const id = accountId;
     // ponytail: loads the whole ledger and filters here; page it in SQL when ledgers pass ~20k rows.
-    Promise.all([api.entries({ accountId: id || undefined }), api.categoriesGrouped()])
-      .then(([r, g]) => { rows = r.rows; groups = g; error = ""; }).catch(e => error = String(e));
+    Promise.all([api.entries({ accountId: id || undefined }), api.categoriesGrouped(), api.wishes(true)])
+      .then(([r, g, w]) => { rows = r.rows; groups = g; goalNames = new Map(w.map(v => [v.wish.id, v.wish.name])); error = ""; }).catch(e => error = String(e));
   });
 
   let account = $derived(app.accounts.find(a => a.id === accountId));
@@ -37,7 +40,7 @@
     const q = norm(search.trim());
     return rows.filter(r =>
       (kind === "todos" || (kind === "gastos") === (r.amount < 0)) &&
-      (!month || monthKey(parseDay(r.date)) === month) &&
+      inRange(r.date, range) &&
       (!categoryFilter || r.categoryId === categoryFilter) &&
       (!q || norm([r.payeeName, r.categoryName, r.notes, r.accountName].join(" ")).includes(q)));
   });
@@ -48,7 +51,13 @@
   const dayTotal = (list: api.EntryRow[]) => list.reduce((s, r) => s + r.amount, 0);
   const longDay = (iso: string) => parseDay(iso).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: parseDay(iso).getFullYear() === app.today.getFullYear() ? undefined : "numeric" });
   const initials = (s: string | null) => (s ?? "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
-  const clearFilter = (key: string) => { const p = new URLSearchParams(params); p.delete(key); const rest = p.toString(); go((accountId ? `cuenta-${accountId}` : "movimientos") + (rest ? `?${rest}` : "")); };
+  const navigate = (p: URLSearchParams) => { const rest = p.toString(); go((accountId ? `cuenta-${accountId}` : "movimientos") + (rest ? `?${rest}` : "")); };
+  const clearFilter = (key: string) => { const p = new URLSearchParams(params); p.delete(key); navigate(p); };
+  function setRange(r: Range) {
+    const p = new URLSearchParams(params); p.delete("mes");
+    for (const [key, value] of [["desde", r.from], ["hasta", r.to]]) { if (value) p.set(key, value); else p.delete(key); }
+    navigate(p);
+  }
 
   async function change(row: api.EntryRow, patch: Partial<api.EntryInput>) {
     const before = api.inputOf(row);
@@ -98,7 +107,7 @@
       <button aria-pressed={kind === value} onclick={() => kind = value as typeof kind}>{label}</button>
     {/each}
   </div>
-  {#if month}<button class="chip brand" onclick={() => clearFilter("mes")} aria-label="Quitar filtro de mes">{monthDate(month).toLocaleDateString("es-MX", { month: "long", year: "numeric" })} <Icon name="x" /></button>{/if}
+  <PeriodPicker {range} today={app.today} onchange={setRange} />
   {#if categoryFilter}<button class="chip brand" onclick={() => clearFilter("categoria")} aria-label="Quitar filtro de categoría">{categoryName ?? "Categoría"} <Icon name="x" /></button>{/if}
   <span class="muted" style="margin-left:auto;font-size:13px">{visible.length} movimientos · doble clic en monto o categoría para editar</span>
 </div>
@@ -114,7 +123,7 @@
         <tr><th colspan={accountId ? 5 : 6} class="day" scope="rowgroup">{longDay(date)}<span class="num" class:pos={dayTotal(list) > 0}>{money(dayTotal(list), true)}</span></th></tr>
         {#each list as r (r.id)}
           <tr class="tx">
-            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b>{r.payeeName ?? "Sin comercio"}</b></div></td>
+            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b>{r.payeeName ?? "Sin comercio"}</b>{#if r.wishId}<span class="chip violet" title="Etiquetado con una meta"><Icon name="star" />{goalNames.get(r.wishId) ?? "Meta"}</span>{/if}</div></td>
             <td data-edit ondblclick={() => startEdit(r.id, "category")} title="Doble clic para cambiar">
               {#if editing?.id === r.id && editing?.field === "category"}
                 <select class="input inline" aria-label="Categoría de {r.payeeName ?? 'movimiento'}" use:focusOnMount

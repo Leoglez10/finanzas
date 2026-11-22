@@ -14,6 +14,8 @@
   let accountId = $state(0), categoryId = $state<number | null>(null);
   let groups = $state<api.CategoryGroup[]>([]), payees = $state<string[]>([]);
   let error = $state(""), saving = $state(false);
+  // Optional goal tag: "" none, "w:ID" a goal, "i:ID" one of its line items.
+  let goals = $state<api.WishView[]>([]), tag = $state(""), initialTag = "";
   let categoryTouched = false;
 
   // Only the open flag triggers this; untrack keeps the 2 s data poll from resetting a half-typed form.
@@ -28,6 +30,9 @@
     accountId = row?.accountId ?? draft?.accountId ?? app.accounts.find(a => !a.closed)?.id ?? 0;
     categoryId = row?.categoryId ?? draft?.categoryId ?? null;
     api.categoriesGrouped().then(g => groups = g);
+    tag = initialTag = row?.wishItemId ? `i:${row.wishItemId}` : row?.wishId ? `w:${row.wishId}` : "";
+    // Archived goals are loaded too: movements recorded when a goal was completed stay tagged with it.
+    api.wishes(true).then(w => goals = w).catch(() => goals = []);
     if (!dialog.open) dialog.showModal();
   }
 
@@ -47,15 +52,21 @@
     if (!cents || cents < 0) { error = "Escribe un monto mayor a cero, por ejemplo 1,250.50"; return; }
     if (!accountId) { error = "Primero crea una cuenta"; return; }
     const input: api.EntryInput = { date, amount: kind === "gasto" ? -cents : cents, accountId, payee: payee.trim(), categoryId, notes: notes.trim() };
+    const [tagKind, tagId] = tag.split(":"), tagNum = Number(tagId);
+    const itemGoal = tagKind === "i" ? goals.find(g => g.items.some(i => i.id === tagNum))?.wish.id ?? null : null;
+    const wishId = tagKind === "w" ? tagNum : itemGoal, itemId = tagKind === "i" ? tagNum : null;
     saving = true;
     try {
       const row = entryDialog.row;
       if (row) {
         const before = api.inputOf(row);
+        // The tag goes first: if it is refused, the movement is left untouched.
+        if (tag !== initialTag) await api.tagEntry(row.id, wishId, itemId);
         await api.updateEntry(row.id, input);
-        remember("Movimiento actualizado", () => api.updateEntry(row.id, before).then(refresh));
+        remember("Movimiento actualizado", () => api.updateEntry(row.id, before).then(() => api.tagEntry(row.id, row.wishId, row.wishItemId)).then(refresh));
       } else {
         const created = await api.addEntry(input);
+        if (tag) await api.tagEntry(created.id, wishId, itemId);
         remember(`Agregado: ${input.payee || "Sin comercio"} ${money(input.amount, true)}`, () => api.deleteEntry(created.id).then(refresh));
       }
       dialog.close();
@@ -67,7 +78,7 @@
 <dialog bind:this={dialog} aria-labelledby="tx-title" onclose={() => entryDialog.open = false}>
   <form method="dialog" novalidate onsubmit={save}>
     <div class="dlg-h"><div><h2 id="tx-title">{entryDialog.row ? "Editar movimiento" : "Nuevo movimiento"}</h2><p>Se registra en la cuenta que elijas.</p></div>
-      <button class="btn icon ghost" value="cancel" formnovalidate aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       <fieldset class="kind"><legend class="sr">Tipo</legend>
         <label><input type="radio" bind:group={kind} value="gasto" /><Icon name="down" />Gasto</label>
@@ -90,10 +101,21 @@
           </select></label>
       </div>
       <datalist id="payee-list">{#each payees as p (p)}<option value={p}></option>{/each}</datalist>
+      {#if goals.length}
+        <label class="field"><span>Meta <span class="opt">· opcional, para un viaje o un plan</span></span><select class="input" bind:value={tag}>
+          <option value="">Ninguna</option>
+          {#each goals.filter(g => !g.wish.archived || tag === `w:${g.wish.id}` || g.items.some(i => tag === `i:${i.id}`)) as g (g.wish.id)}
+            <optgroup label={g.wish.name}>
+              <option value="w:{g.wish.id}">{g.wish.name} (sin partida)</option>
+              {#each g.items as it (it.id)}<option value="i:{it.id}">{g.wish.name} · {it.name}</option>{/each}
+            </optgroup>
+          {/each}
+        </select></label>
+      {/if}
       <label class="field"><span>Notas <span class="opt">· opcional</span></span><textarea class="input" bind:value={notes} placeholder="Algo para recordar"></textarea></label>
     </div>
     <div class="dlg-f"><span class="left"><kbd>esc</kbd> para cerrar</span>
-      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button>
       <button class="btn primary" value="save" disabled={saving}>{entryDialog.row ? "Guardar" : "Agregar"} {kind}</button></div>
   </form>
 </dialog>

@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 2;
+pub(super) const CURRENT_VERSION: i64 = 7;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -38,6 +38,66 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))
             );
             CREATE INDEX IF NOT EXISTS wish_category_idx ON wish(category_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 2)?;
+        tx.commit()?;
+    }
+    if version < 3 {
+        // Goals: a wish can be a trip, an experience or a savings fund, with an optional target date (YYYY-MM-DD).
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "ALTER TABLE wish ADD COLUMN kind TEXT NOT NULL DEFAULT 'compra' CHECK(kind IN ('compra','viaje','experiencia','fondo'));
+             ALTER TABLE wish ADD COLUMN target_date TEXT;"
+        )?;
+        tx.pragma_update(None, "user_version", 3)?;
+        tx.commit()?;
+    }
+    if version < 4 {
+        // Line items of a goal (flight, hotel…): the goal's price is their sum; paid ones count as progress.
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish_item (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                name TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+                paid INTEGER NOT NULL DEFAULT 0 CHECK(paid IN (0,1)), sort_order INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS wish_item_wish_idx ON wish_item(wish_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 4)?;
+        tx.commit()?;
+    }
+    if version < 5 {
+        // Log of every change to a goal's set-aside amount (positive: set aside; negative: released).
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish_contribution (
+                id INTEGER PRIMARY KEY, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount <> 0)
+            );
+            CREATE INDEX IF NOT EXISTS wish_contribution_wish_idx ON wish_contribution(wish_id, date);
+            -- Money already set aside opens each goal's history, so the log always adds up to `reserved`.
+            INSERT INTO wish_contribution(wish_id, date, amount) SELECT id, date('now', 'localtime'), reserved FROM wish WHERE reserved > 0;"
+        )?;
+        tx.pragma_update(None, "user_version", 5)?;
+        tx.commit()?;
+    }
+    if version < 6 {
+        // The day a goal was completed: archived goals with a date are achievements.
+        let tx = conn.transaction()?;
+        tx.execute_batch("ALTER TABLE wish ADD COLUMN achieved_date TEXT;")?;
+        tx.pragma_update(None, "user_version", 6)?;
+        tx.commit()?;
+    }
+    if version < 7 {
+        // Movements tagged with a goal (and optionally one of its line items), to compare spent with planned.
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish_entry (
+                entry_id INTEGER PRIMARY KEY REFERENCES entry(id) ON DELETE CASCADE,
+                wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                item_id INTEGER REFERENCES wish_item(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS wish_entry_wish_idx ON wish_entry(wish_id);"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

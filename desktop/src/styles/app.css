@@ -133,6 +133,8 @@ button.avatar:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, tra
 .btn.icon { width: 36px; padding: 0; }
 .btn.sm { min-height: 30px; padding: 0 10px; font-size: 13px; } .btn.icon.sm { width: 30px; padding: 0; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* main is tabindex=-1 so code can move focus to it; clicking empty space focuses it too, which is not a control. */
+.main:focus { outline: none; }
 .field { display: grid; gap: 6px; font-size: 13px; font-weight: 550; align-content: start; }
 .field .opt { font-weight: 400; color: var(--muted); }
 .field small { font-weight: 400; color: var(--muted); }
@@ -153,6 +155,7 @@ button.chip { cursor: pointer; }
 .chip.ok { background: var(--income-soft); color: var(--income); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .chip.bad { background: var(--expense-soft); color: var(--expense); }
+.chip.violet { background: var(--violet-soft); color: var(--violet); }
 .chip.brand { background: var(--brand-soft); color: var(--brand); }
 
 /* Cards */

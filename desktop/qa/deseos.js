@@ -1,4 +1,4 @@
-// Deseos: reserve/release with undo, Spanish core errors, buy + undo, two-step editor ("11,000"), archive + undo.
+// Deseos: reserve/release with undo, Spanish core errors, buy + undo, two-step editor ("11,000"), archive + undo, trip goal with a date.
 (async () => {
   const wait = ms => window.__TAURI_INTERNALS__.invoke('qa_sleep', { ms }); // webview timers stop when the window is covered
   const log = document.createElement('pre');
@@ -43,7 +43,7 @@
     await ok(() => ![...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('Audífonos')), () => 'and removes the expense');
     location.hash = 'deseos'; await wait(1000);
 
-    btn($('.topbar'), 'Nuevo deseo').click(); await wait(500);
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
     const d = $('dialog[open]');
     set(d.querySelector('input[placeholder="PlayStation 5"]'), 'QA Bici');
     set(d.querySelector('input[placeholder="11,000.00"]'), '1,2');
@@ -62,6 +62,100 @@
     btn($('.topbar'), 'Ver activos').click(); await wait(800);
     await undo();
     await ok(() => !!card('QA Bici'), () => 'undo restores the archived wish');
+
+    // A trip with a date ~6 months out: the card shows its type and the monthly amount to set aside.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const t = $('dialog[open]');
+    btn(t, 'Viaje').click(); await wait(200);
+    await ok(() => !!t.querySelector('input[placeholder="Viaje a Cancún"]'), () => 'choosing Viaje changes the example name');
+    set(t.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Cancún');
+    set(t.querySelector('input[placeholder="25,000.00"]'), '8,400');
+    const now = new Date(), target = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+    const iso = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-01`;
+    set(t.querySelector('input[type="date"]'), iso);
+    t.querySelector('button[value="next"]').click(); await wait(300);
+    await ok(() => t.querySelector('.review')?.textContent.includes('Viaje'), () => 'the review names the type');
+    t.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Cancún')?.textContent.includes('Viaje') && /Aparta \$[\d,.]+ al mes · \d+ meses/.test(card('QA Cancún')?.querySelector('.plan')?.textContent ?? ''),
+      () => `the trip card shows its plan: "${card('QA Cancún')?.querySelector('.plan')?.textContent}"`);
+
+    // Line items: the price is their sum, and paying one counts as progress.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const li = $('dialog[open]');
+    btn(li, 'Viaje').click(); await wait(200);
+    set(li.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Mérida');
+    btn(li, '+ Vuelo').click(); await wait(100); btn(li, '+ Hotel').click(); await wait(200);
+    set(li.querySelector('input[aria-label="Monto de la partida 1"]'), '3,000');
+    set(li.querySelector('input[aria-label="Monto de la partida 2"]'), '2,000');
+    await wait(200);
+    await ok(() => [...li.querySelectorAll('input[readonly]')].some(i => i.value === '$5,000.00'), () => 'two items add up to $5,000.00');
+    li.querySelector('button[value="next"]').click(); await wait(300);
+    await ok(() => li.querySelector('.review')?.textContent.includes('Vuelo $3,000.00'), () => 'the review lists the items');
+    li.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Mérida')?.querySelectorAll('.items li').length === 2, () => 'the card lists both items');
+    card('QA Mérida').querySelector('.items input[type="checkbox"]').click(); await wait(1500);
+    await ok(() => saved('QA Mérida')?.includes('Pagado $3,000.00'), () => `paying the flight counts as progress: "${saved('QA Mérida')}"`);
+    await undo();
+    await ok(() => !saved('QA Mérida')?.includes('Pagado'), () => 'undo unmarks it');
+
+    // History: setting money aside is logged and drawn.
+    await reserve('Silla ergonómica', '50');
+    await ok(() => card('Silla ergonómica')?.querySelector('.history summary')?.textContent.includes('movimiento'), () => `the card gets a history: "${card('Silla ergonómica')?.querySelector('.history summary')?.textContent}"`);
+    card('Silla ergonómica').querySelector('.history summary').click(); await wait(200);
+    await ok(() => card('Silla ergonómica').querySelector('.history li')?.textContent.includes('Apartaste $50.00') && !!card('Silla ergonómica').querySelector('.spark polyline'), () => 'it lists "Apartaste $50.00" and draws the chart');
+
+    // Completing the trip records one expense per item and keeps it as an achievement.
+    btn(card('QA Mérida'), 'Cumplida').click(); await wait(1500);
+    await ok(() => !card('QA Mérida'), () => 'Cumplida takes the trip off the active list');
+    location.hash = 'movimientos'; await wait(1000);
+    const rows = () => [...document.querySelectorAll('tr.tx')].map(r => r.textContent);
+    await ok(() => rows().some(t => t.includes('QA Mérida · Vuelo') && t.includes('-$3,000.00')) && rows().some(t => t.includes('QA Mérida · Hotel') && t.includes('-$2,000.00')), () => 'it records one expense per item');
+    location.hash = 'deseos'; await wait(1000);
+    btn($('.topbar'), 'Archivados').click(); await wait(1000);
+    await ok(() => card('QA Mérida')?.querySelector('.chip.ok')?.textContent.includes('Logro'), () => `it shows as an achievement: "${card('QA Mérida')?.querySelector('.chip')?.textContent}"`);
+    btn($('.topbar'), 'Ver activos').click(); await wait(800);
+
+    // Tagging a movement with a goal's line item shows it as spent against that item.
+    location.hash = 'movimientos'; await wait(1000);
+    btn($('.topbar'), 'Gasto').click(); await wait(600);
+    const e = $('dialog[open]');
+    set(e.querySelector('input[inputmode="decimal"]'), '120');
+    set(e.querySelector('input[placeholder="¿Dónde?"]'), 'QA Taxi');
+    const goalSelect = [...e.querySelectorAll('select')].find(s => [...s.options].some(o => o.textContent.includes('Viaje') || o.value.startsWith('w:')));
+    await ok(() => !!goalSelect, () => 'the movement dialog offers goals');
+    const option = [...goalSelect.options].find(o => o.textContent.includes('QA Cancún'));
+    goalSelect.value = option.value; goalSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    e.querySelector('button[value="save"]').click(); await wait(1500);
+    await ok(() => [...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('QA Taxi') && r.textContent.includes('QA Cancún')), () => 'the ledger shows the goal tag');
+    location.hash = 'deseos'; await wait(1000);
+    await ok(() => card('QA Cancún')?.querySelector('.spent-total')?.textContent.includes('$120.00'), () => `the goal shows what was spent: "${card('QA Cancún')?.querySelector('.spent-total')?.textContent}"`);
+
+    // Editing a movement recorded when a goal with items was completed works (its goal is archived).
+    location.hash = 'movimientos'; await wait(1000);
+    const hotelRow = [...document.querySelectorAll('tr.tx')].find(r => r.textContent.includes('QA Mérida · Hotel'));
+    hotelRow.querySelector('button[aria-label^="Editar"]').click(); await wait(800);
+    const ed = $('dialog[open]');
+    set(ed.querySelector('textarea'), 'QA Mérida · Hotel (2 noches)');
+    ed.querySelector('button[value="save"]').click(); await wait(1500);
+    await ok(() => !$('dialog[open]') && [...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('Hotel (2 noches)') && r.textContent.includes('QA Mérida')), () => 'a completed goal\'s movement can be edited and keeps its tag');
+    location.hash = 'deseos'; await wait(1000);
+
+    // Undoing an edit that removed a line item brings the item back.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const ox = $('dialog[open]');
+    btn(ox, 'Viaje').click(); await wait(200);
+    set(ox.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Oaxaca');
+    btn(ox, '+ Vuelo').click(); await wait(100); btn(ox, '+ Hotel').click(); await wait(200);
+    set(ox.querySelector('input[aria-label="Monto de la partida 1"]'), '1,000');
+    set(ox.querySelector('input[aria-label="Monto de la partida 2"]'), '500');
+    ox.querySelector('button[value="next"]').click(); await wait(300); ox.querySelector('button[value="next"]').click(); await wait(1500);
+    card('QA Oaxaca').querySelector('button[aria-label^="Editar"]').click(); await wait(600);
+    const oe = $('dialog[open]');
+    oe.querySelector('button[aria-label="Quitar partida 2"]').click(); await wait(200);
+    oe.querySelector('button[value="next"]').click(); await wait(300); oe.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Oaxaca')?.querySelectorAll('.items li').length === 1, () => 'removing an item leaves one');
+    await undo(); await wait(500);
+    await ok(() => card('QA Oaxaca')?.querySelectorAll('.items li').length === 2 && !toastText().includes('not found'), () => `undo brings the item back (${card('QA Oaxaca')?.querySelectorAll('.items li').length} items, toast "${toastText()}")`);
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

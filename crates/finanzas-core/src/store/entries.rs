@@ -27,10 +27,13 @@ pub struct EntryRow {
     pub account_name: Option<String>,
     pub payee_name: Option<String>,
     pub category_name: Option<String>,
+    /// The goal (and line item) this movement was tagged with, if any.
+    pub wish_id: Option<Id>,
+    pub wish_item_id: Option<Id>,
 }
 fn joined_row(row: &rusqlite::Row<'_>) -> Result<EntryRow> {
     let entry = entry_row(row)?;
-    Ok(EntryRow { id: entry.id, date: entry.date, amount: entry.amount, notes: entry.notes, cleared: entry.cleared, account_id: entry.account_id, category_id: entry.category_id, payee_id: entry.payee_id, schedule_id: entry.schedule_id, account_name: row.get(9)?, payee_name: row.get(10)?, category_name: row.get(11)? })
+    Ok(EntryRow { id: entry.id, date: entry.date, amount: entry.amount, notes: entry.notes, cleared: entry.cleared, account_id: entry.account_id, category_id: entry.category_id, payee_id: entry.payee_id, schedule_id: entry.schedule_id, account_name: row.get(9)?, payee_name: row.get(10)?, category_name: row.get(11)?, wish_id: row.get(12)?, wish_item_id: row.get(13)? })
 }
 
 const FILTER: &str = " WHERE (?1 IS NULL OR e.account_id=?1) AND (?2 IS NULL OR e.category_id=?2) AND (?3 IS NULL OR e.date>=?3) AND (?4 IS NULL OR e.date<=?4)";
@@ -42,14 +45,14 @@ impl Store {
     }
     pub fn entry_row(&self, id: Id) -> Result<Option<EntryRow>> {
         use rusqlite::OptionalExtension;
-        self.conn.query_row("SELECT e.id,e.date,e.amount,e.notes,e.cleared,e.account_id,e.category_id,e.payee_id,e.schedule_id,a.name,p.name,c.name FROM entry e LEFT JOIN account a ON a.id=e.account_id LEFT JOIN payee p ON p.id=e.payee_id LEFT JOIN category c ON c.id=e.category_id WHERE e.id=?1", [id], joined_row).optional()
+        self.conn.query_row("SELECT e.id,e.date,e.amount,e.notes,e.cleared,e.account_id,e.category_id,e.payee_id,e.schedule_id,a.name,p.name,c.name,w.wish_id,w.item_id FROM entry e LEFT JOIN wish_entry w ON w.entry_id=e.id LEFT JOIN account a ON a.id=e.account_id LEFT JOIN payee p ON p.id=e.payee_id LEFT JOIN category c ON c.id=e.category_id WHERE e.id=?1", [id], joined_row).optional()
     }
     pub fn entries(&self, filter: &EntryFilter) -> Result<(Vec<EntryRow>, usize)> {
         let start = filter.start.map(|d| d.to_string());
         let end = filter.end.map(|d| d.to_string());
         let search = filter.search.as_deref().map(normalize).filter(|s| !s.is_empty());
         let limit = filter.limit.unwrap_or(usize::MAX);
-        let select = format!("SELECT e.id,e.date,e.amount,e.notes,e.cleared,e.account_id,e.category_id,e.payee_id,e.schedule_id,a.name,p.name,c.name FROM entry e LEFT JOIN account a ON a.id=e.account_id LEFT JOIN payee p ON p.id=e.payee_id LEFT JOIN category c ON c.id=e.category_id{FILTER} ORDER BY e.date DESC,e.id DESC");
+        let select = format!("SELECT e.id,e.date,e.amount,e.notes,e.cleared,e.account_id,e.category_id,e.payee_id,e.schedule_id,a.name,p.name,c.name,w.wish_id,w.item_id FROM entry e LEFT JOIN wish_entry w ON w.entry_id=e.id LEFT JOIN account a ON a.id=e.account_id LEFT JOIN payee p ON p.id=e.payee_id LEFT JOIN category c ON c.id=e.category_id{FILTER} ORDER BY e.date DESC,e.id DESC");
         let mut output = Vec::new();
         let total;
         if search.is_none() {

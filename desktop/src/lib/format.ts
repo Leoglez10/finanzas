@@ -16,13 +16,19 @@ export const monthKey = (d: Date) => d.getFullYear() * 100 + d.getMonth() + 1;
 export const monthDate = (key: number) => new Date(Math.floor(key / 100), (key % 100) - 1, 1);
 export const shiftMonth = (key: number, by: number) => { const d = monthDate(key); d.setMonth(d.getMonth() + by); return monthKey(d); };
 export const monthTitle = (key: number) => { const s = monthDate(key).toLocaleDateString("es-MX", { month: "long", year: "numeric" }).replace(" de ", " "); return s[0].toUpperCase() + s.slice(1); };
+/** "Enero – Noviembre 2026": a month span with full names, the year once when both ends share it. */
+export const monthSpan = (from: number, to: number) => {
+  const name = (k: number) => { const s = monthDate(k).toLocaleDateString("es-MX", { month: "long" }); return s[0].toUpperCase() + s.slice(1); };
+  if (from === to) return monthTitle(to);
+  return Math.floor(from / 100) === Math.floor(to / 100) ? `${name(from)} – ${monthTitle(to)}` : `${monthTitle(from)} – ${monthTitle(to)}`;
+};
 export const monthShort = (key: number) => monthDate(key).toLocaleDateString("es-MX", { month: "short" }).replace(".", "");
 export const dayNumber = (d: Date) => d.toLocaleDateString("es-MX", { day: "2-digit" });
 export const dayMonth = (d: Date) => d.toLocaleDateString("es-MX", { month: "short" }).replace(".", "");
 
 /** "+2.1% vs octubre" from a ratio change such as 0.021. */
-export const change = (ratio: number | null, previousKey: number) =>
-  ratio === null ? "" : `${ratio >= 0 ? "+" : "−"}${Math.abs(ratio * 100).toFixed(1)}% vs ${monthDate(previousKey).toLocaleDateString("es-MX", { month: "long" })}`;
+export const change = (ratio: number | null, previousKey: number, against?: string) =>
+  ratio === null ? "" : `${ratio >= 0 ? "+" : "−"}${Math.abs(ratio * 100).toFixed(1)}% vs ${against ?? monthDate(previousKey).toLocaleDateString("es-MX", { month: "long" })}`;
 
 // ponytail: color by category id modulo a fixed set; let users pick per category when someone asks.
 const CATEGORY_COLORS = ["var(--c-vivienda)", "var(--c-alimentacion)", "var(--c-transporte)", "var(--c-ocio)", "var(--c-servicios)", "var(--c-salud)", "#EC4899", "#84CC16"];

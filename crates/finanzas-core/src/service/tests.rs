@@ -148,3 +148,26 @@ fn add_and_update_transaction_reuses_payee_and_learns_category() {
     assert_eq!(delete_entry(&store, second.id).unwrap().id, second.id);
     assert!(matches!(delete_entry(&store, second.id), Err(ServiceError::NotFound)));
 }
+
+#[test]
+fn overview_span_sums_the_months_and_compares_with_the_span_before() {
+    let store = Store::open_in_memory().unwrap();
+    let bank = store.insert_account(&Account { id: 0, name: "Banco".into(), off_budget: false, closed: false, sort_order: 0.0 }).unwrap();
+    let income = store.insert_category_group(&CategoryGroup { id: 0, name: "Ingresos".into(), is_income: true, sort_order: 0.0 }).unwrap();
+    let expenses = store.insert_category_group(&CategoryGroup { id: 0, name: "Gastos".into(), is_income: false, sort_order: 1.0 }).unwrap();
+    let salary = store.insert_category(&Category { id: 0, name: "Sueldo".into(), hidden: false, sort_order: 0.0, group_id: Some(income) }).unwrap();
+    let food = store.insert_category(&Category { id: 0, name: "Comida".into(), hidden: false, sort_order: 1.0, group_id: Some(expenses) }).unwrap();
+    // Two-month span Sep–Oct; the span before it is Jul–Aug.
+    for (m, category, amount) in [(7, salary, 50_000), (8, food, -10_000), (9, salary, 100_000), (9, food, -20_000), (10, salary, 100_000), (10, food, -30_000)] {
+        store.insert_entry(&Entry { id: 0, date: day(2026, m, 5), amount, notes: String::new(), cleared: false, account_id: Some(bank), category_id: Some(category), payee_id: None, schedule_id: None }).unwrap();
+    }
+    let view = overview_span(&store, 202610, 2, 1).unwrap();
+    assert_eq!((view.current.income, view.current.expenses, view.current.savings_rate), (200_000, 50_000, Some(0.75)));
+    assert_eq!((view.previous.income, view.previous.expenses), (50_000, 10_000));
+    assert_eq!((view.income_change, view.expenses_change), (Some(3.0), Some(4.0)));
+    assert_eq!((view.spending_total, view.spending.iter().map(|c| (c.category_id, c.spent)).collect::<Vec<_>>()), (50_000, vec![(food, 50_000)]));
+    // The chart always covers at least the span.
+    assert_eq!(view.chart.iter().map(|p| p.month).collect::<Vec<_>>(), [202609, 202610]);
+    // A one-month span is the plain overview.
+    assert_eq!(overview_span(&store, 202610, 1, 6).unwrap().current.expenses, overview(&store, 202610, 6).unwrap().current.expenses);
+}

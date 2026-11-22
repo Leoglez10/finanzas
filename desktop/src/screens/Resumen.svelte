@@ -7,7 +7,7 @@
   import Kpi from "../components/Kpi.svelte";
   import Money from "../components/Money.svelte";
   import MonthPicker from "../components/MonthPicker.svelte";
-  import { WIDGETS, readLayout, moveTo, toggle, resize, type Slot } from "../lib/dashboard";
+  import { WIDGETS, readLayout, placeAt, toggle, resize, type Slot } from "../lib/dashboard";
   import { flip } from "svelte/animate";
   import Topbar from "../components/Topbar.svelte";
 
@@ -51,14 +51,30 @@
     const r = widgetOf(e).getBoundingClientRect();
     dragId = id;
     ghost = { id, x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
-    let last = id;
+    const grid = widgetOf(e).parentElement!;
+    let settleUntil = 0, frame = 0;
     track(ev => {
       if (ghost) { ghost.x = ev.clientX; ghost.y = ev.clientY; }
-      const target = (document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-widget]") as HTMLElement | null)?.dataset.widget;
-      if (!target || target === last) return;
-      last = target;
-      if (target !== id) layout = moveTo(layout, id, target);
-    }, () => { dragId = null; ghost = null; });
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // While the others slide (animate:flip) their boxes are mid-move; wait so the drop spot does not flicker.
+        if (performance.now() < settleUntil) return;
+        const next = dropSpot(grid, id, ev.clientX, ev.clientY);
+        if (next !== layout) { layout = next; settleUntil = performance.now() + FLIP_MS + 30; }
+      });
+    }, () => { cancelAnimationFrame(frame); dragId = null; ghost = null; });
+  }
+  const FLIP_MS = 220;
+  /** The layout with `id` dropped next to the widget nearest the pointer: before it when the pointer is on its
+   *  left (or above it), after it otherwise, and at the end when the pointer is below every widget. */
+  function dropSpot(grid: HTMLElement, id: string, x: number, y: number): Slot[] {
+    const boxes = [...grid.querySelectorAll<HTMLElement>("[data-widget]")].filter(el => el.dataset.widget !== id).map(el => ({ id: el.dataset.widget!, r: el.getBoundingClientRect() }));
+    if (!boxes.length) return layout;
+    if (y > Math.max(...boxes.map(b => b.r.bottom))) return placeAt(layout, id, null, true);
+    const gapTo = (r: DOMRect) => Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    const near = boxes.reduce((a, b) => gapTo(b.r) < gapTo(a.r) ? b : a);
+    const inRow = y >= near.r.top && y <= near.r.bottom;
+    return placeAt(layout, id, near.id, inRow ? x > near.r.left + near.r.width / 2 : y > near.r.top + near.r.height / 2);
   }
   // The corner grip snaps the width to whole columns of the 6-column grid.
   function startResize(e: PointerEvent, id: string) {
@@ -141,7 +157,7 @@
   {/if}
   <div class="dash" class:editing class:moving={dragId !== null}>
     {#each layout.filter(s => !s.hidden) as s (s.id)}
-      <div class="w" style:grid-column="span {s.span}" class:dragging={ghost?.id === s.id} class:sizing={dragId === s.id && !ghost} data-widget={s.id} animate:flip={{ duration: reduceMotion ? 0 : 220 }}>
+      <div class="w" style:grid-column="span {s.span}" class:dragging={ghost?.id === s.id} class:sizing={dragId === s.id && !ghost} data-widget={s.id} animate:flip={{ duration: reduceMotion ? 0 : FLIP_MS }}>
         {#if editing}
           <div class="w-tools">
             <button class="btn icon sm handle" aria-label="Mover {widgetTitle(s.id)}" onpointerdown={e => startDrag(e, s.id)}><Icon name="list" /></button>
@@ -156,7 +172,7 @@
     {/each}
   </div>
   {#if ghost}
-    <div class="ghost" aria-hidden="true" style="width:{ghost.w}px;height:{ghost.h}px;transform:translate({ghost.x - ghost.dx}px, {ghost.y - ghost.dy}px) var(--lift)">{@render widget(ghost.id)}</div>
+    <div class="floating" aria-hidden="true" style="width:{ghost.w}px;height:{ghost.h}px;transform:translate({ghost.x - ghost.dx}px, {ghost.y - ghost.dy}px) var(--lift)">{@render widget(ghost.id)}</div>
   {/if}
 {/if}
 
@@ -302,10 +318,10 @@
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 6px 0; cursor: ew-resize; touch-action: none; }
-  .ghost { --lift: rotate(1.5deg) scale(1.03); position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; border-radius: var(--radius); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
-  .ghost > :global(*) { height: 100%; }
+  .floating { --lift: rotate(1.5deg) scale(1.03); position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; border-radius: var(--radius); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
+  .floating > :global(*) { height: 100%; }
   @keyframes lift { from { box-shadow: var(--shadow); } }
-  @media (prefers-reduced-motion: reduce) { .ghost { animation: none; --lift: none; } }
+  @media (prefers-reduced-motion: reduce) { .floating { animation: none; --lift: none; } }
   .w-tools { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 4px; }
   .w-tools .btn { background: var(--surface); box-shadow: var(--shadow); color: var(--text, inherit); }
   .handle { cursor: grab; touch-action: none; }

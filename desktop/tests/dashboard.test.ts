@@ -1,7 +1,7 @@
 // Run: pnpm --dir desktop test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WIDGETS, readLayout, moveTo, toggle, resize } from "../src/lib/dashboard.ts";
+import { WIDGETS, readLayout, placeAt, toggle, resize } from "../src/lib/dashboard.ts";
 
 const ids = (l: { id: string }[]) => l.map(w => w.id);
 
@@ -23,12 +23,14 @@ test("broken JSON falls back to the default", () => {
   assert.deepEqual(ids(readLayout("{nope")), WIDGETS.map(w => w.id));
 });
 
-test("moveTo puts a widget where another one is", () => {
+test("placeAt drops a widget before or after another, or at the end", () => {
   const base = readLayout(null);
   const [a, b, c] = ids(base);
-  assert.deepEqual(ids(moveTo(base, a, c)).slice(0, 3), [b, c, a]);
-  assert.deepEqual(ids(moveTo(base, c, a)).slice(0, 3), [c, a, b]);
-  assert.deepEqual(ids(moveTo(base, a, a)), ids(base));
+  assert.deepEqual(ids(placeAt(base, a, c, false)).slice(0, 3), [b, a, c]);
+  assert.deepEqual(ids(placeAt(base, a, c, true)).slice(0, 3), [b, c, a]);
+  assert.deepEqual(ids(placeAt(base, c, a, false)).slice(0, 3), [c, a, b]);
+  assert.equal(ids(placeAt(base, a, null, true)).at(-1), a);
+  assert.equal(placeAt(base, a, b, false), base, "same place: no new layout");
 });
 
 test("toggle hides and shows one widget", () => {

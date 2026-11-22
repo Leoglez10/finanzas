@@ -28,13 +28,15 @@ export function readLayout(saved: string | null): Slot[] {
   return [...kept, ...WIDGETS.filter(w => !kept.some(s => s.id === w.id)).map(w => ({ id: w.id, hidden: false, span: w.span }))];
 }
 
-/** Moves `id` to where `target` is, shifting the rest. */
-export function moveTo(layout: Slot[], id: string, target: string): Slot[] {
-  const from = layout.findIndex(s => s.id === id), to = layout.findIndex(s => s.id === target);
-  if (from < 0 || to < 0 || from === to) return layout;
-  const next = [...layout];
-  next.splice(to, 0, ...next.splice(from, 1));
-  return next;
+/** Puts `id` right before or after `target` (at the end when `target` is null). Returns the same layout when nothing moves. */
+export function placeAt(layout: Slot[], id: string, target: string | null, after: boolean): Slot[] {
+  const moving = layout.find(s => s.id === id);
+  if (!moving || target === id) return layout;
+  const rest = layout.filter(s => s.id !== id);
+  const at = target === null ? rest.length : rest.findIndex(s => s.id === target) + (after ? 1 : 0);
+  if (at < 0 || (target !== null && !rest.some(s => s.id === target))) return layout;
+  const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
+  return next.every((s, i) => s === layout[i]) ? layout : next;
 }
 
 export const toggle = (layout: Slot[], id: string): Slot[] => layout.map(s => s.id === id ? { ...s, hidden: !s.hidden } : s);

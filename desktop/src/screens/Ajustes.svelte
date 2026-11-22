@@ -6,10 +6,12 @@
   import { runCommand } from "../lib/commands.svelte";
   import { checkUpdates, installUpdate, restart, updates } from "../lib/updates.svelte";
   import { toast } from "../lib/undo.svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { SECURITY_URL, sendFeedback, type FeedbackKind } from "../lib/feedback";
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
 
-  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["atajos", "Atajos", "command"]];
+  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["comentarios", "Fallas y mejoras", "alert"], ["atajos", "Atajos", "command"]];
   const PALETTES: [string, string, string][] = [["petroleo", "Petróleo", "El original"], ["bosque", "Bosque", "Verde oliva sobrio"], ["ciruela", "Ciruela", "Violeta profundo"], ["grafito", "Grafito", "Casi sin color"], ["arena", "Arena", "Cálido, tonos café"], ["sistema", "Sistema", "Acento de macOS"]];
   let tab = $derived(TABS.find(t => t[0] === app.route.split("/")[1]) ?? TABS[0]);
   let s = $derived(app.settings);
@@ -31,6 +33,18 @@
   });
   async function copy(agent: api.AgentView) {
     try { await navigator.clipboard.writeText(agent.config); copied = agent.name; setTimeout(() => copied = "", 2000); } catch (e) { toast(`No se pudo copiar: ${e}`); }
+  }
+
+  let fbKind = $state<FeedbackKind>("falla"), fbTitle = $state(""), fbBody = $state(""), fbError = $state(""), fbBusy = $state(false);
+  let fbSent = $state<{ number: number; url: string } | null>(null);
+  const open = (url: string) => openUrl(url).catch(e => toast(String(e)));
+  async function submitFeedback(e: SubmitEvent) {
+    e.preventDefault();
+    if (fbBusy) return;
+    fbBusy = true; fbError = "";
+    try { fbSent = await sendFeedback({ kind: fbKind, title: fbTitle, body: fbBody, version }); fbTitle = ""; fbBody = ""; }
+    catch (err) { fbError = err instanceof Error ? err.message : String(err); }
+    finally { fbBusy = false; }
   }
 
   async function save(patch: Partial<api.Settings>) { try { await updateSettings(patch); } catch (e) { toast(String(e)); } }
@@ -192,6 +206,27 @@
         {#if updates.status === "error"}<p class="err" role="alert">{updates.error}</p>{/if}
         {#if updates.notes && updates.status !== "none"}<p class="muted" style="font-size:13px;white-space:pre-line">{updates.notes}</p>{/if}
         <label class="setting"><div class="grow"><b>Buscar actualizaciones al abrir</b><p>Se descargan solo cuando tú lo pides.</p></div><input type="checkbox" role="switch" class="switch" checked={s.auto_update} onchange={e => save({ auto_update: e.currentTarget.checked })} /></label>
+      </article>
+    {:else if tab[0] === "comentarios"}
+      <article class="card">
+        <div class="card-h"><h2>Reporta una falla o propón una mejora</h2></div>
+        <p class="muted" style="margin-top:0">Se publica como issue en GitHub, a la vista de todos. Solo se envía lo que escribes, la versión de la app y tu sistema operativo; nunca tus movimientos ni cuentas. Si es un problema de seguridad, no lo publiques: <button class="link" type="button" onclick={() => open(SECURITY_URL)}>escríbenos en privado</button>.</p>
+        {#if fbSent}
+          <div class="setting" style="border:0"><div class="grow"><b>¡Gracias! Se creó el reporte #{fbSent.number}.</b><p>Puedes seguirlo en GitHub.</p></div>
+            <button class="btn sm" onclick={() => open(fbSent!.url)}>Ver en GitHub</button>
+            <button class="btn sm ghost" onclick={() => fbSent = null}>Enviar otro</button></div>
+        {:else}
+          <form style="display:grid;gap:12px" onsubmit={submitFeedback}>
+            <div class="seg" role="group" aria-label="Tipo de reporte" style="justify-self:start">
+              <button type="button" aria-pressed={fbKind === "falla"} onclick={() => fbKind = "falla"}>Falla</button>
+              <button type="button" aria-pressed={fbKind === "mejora"} onclick={() => fbKind = "mejora"}>Mejora</button>
+            </div>
+            <input class="input" aria-label="Título" placeholder={fbKind === "falla" ? "Qué falla, en pocas palabras" : "Qué te gustaría, en pocas palabras"} maxlength="120" minlength="4" required bind:value={fbTitle} />
+            <textarea class="input" aria-label="Descripción" rows="6" maxlength="5000" minlength="10" required placeholder={fbKind === "falla" ? "Qué hiciste, qué esperabas y qué pasó." : "Cómo te ayudaría y en qué pantalla."} bind:value={fbBody}></textarea>
+            {#if fbError}<p class="err" role="alert">{fbError}</p>{/if}
+            <div><button class="btn primary" disabled={fbBusy}>{fbBusy ? "Enviando…" : "Enviar reporte"}</button></div>
+          </form>
+        {/if}
       </article>
     {:else}
       <article class="card">

@@ -16,7 +16,7 @@
   const avatar = () => $('.side-foot .avatar')?.textContent.trim();
   try {
     await wait(1200); location.hash = 'ajustes'; await wait(1000);
-    say(document.querySelectorAll('.subnav .nav').length === 7 && $('.topbar .sub')?.textContent === 'Perfil', 'seven sub-tabs, Perfil first');
+    say(document.querySelectorAll('.subnav .nav').length === 8 && $('.topbar .sub')?.textContent === 'Perfil', 'eight sub-tabs, Perfil first');
     say(!!profileRow('Personal')?.textContent.includes('En uso'), 'Personal is the profile in use');
 
     set($('input[aria-label="Nombre del nuevo perfil"]'), 'QA Negocio');

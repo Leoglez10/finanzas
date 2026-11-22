@@ -116,7 +116,7 @@ fn save_wish(state: State<'_, AppState>, id: Option<i64>, draft: service::WishDr
 /// `amount` is the new total set aside, not a delta (0 releases everything).
 #[tauri::command(async)]
 fn set_wish_item_paid(state: State<'_, AppState>, id: i64, paid: bool) -> Result<finanzas_core::service::Wish, String> {
-    let wish = state.with_store(|s| service::set_wish_item_paid(s, id, paid).map_err(|e| e.to_string()))?; state.changed(); Ok(wish)
+    let wish = state.with_store(|s| service::set_wish_item_paid(s, id, paid, Local::now().date_naive()).map_err(|e| e.to_string()))?; state.changed(); Ok(wish)
 }
 #[tauri::command(async)]
 fn reserve_wish(state: State<'_, AppState>, id: i64, amount: i64) -> Result<finanzas_core::service::Wish, String> {

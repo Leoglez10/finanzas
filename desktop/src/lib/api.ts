@@ -21,7 +21,8 @@ export interface Wish { id: number; name: string; price: number; url: string; no
 export interface WishEvaluation { status: string; availableForWish: number | null; budgetShortfall: number | null; reservationDeficit: number; cashBalance: number | null; upcomingOutflows: number; cashShortfall: number | null; reasons: string[] }
 export interface WishItem { id: number; wishId: number; name: string; amount: number; paid: boolean }
 export interface WishItemDraft { id: number | null; name: string; amount: number; paid: boolean }
-export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null; items: WishItem[] }
+export interface WishContribution { wishId: number; date: string; amount: number }
+export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null; items: WishItem[]; contributions: WishContribution[] }
 export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null; kind: Kind; targetDate: string | null; items: WishItemDraft[] | null }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }

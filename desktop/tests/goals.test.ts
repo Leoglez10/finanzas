@@ -20,3 +20,10 @@ test("the plan reads as what to set aside each month", () => {
   assert.equal(planText({ targetDate: "2027-06-15", remaining: 0, monthsLeft: 7, monthly: 0, overdue: false }),
     "Meta alcanzada antes del 15 jun 2027");
 });
+
+test("the log becomes a running total, one point per day", async () => {
+  const { runningTotal } = await import("../src/lib/goals.ts");
+  assert.deepEqual(runningTotal([{ date: "2026-11-10", amount: 1000 }, { date: "2026-11-10", amount: 500 }, { date: "2026-11-20", amount: -300 }]),
+    [{ date: "2026-11-10", total: 1500 }, { date: "2026-11-20", total: 1200 }]);
+  assert.deepEqual(runningTotal([]), []);
+});

@@ -298,3 +298,13 @@ fn wishes_take_line_items_and_keep_them_when_omitted() {
     assert_eq!((kept["price"].clone(), kept["paid"].clone()), (json!(350.0), json!(0.0)));
     assert_eq!(call(&mut s.store, "save_wish", &json!({"name":"X","price":1,"items":[{"name":"","amount":1}]}), day(10, 15)).unwrap_err().0, "Line item name must not be empty");
 }
+
+#[test]
+fn list_wishes_returns_the_contribution_log() {
+    let mut s = Seed::new();
+    s.store.set_budget(202610, s.food, 50000).unwrap();
+    let wish = s.call("save_wish", json!({"name":"Bici", "price":300, "categoryId":format!("Category/p{}", s.food)}));
+    s.call("reserve_wish", json!({"id":wish["id"], "amount":100}));
+    s.call("reserve_wish", json!({"id":wish["id"], "amount":40}));
+    assert_eq!(s.call("list_wishes", json!({}))[0]["contributions"], json!([{"date":"2026-10-15","amount":100.0},{"date":"2026-10-15","amount":-60.0}]));
+}

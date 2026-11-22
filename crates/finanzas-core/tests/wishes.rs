@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 4);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 5);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -258,14 +258,31 @@ fn paid_items_count_as_progress_and_release_what_they_cover() {
     reserve_wish(&mut store, trip.id, 25_000, today()).unwrap();
     let flight = view(&mut store, trip.id).items[0].id;
     // Paying the flight: 50,000 - 30,000 paid leaves 20,000 to cover, so 5,000 of the 25,000 set aside is released.
-    let after = set_wish_item_paid(&mut store, flight, true).unwrap();
+    let after = set_wish_item_paid(&mut store, flight, true, today()).unwrap();
     assert_eq!((after.paid, after.reserved), (30_000, 20_000));
     let v = view(&mut store, trip.id);
     assert!(v.items[0].paid);
     assert_eq!(v.plan.unwrap().remaining, 0);
     assert!(reserve_wish(&mut store, trip.id, 20_001, today()).is_err(), "the reservation limit is what is still unpaid");
     // Unmarking restores the room to reserve again but does not re-reserve.
-    let back = set_wish_item_paid(&mut store, flight, false).unwrap();
+    let back = set_wish_item_paid(&mut store, flight, false, today()).unwrap();
     assert_eq!((back.paid, back.reserved), (0, 20_000));
-    assert!(matches!(set_wish_item_paid(&mut store, 9_999, true), Err(ServiceError::NotFound)));
+    assert!(matches!(set_wish_item_paid(&mut store, 9_999, true, today()), Err(ServiceError::NotFound)));
+}
+
+#[test]
+fn every_change_to_the_set_aside_amount_is_logged_with_its_date() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { items: Some(vec![item("Vuelo", 30_000), item("Hotel", 20_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, trip.id, 10_000, today()).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, day(2026, 11, 20)).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, day(2026, 11, 21)).unwrap(); // no change: nothing logged
+    reserve_wish(&mut store, trip.id, 22_000, day(2026, 11, 22)).unwrap();
+    // Paying the flight releases 2,000 (50,000 - 30,000 paid leaves 20,000 to cover).
+    let flight = view(&mut store, trip.id).items[0].id;
+    set_wish_item_paid(&mut store, flight, true, day(2026, 11, 23)).unwrap();
+    let log: Vec<_> = view(&mut store, trip.id).contributions.iter().map(|c| (c.date, c.amount)).collect();
+    assert_eq!(log, [(today(), 10_000), (day(2026, 11, 20), 15_000), (day(2026, 11, 22), -3_000), (day(2026, 11, 23), -2_000)]);
+    let other = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    assert!(view(&mut store, other.id).contributions.is_empty(), "each goal has its own log");
 }

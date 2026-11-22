@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 4;
+pub(super) const CURRENT_VERSION: i64 = 5;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -62,6 +62,19 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 paid INTEGER NOT NULL DEFAULT 0 CHECK(paid IN (0,1)), sort_order INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS wish_item_wish_idx ON wish_item(wish_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 4)?;
+        tx.commit()?;
+    }
+    if version < 5 {
+        // Log of every change to a goal's set-aside amount (positive: set aside; negative: released).
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish_contribution (
+                id INTEGER PRIMARY KEY, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount <> 0)
+            );
+            CREATE INDEX IF NOT EXISTS wish_contribution_wish_idx ON wish_contribution(wish_id, date);"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

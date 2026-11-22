@@ -97,6 +97,12 @@
     await ok(() => saved('QA Mérida')?.includes('Pagado $3,000.00'), () => `paying the flight counts as progress: "${saved('QA Mérida')}"`);
     await undo();
     await ok(() => !saved('QA Mérida')?.includes('Pagado'), () => 'undo unmarks it');
+
+    // History: setting money aside is logged and drawn.
+    await reserve('Silla ergonómica', '50');
+    await ok(() => card('Silla ergonómica')?.querySelector('.history summary')?.textContent.includes('movimiento'), () => `the card gets a history: "${card('Silla ergonómica')?.querySelector('.history summary')?.textContent}"`);
+    card('Silla ergonómica').querySelector('.history summary').click(); await wait(200);
+    await ok(() => card('Silla ergonómica').querySelector('.history li')?.textContent.includes('Apartaste $50.00') && !!card('Silla ergonómica').querySelector('.spark polyline'), () => 'it lists "Apartaste $50.00" and draws the chart');
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

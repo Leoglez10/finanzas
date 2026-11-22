@@ -3,10 +3,10 @@
   import * as api from "../lib/api";
   import { app, refresh } from "../lib/app.svelte";
   import { openWish } from "../lib/dialogs.svelte";
-  import { isoDay, money } from "../lib/format";
+  import { isoDay, money, parseDay } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember, toast } from "../lib/undo.svelte";
-  import { kindOf, planText } from "../lib/goals";
+  import { kindOf, planText, runningTotal } from "../lib/goals";
   import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
   import Money from "../components/Money.svelte";
@@ -57,6 +57,14 @@
     await api.setWishItemPaid(it.id, paid);
     return () => api.setWishItemPaid(it.id, !paid).then(() => api.restoreWish(w));
   });
+  /** Step line of the set-aside total, as SVG points in a 100×40 box (full height = the goal's price). */
+  function spark(log: api.WishContribution[], price: number) {
+    const pts = runningTotal(log), y = (t: number) => (40 - Math.max(0, Math.min(1, t / price)) * 36).toFixed(1);
+    let last = "40", out = "0,40";
+    pts.forEach((p, i) => { const x = ((i + 1) / pts.length * 100).toFixed(1); out += ` ${x},${last} ${x},${y(p.total)}`; last = y(p.total); });
+    return out;
+  }
+  const shortDay = (iso: string) => parseDay(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short" }).replace(".", "");
   const archive = (w: api.Wish) => act(`Archivado: ${w.name}`, async () => { await api.archiveWish(w.id); return () => api.restoreWish(w); });
   // Buying records the expense and archives the wish; undo removes both changes.
   const buy = (w: api.Wish) => act(`${kindOf(w.kind).done}: ${w.name} ${money(-w.price)}`, async () => {
@@ -106,6 +114,13 @@
             {/each}
           </ul>
         {/if}
+        {#if v.contributions.length}
+          <details class="history">
+            <summary>Historial · {v.contributions.length} movimiento{v.contributions.length === 1 ? "" : "s"}</summary>
+            <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Avance de lo apartado para {w.name}"><polyline points={spark(v.contributions, w.price)} /></svg>
+            <ul>{#each v.contributions.slice(-5).reverse() as c, i (i)}<li><span class="muted">{shortDay(c.date)}</span><b class="num" class:pos={c.amount > 0}>{c.amount > 0 ? "Apartaste" : "Liberaste"} {money(Math.abs(c.amount))}</b></li>{/each}</ul>
+          </details>
+        {/if}
         {#if v.plan}<p class="plan" class:late={v.plan.overdue}><Icon name={v.plan.overdue ? "alert" : "cal"} />{planText(v.plan)}</p>{/if}
         <div><span class="chip {tone}">{text}</span></div>
         {#if reserving === w.id}
@@ -139,5 +154,10 @@
   .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
   .items li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
   .items label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .history summary { cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 550; }
+  .history ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12.5px; }
+  .history li { display: flex; justify-content: space-between; }
+  .spark { display: block; width: 100%; height: 40px; margin-top: 6px; }
+  .spark polyline { fill: none; stroke: var(--violet); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .items .done { text-decoration: line-through; color: var(--muted); }
 </style>

@@ -1,5 +1,5 @@
 use super::Store;
-use crate::service::{Wish, WishItem, WishItemDraft, WishKind};
+use crate::service::{Wish, WishContribution, WishItem, WishItemDraft, WishKind};
 use crate::Id;
 use chrono::NaiveDate;
 use rusqlite::{params, Result};
@@ -51,5 +51,19 @@ impl Store {
     pub(crate) fn set_wish_item_paid(&self, id: Id, paid: bool) -> Result<Option<Id>> {
         use rusqlite::OptionalExtension;
         self.conn.query_row("UPDATE wish_item SET paid = ?1 WHERE id = ?2 RETURNING wish_id", params![paid, id], |r| r.get(0)).optional()
+    }
+
+    pub(crate) fn add_wish_contribution(&self, wish_id: Id, date: NaiveDate, amount: i64) -> Result<()> {
+        if amount != 0 { self.conn.execute("INSERT INTO wish_contribution(wish_id,date,amount) VALUES (?1,?2,?3)", params![wish_id, date.to_string(), amount])?; }
+        Ok(())
+    }
+
+    pub(crate) fn wish_contributions(&self) -> Result<Vec<WishContribution>> {
+        let mut stmt = self.conn.prepare("SELECT wish_id,date,amount FROM wish_contribution ORDER BY wish_id, date, id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, Id>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?)))?;
+        rows.filter_map(|row| match row {
+            Ok((wish_id, date, amount)) => NaiveDate::parse_from_str(&date, "%Y-%m-%d").ok().map(|date| Ok(WishContribution { wish_id, date, amount })),
+            Err(e) => Some(Err(e)),
+        }).collect()
     }
 }

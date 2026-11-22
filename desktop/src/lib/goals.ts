@@ -23,3 +23,14 @@ export function planText(p: Plan): string {
   if (p.monthsLeft <= 1) return `Aparta ${money(p.monthly)} este mes · hasta el ${until}`;
   return `Aparta ${money(p.monthly)} al mes · ${p.monthsLeft} meses, hasta el ${until}`;
 }
+
+/** Set-aside total after each day that had changes, oldest first. */
+export function runningTotal(log: { date: string; amount: number }[]): { date: string; total: number }[] {
+  const points: { date: string; total: number }[] = [];
+  let total = 0;
+  for (const c of log) {
+    total += c.amount;
+    if (points.at(-1)?.date === c.date) points.at(-1)!.total = total; else points.push({ date: c.date, total });
+  }
+  return points;
+}

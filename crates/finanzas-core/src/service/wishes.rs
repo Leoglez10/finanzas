@@ -61,9 +61,13 @@ pub struct WishEvaluation {
     pub cash_balance: Option<Cents>, pub upcoming_outflows: Cents,
     pub cash_shortfall: Option<Cents>, pub reasons: Vec<String>,
 }
+/// One change to the set-aside amount: positive when money was set aside, negative when released.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishContribution { pub wish_id: Id, pub date: NaiveDate, pub amount: Cents }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan>, pub items: Vec<WishItem> }
+pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan>, pub items: Vec<WishItem>, pub contributions: Vec<WishContribution> }
 
 fn invalid(message: &'static str) -> ServiceError { ServiceError::InvalidWish(message) }
 fn find(store: &Store, id: Id) -> Result<Wish> {
@@ -124,13 +128,17 @@ pub fn save_wish(store: &mut Store, id: Option<Id>, mut draft: WishDraft) -> Res
 }
 
 /// Marks a line item as paid (or not). Money set aside beyond what is still unpaid is released: the payment used it.
-pub fn set_wish_item_paid(store: &mut Store, item: Id, paid: bool) -> Result<Wish> {
+pub fn set_wish_item_paid(store: &mut Store, item: Id, paid: bool, today: NaiveDate) -> Result<Wish> {
     store.transaction(|store| {
         let wish_id = store.set_wish_item_paid(item, paid)?.ok_or(ServiceError::NotFound)?;
         let mut wish = find(store, wish_id)?;
         if wish.archived { return Err(invalid("Archived wishes cannot be edited")); }
         let unpaid = (wish.price - wish.paid).max(0);
-        if wish.reserved > unpaid { wish.reserved = unpaid; store.put_wish(&wish)?; }
+        if wish.reserved > unpaid {
+            store.add_wish_contribution(wish.id, today, unpaid - wish.reserved)?;
+            wish.reserved = unpaid;
+            store.put_wish(&wish)?;
+        }
         Ok(wish)
     })
 }
@@ -150,6 +158,7 @@ pub fn reserve_wish(store: &mut Store, id: Id, amount: Cents, today: NaiveDate) 
             let others = total_reserved(&store.wishes()?, |w| w.id != id && w.category_id == Some(category))?;
             if amount > available.saturating_sub(others).max(0) { return Err(invalid("Not enough unreserved category funds")); }
         }
+        store.add_wish_contribution(wish.id, today, amount - wish.reserved)?;
         wish.reserved = amount;
         store.put_wish(&wish)?;
         Ok(wish)
@@ -223,11 +232,13 @@ pub fn evaluate_wish(store: &mut Store, id: Id, today: NaiveDate) -> Result<Wish
 pub fn list_wishes(store: &mut Store, today: NaiveDate, include_archived: bool) -> Result<Vec<WishView>> {
     store.transaction(|store| {
         let items = store.wish_items()?;
+        let contributions = store.wish_contributions()?;
         store.wishes()?.into_iter().filter(|w| include_archived || !w.archived).map(|wish| {
             let evaluation = evaluate(store, &wish, today)?;
             let plan = plan(&wish, today);
             let items = items.iter().filter(|i| i.wish_id == wish.id).cloned().collect();
-            Ok(WishView { wish, evaluation, plan, items })
+            let contributions = contributions.iter().filter(|c| c.wish_id == wish.id).cloned().collect();
+            Ok(WishView { wish, evaluation, plan, items, contributions })
         }).collect()
     })
 }

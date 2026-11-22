@@ -96,6 +96,7 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
     Ok(match name {
         "list_wishes" => json!(service::list_wishes(store, today, a.bool("includeArchived")?.unwrap_or(false)).map_err(err)?.into_iter()
             .map(|v| json!({"wish":wish_json(v.wish),"evaluation":evaluation_json(v.evaluation),"plan":v.plan.map(plan_json),
+                "contributions":v.contributions.into_iter().map(|c| json!({"date":c.date.to_string(),"amount":dec(c.amount)})).collect::<Vec<_>>(),
                 "items":v.items.into_iter().map(|i| json!({"id":id("WishItem",i.id),"name":i.name,"amount":dec(i.amount),"paid":i.paid})).collect::<Vec<_>>()})).collect::<Vec<_>>()),
         "save_wish" => {
             let draft = service::WishDraft { name:a.required_string("name")?.into(), price:a.cents("price")?,

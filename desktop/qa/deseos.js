@@ -129,6 +129,33 @@
     await ok(() => [...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('QA Taxi') && r.textContent.includes('QA Cancún')), () => 'the ledger shows the goal tag');
     location.hash = 'deseos'; await wait(1000);
     await ok(() => card('QA Cancún')?.querySelector('.spent-total')?.textContent.includes('$120.00'), () => `the goal shows what was spent: "${card('QA Cancún')?.querySelector('.spent-total')?.textContent}"`);
+
+    // Editing a movement recorded when a goal with items was completed works (its goal is archived).
+    location.hash = 'movimientos'; await wait(1000);
+    const hotelRow = [...document.querySelectorAll('tr.tx')].find(r => r.textContent.includes('QA Mérida · Hotel'));
+    hotelRow.querySelector('button[aria-label^="Editar"]').click(); await wait(800);
+    const ed = $('dialog[open]');
+    set(ed.querySelector('textarea'), 'QA Mérida · Hotel (2 noches)');
+    ed.querySelector('button[value="save"]').click(); await wait(1500);
+    await ok(() => !$('dialog[open]') && [...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('Hotel (2 noches)') && r.textContent.includes('QA Mérida')), () => 'a completed goal\'s movement can be edited and keeps its tag');
+    location.hash = 'deseos'; await wait(1000);
+
+    // Undoing an edit that removed a line item brings the item back.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const ox = $('dialog[open]');
+    btn(ox, 'Viaje').click(); await wait(200);
+    set(ox.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Oaxaca');
+    btn(ox, '+ Vuelo').click(); await wait(100); btn(ox, '+ Hotel').click(); await wait(200);
+    set(ox.querySelector('input[aria-label="Monto de la partida 1"]'), '1,000');
+    set(ox.querySelector('input[aria-label="Monto de la partida 2"]'), '500');
+    ox.querySelector('button[value="next"]').click(); await wait(300); ox.querySelector('button[value="next"]').click(); await wait(1500);
+    card('QA Oaxaca').querySelector('button[aria-label^="Editar"]').click(); await wait(600);
+    const oe = $('dialog[open]');
+    oe.querySelector('button[aria-label="Quitar partida 2"]').click(); await wait(200);
+    oe.querySelector('button[value="next"]').click(); await wait(300); oe.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Oaxaca')?.querySelectorAll('.items li').length === 1, () => 'removing an item leaves one');
+    await undo(); await wait(500);
+    await ok(() => card('QA Oaxaca')?.querySelectorAll('.items li').length === 2 && !toastText().includes('not found'), () => `undo brings the item back (${card('QA Oaxaca')?.querySelectorAll('.items li').length} items, toast "${toastText()}")`);
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

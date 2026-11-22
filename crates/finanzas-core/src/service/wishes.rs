@@ -104,6 +104,14 @@ pub fn tag_entry(store: &mut Store, entry: Id, wish: Option<Id>, item: Option<Id
 }
 
 fn invalid(message: &'static str) -> ServiceError { ServiceError::InvalidWish(message) }
+/// Every change to `reserved` goes through here so the history always adds up to it.
+fn set_reserved(store: &Store, wish: &mut Wish, amount: Cents, today: NaiveDate) -> Result<()> {
+    store.add_wish_contribution(wish.id, today, amount - wish.reserved)?;
+    wish.reserved = amount;
+    Ok(())
+}
+// ponytail: paths without a caller-supplied date (edit, undo, archive) log with the machine's local date.
+fn local_today() -> NaiveDate { chrono::Local::now().date_naive() }
 fn find(store: &Store, id: Id) -> Result<Wish> {
     store.wishes()?.into_iter().find(|w| w.id == id).ok_or(ServiceError::NotFound)
 }
@@ -132,6 +140,8 @@ pub fn save_wish(store: &mut Store, id: Option<Id>, mut draft: WishDraft) -> Res
         if let Some(items) = draft.items.as_ref().filter(|items| !items.is_empty()) {
             if items.iter().any(|i| i.name.trim().is_empty()) { return Err(invalid("Line item name must not be empty")); }
             if items.iter().any(|i| i.amount <= 0) { return Err(invalid("Line item amount must be greater than zero")); }
+            let ids: Vec<Id> = items.iter().filter_map(|i| i.id).collect();
+            if ids.iter().enumerate().any(|(n, id)| ids[..n].contains(id)) { return Err(invalid("A line item appears twice")); }
             draft.price = items.iter().try_fold(0i64, |sum, i| sum.checked_add(i.amount)).ok_or_else(|| invalid("Line item total is too large"))?;
         }
         if draft.items.is_none() {
@@ -156,6 +166,8 @@ pub fn save_wish(store: &mut Store, id: Option<Id>, mut draft: WishDraft) -> Res
             url: draft.url.trim().into(), notes: draft.notes, category_id: draft.category_id, reserved, archived: false,
             kind: draft.kind, target_date: draft.target_date, paid, achieved_date: None };
         wish.id = store.put_wish(&wish)?;
+        // A category change releases what was set aside.
+        if let Some(old) = &old { if old.reserved != reserved { store.add_wish_contribution(wish.id, local_today(), reserved - old.reserved)?; } }
         if let Some(items) = &draft.items { store.replace_wish_items(wish.id, items)?; }
         Ok(wish)
     })
@@ -169,8 +181,7 @@ pub fn set_wish_item_paid(store: &mut Store, item: Id, paid: bool, today: NaiveD
         if wish.archived { return Err(invalid("Archived wishes cannot be edited")); }
         let unpaid = (wish.price - wish.paid).max(0);
         if wish.reserved > unpaid {
-            store.add_wish_contribution(wish.id, today, unpaid - wish.reserved)?;
-            wish.reserved = unpaid;
+            set_reserved(store, &mut wish, unpaid, today)?;
             store.put_wish(&wish)?;
         }
         Ok(wish)
@@ -192,8 +203,7 @@ pub fn reserve_wish(store: &mut Store, id: Id, amount: Cents, today: NaiveDate) 
             let others = total_reserved(&store.wishes()?, |w| w.id != id && w.category_id == Some(category))?;
             if amount > available.saturating_sub(others).max(0) { return Err(invalid("Not enough unreserved category funds")); }
         }
-        store.add_wish_contribution(wish.id, today, amount - wish.reserved)?;
-        wish.reserved = amount;
+        set_reserved(store, &mut wish, amount, today)?;
         store.put_wish(&wish)?;
         Ok(wish)
     })
@@ -201,7 +211,8 @@ pub fn reserve_wish(store: &mut Store, id: Id, amount: Cents, today: NaiveDate) 
 /// Undo support: puts back a snapshot of an existing wish (archived flag and reservation included).
 pub fn restore_wish(store: &mut Store, snapshot: &Wish) -> Result<Wish> {
     store.transaction(|store| {
-        find(store, snapshot.id)?;
+        let current = find(store, snapshot.id)?;
+        store.add_wish_contribution(snapshot.id, local_today(), snapshot.reserved - current.reserved)?;
         store.put_wish(snapshot)?;
         Ok(snapshot.clone())
     })
@@ -227,7 +238,7 @@ pub fn complete_wish(store: &mut Store, id: Id, account: Id, today: NaiveDate) -
             store.entry_row(row.id)?.ok_or(ServiceError::NotFound)
         }).collect::<Result<Vec<_>>>()?;
         wish.archived = true;
-        wish.reserved = 0;
+        set_reserved(store, &mut wish, 0, today)?;
         wish.achieved_date = Some(today);
         store.put_wish(&wish)?;
         Ok(CompletedWish { wish, entries })
@@ -238,7 +249,7 @@ pub fn archive_wish(store: &mut Store, id: Id) -> Result<Wish> {
     store.transaction(|store| {
         let mut wish = find(store, id)?;
         wish.archived = true;
-        wish.reserved = 0;
+        set_reserved(store, &mut wish, 0, local_today())?;
         store.put_wish(&wish)?;
         Ok(wish)
     })

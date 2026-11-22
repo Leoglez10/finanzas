@@ -369,3 +369,39 @@ fn tags_are_validated_and_completion_tags_its_movements() {
     assert_eq!((done.entries[0].wish_id, done.entries[0].wish_item_id), (Some(a.id), Some(a_item)));
     assert_eq!(view(&mut store, a.id).spending.total, 100);
 }
+
+fn logged(store: &mut Store, id: Id) -> (Cents, Cents) {
+    let v = view(store, id);
+    (v.contributions.iter().map(|c| c.amount).sum(), v.wish.reserved)
+}
+
+#[test]
+fn the_history_always_adds_up_to_what_is_set_aside() {
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, bike.id, 30_000, today()).unwrap();
+    // Changing the category releases what was set aside.
+    let snapshot = view(&mut store, bike.id).wish;
+    save_wish(&mut store, Some(bike.id), draft(None)).unwrap();
+    let (log, reserved) = logged(&mut store, bike.id);
+    assert_eq!((log, reserved), (0, 0));
+    // Undo (restoring the snapshot) sets it aside again.
+    restore_wish(&mut store, &snapshot).unwrap();
+    assert_eq!(logged(&mut store, bike.id), (30_000, 30_000));
+    // Archiving and completing release it.
+    let other = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, other.id, 10_000, today()).unwrap();
+    archive_wish(&mut store, other.id).unwrap();
+    assert_eq!(logged(&mut store, other.id), (0, 0));
+    let done = complete_wish(&mut store, bike.id, account, today()).unwrap();
+    assert_eq!(logged(&mut store, done.wish.id), (0, 0));
+}
+
+#[test]
+fn duplicate_item_ids_are_refused() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 100)]), ..draft(Some(category)) }).unwrap();
+    let a = view(&mut store, trip.id).items[0].id;
+    let twice = vec![WishItemDraft { id: Some(a), ..item("A", 100) }, WishItemDraft { id: Some(a), ..item("A", 200) }];
+    assert_eq!(save_wish(&mut store, Some(trip.id), WishDraft { items: Some(twice), ..draft(Some(category)) }).unwrap_err().to_string(), "A line item appears twice");
+}

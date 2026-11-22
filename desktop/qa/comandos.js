@@ -20,7 +20,7 @@
     await ok(() => location.hash === '#presupuesto', () => `menu event "go-presupuesto" navigates (${location.hash})`);
     await menu('new-gasto');
     await ok(() => $('dialog[open] input[aria-label="Monto"]'), () => 'menu event "new-gasto" opens the movement dialog');
-    $('dialog[open] button[value="cancel"]').click(); await wait(300);
+    $('dialog[open] button[aria-label="Cerrar"]').click(); await wait(300);
 
     await openPalette();
     await type('netflix');

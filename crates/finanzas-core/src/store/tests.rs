@@ -383,10 +383,22 @@ fn version_2_wishes_become_purchases_without_a_date() {
     assert_eq!(tags, 0);
     assert_eq!(wishes[0].achieved_date, None);
     let contributions: i64 = store.conn.query_row("SELECT COUNT(*) FROM wish_contribution", [], |r| r.get(0)).unwrap();
-    assert_eq!(contributions, 0);
+    assert_eq!(contributions, 1, "the 400 already set aside on Tele opens its history");
     let items: i64 = store.conn.query_row("SELECT COUNT(*) FROM wish_item", [], |r| r.get(0)).unwrap();
     assert_eq!(items, 0, "the line item table exists and is empty");
     assert!(store.conn.execute("UPDATE wish SET kind = 'otro'", []).is_err(), "kind is limited to the four types");
     drop(store);
     assert_eq!(Store::open(&path).unwrap().wishes().unwrap().len(), 3, "reopening is idempotent");
+}
+
+#[test]
+fn money_already_set_aside_starts_the_history() {
+    let path = unique_db_path("wish-v4");
+    let mut conn = rusqlite::Connection::open(&path).unwrap();
+    super::schema::migrate(&mut conn).unwrap();
+    conn.execute_batch("DROP TABLE wish_entry; DROP TABLE wish_contribution; ALTER TABLE wish DROP COLUMN achieved_date; INSERT INTO wish(name, price, url, notes, reserved) VALUES ('Tele', 1000, '', '', 400), ('Bici', 900, '', '', 0); PRAGMA user_version = 4;").unwrap();
+    drop(conn);
+    let store = Store::open(&path).unwrap();
+    let log = store.wish_contributions().unwrap();
+    assert_eq!(log.iter().map(|c| (c.wish_id, c.amount)).collect::<Vec<_>>(), [(1, 400)], "one opening row per goal with money set aside");
 }

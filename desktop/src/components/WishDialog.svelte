@@ -57,8 +57,13 @@
       const items = rows.map((r, i) => ({ id: r.id, name: r.name.trim(), amount: rowCents[i]!, paid: r.paid }));
       const saved = await api.saveWish(before?.id ?? null, { name: name.trim(), price: cents!, url: url.trim(), notes: notes.trim(), categoryId, kind, targetDate: targetDate || null, items });
       // Undo puts the items back first, then the exact snapshot (reserved amount included).
-      if (before) remember(kind === "compra" ? "Deseo actualizado" : "Meta actualizada", () => api.saveWish(before.id, { ...before, items: beforeItems.map(i => ({ id: i.id, name: i.name, amount: i.amount, paid: i.paid })) })
-        .then(() => api.restoreWish(before)).then(refresh));
+      // Items removed by this edit no longer exist, so undo recreates them (id null) and keeps the rest by id.
+      if (before) remember(kind === "compra" ? "Deseo actualizado" : "Meta actualizada", async () => {
+        const now = (await api.wishes(true)).find(v => v.wish.id === before.id)?.items ?? [];
+        await api.saveWish(before.id, { ...before, items: beforeItems.map(i => ({ id: now.some(n => n.id === i.id) ? i.id : null, name: i.name, amount: i.amount, paid: i.paid })) });
+        await api.restoreWish(before);
+        await refresh();
+      });
       else remember(`${kind === "compra" ? "Deseo guardado" : "Meta guardada"}: ${saved.name}`, () => api.archiveWish(saved.id).then(refresh));
       dialog.close();
       await refresh();

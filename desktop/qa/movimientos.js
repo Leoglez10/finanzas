@@ -49,7 +49,8 @@
     await ok(() => [...document.querySelectorAll('tr.tx td.amt')].every(td => td.textContent.trim().startsWith('+')), () => 'Ingresos filter shows only positive amounts');
     byText('.seg button', 'Todos').click();
     location.hash = 'movimientos?mes=' + (new Date().getFullYear() * 100 + new Date().getMonth()); await wait(800);
-    await ok(() => !!byText('.chip.brand', ''), () => `month filter chip from route: "${$('.toolbar .chip.brand')?.textContent.trim()}"`);
+    // mes= is last month (getMonth() is 0-based), so the period picker reads "Mes pasado".
+    await ok(() => $('.toolbar .period-btn')?.textContent.trim() === 'Mes pasado', () => `month from the route sets the period: "${$('.toolbar .period-btn')?.textContent.trim()}"`);
     location.hash = 'movimientos'; await wait(600);
     document.title = 'QA-DONE';
   } catch (e) { say(false, 'exception: ' + e); document.title = 'QA-DONE'; }

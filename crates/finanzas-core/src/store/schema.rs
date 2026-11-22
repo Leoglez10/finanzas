@@ -57,7 +57,7 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
         let tx = conn.transaction()?;
         tx.execute_batch(
             "CREATE TABLE IF NOT EXISTS wish_item (
-                id INTEGER PRIMARY KEY, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                id INTEGER PRIMARY KEY AUTOINCREMENT, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
                 name TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
                 paid INTEGER NOT NULL DEFAULT 0 CHECK(paid IN (0,1)), sort_order INTEGER NOT NULL
             );
@@ -74,7 +74,9 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 id INTEGER PRIMARY KEY, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
                 date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount <> 0)
             );
-            CREATE INDEX IF NOT EXISTS wish_contribution_wish_idx ON wish_contribution(wish_id, date);"
+            CREATE INDEX IF NOT EXISTS wish_contribution_wish_idx ON wish_contribution(wish_id, date);
+            -- Money already set aside opens each goal's history, so the log always adds up to `reserved`.
+            INSERT INTO wish_contribution(wish_id, date, amount) SELECT id, date('now', 'localtime'), reserved FROM wish WHERE reserved > 0;"
         )?;
         tx.pragma_update(None, "user_version", 5)?;
         tx.commit()?;

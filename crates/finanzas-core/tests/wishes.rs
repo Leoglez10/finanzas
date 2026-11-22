@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 5);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 6);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -285,4 +285,44 @@ fn every_change_to_the_set_aside_amount_is_logged_with_its_date() {
     assert_eq!(log, [(today(), 10_000), (day(2026, 11, 20), 15_000), (day(2026, 11, 22), -3_000), (day(2026, 11, 23), -2_000)]);
     let other = save_wish(&mut store, None, draft(Some(category))).unwrap();
     assert!(view(&mut store, other.id).contributions.is_empty(), "each goal has its own log");
+}
+
+#[test]
+fn completing_a_goal_records_its_expense_and_keeps_it_as_an_achievement() {
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    reserve_wish(&mut store, bike.id, 20_000, today()).unwrap();
+    let done = complete_wish(&mut store, bike.id, account, today()).unwrap();
+    assert_eq!((done.wish.archived, done.wish.reserved, done.wish.achieved_date), (true, 0, Some(today())));
+    assert_eq!(done.entries.iter().map(|e| (e.amount, e.category_id, e.payee_name.as_deref(), e.notes.as_str())).collect::<Vec<_>>(),
+        [(-50_000, Some(category), Some("PlayStation"), "Compra de un deseo")]);
+    assert!(matches!(complete_wish(&mut store, bike.id, account, today()), Err(ServiceError::InvalidWish("Archived wishes cannot be edited"))));
+}
+
+#[test]
+fn completing_a_goal_with_items_records_one_expense_per_unpaid_item() {
+    let (mut store, account, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { name: "Cancún".into(), kind: WishKind::Viaje, items: Some(vec![item("Vuelo", 30_000), item("Hotel", 15_000), item("Comida", 5_000)]), ..draft(Some(category)) }).unwrap();
+    let flight = view(&mut store, trip.id).items[0].id;
+    set_wish_item_paid(&mut store, flight, true, today()).unwrap();
+    let done = complete_wish(&mut store, trip.id, account, today()).unwrap();
+    assert_eq!(done.entries.iter().map(|e| (e.amount, e.notes.as_str())).collect::<Vec<_>>(), [(-15_000, "Cancún · Hotel"), (-5_000, "Cancún · Comida")]);
+    assert!(done.entries.iter().all(|e| e.payee_name.as_deref() == Some("Cancún") && e.category_id == Some(category)));
+}
+
+#[test]
+fn completing_fails_without_writing_anything() {
+    let (mut store, _, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let before = store.list_entries().unwrap().len();
+    assert!(matches!(complete_wish(&mut store, bike.id, 9_999, today()), Err(ServiceError::NotFound)));
+    assert_eq!(store.list_entries().unwrap().len(), before);
+    assert!(!view(&mut store, bike.id).wish.archived);
+    // Undo: restoring the snapshot brings the goal back as it was.
+    let (mut store, account, category) = seed();
+    let bike = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    complete_wish(&mut store, bike.id, account, today()).unwrap();
+    restore_wish(&mut store, &bike).unwrap();
+    let back = view(&mut store, bike.id).wish;
+    assert_eq!((back.archived, back.achieved_date), (false, None));
 }

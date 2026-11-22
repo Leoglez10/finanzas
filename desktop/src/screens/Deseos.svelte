@@ -67,12 +67,12 @@
   const shortDay = (iso: string) => parseDay(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short" }).replace(".", "");
   const archive = (w: api.Wish) => act(`Archivado: ${w.name}`, async () => { await api.archiveWish(w.id); return () => api.restoreWish(w); });
   // Buying records the expense and archives the wish; undo removes both changes.
-  const buy = (w: api.Wish) => act(`${kindOf(w.kind).done}: ${w.name} ${money(-w.price)}`, async () => {
+  // Completing records the expense(s) and keeps the goal as an achievement; undo removes both changes.
+  const complete = (w: api.Wish) => act(`${kindOf(w.kind).done}: ${w.name} ${money(-(w.price - w.paid))}`, async () => {
     const account = app.accounts.find(a => !a.closed && !a.offBudget) ?? app.accounts.find(a => !a.closed);
     if (!account) throw new Error("Primero crea una cuenta");
-    const entry = await api.addEntry({ date: isoDay(app.today), amount: -w.price, accountId: account.id, payee: w.name, categoryId: w.categoryId, notes: w.kind === "compra" ? "Compra de un deseo" : `Meta cumplida (${kindOf(w.kind).label.toLowerCase()})` });
-    await api.archiveWish(w.id);
-    return async () => { await api.deleteEntry(entry.id); await api.restoreWish(w); };
+    const done = await api.completeWish(w.id, account.id);
+    return async () => { for (const e of done.entries) await api.deleteEntry(e.id); await api.restoreWish(w); };
   });
 </script>
 
@@ -101,7 +101,8 @@
         <div style="flex:1;min-width:0"><h3>{w.name}</h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
       <Money cents={w.price} class="price" />
       {#if w.archived}
-        <span class="chip">Archivado</span>
+        {#if w.achievedDate}<span class="chip ok"><Icon name="star" />Logro · {k.done.toLowerCase()} el {shortDay(w.achievedDate)} {w.achievedDate.slice(0, 4)}</span>
+        {:else}<span class="chip">Archivado</span>{/if}
       {:else}
         <div style="display:grid;gap:6px">
           <div class="bar" style="--c:var(--violet)"><span style="width:{pct}%"></span></div>
@@ -131,8 +132,9 @@
           </form>
         {:else}
           <div class="foot">
-            {#if w.reserved + w.paid >= w.price}<button class="btn sm primary" onclick={() => buy(w)}><Icon name="check" />{k.done}</button>
+            {#if w.reserved + w.paid >= w.price}<button class="btn sm primary" onclick={() => complete(w)}><Icon name="check" />{k.done}</button>
             {:else}<button class="btn sm primary" onclick={() => reserving = w.id}>Apartar más</button>{/if}
+            {#if w.reserved + w.paid < w.price}<button class="btn sm ghost" title="Registra el gasto y la guarda como logro" onclick={() => complete(w)}><Icon name="check" />Cumplida</button>{/if}
             {#if w.reserved}<button class="btn sm" onclick={() => setReserved(w, 0, `Liberaste ${money(w.reserved)} de ${w.name}`)}>Liberar</button>{/if}
             {#if w.url}<button class="btn sm ghost" onclick={() => openUrl(w.url).catch(e => toast(String(e)))}>{w.kind === "compra" ? "Ver producto" : "Ver enlace"}</button>{/if}
             <span class="spacer"></span>

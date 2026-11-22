@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 5;
+pub(super) const CURRENT_VERSION: i64 = 6;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -76,6 +76,13 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
             );
             CREATE INDEX IF NOT EXISTS wish_contribution_wish_idx ON wish_contribution(wish_id, date);"
         )?;
+        tx.pragma_update(None, "user_version", 5)?;
+        tx.commit()?;
+    }
+    if version < 6 {
+        // The day a goal was completed: archived goals with a date are achievements.
+        let tx = conn.transaction()?;
+        tx.execute_batch("ALTER TABLE wish ADD COLUMN achieved_date TEXT;")?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;
     }

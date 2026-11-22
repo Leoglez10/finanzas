@@ -1,5 +1,5 @@
 use super::{budget_month, upcoming, Result, ServiceError};
-use crate::{store::Store, Cents, Id, domain::month};
+use crate::{store::{EntryRow, Store}, Cents, Id, domain::month};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +35,8 @@ pub struct Wish {
     #[serde(default)] pub kind: WishKind, #[serde(default)] pub target_date: Option<NaiveDate>,
     /// Sum of the paid line items: money already spent toward the goal. Read-only, derived from the items.
     #[serde(default)] pub paid: Cents,
+    /// Set when the goal was completed (it is then archived as an achievement).
+    #[serde(default)] pub achieved_date: Option<NaiveDate>,
 }
 /// How to reach a goal with a target date: set aside `monthly` on each of `months_left` monthly dates
 /// (today's day of the month, up to the target). Overdue goals ask for everything now; archived goals have no plan.
@@ -120,7 +122,7 @@ pub fn save_wish(store: &mut Store, id: Option<Id>, mut draft: WishDraft) -> Res
         if reserved > draft.price - paid { return Err(invalid("Release reserved funds before reducing the price")); }
         let mut wish = Wish { id: id.unwrap_or(0), name: draft.name.trim().into(), price: draft.price,
             url: draft.url.trim().into(), notes: draft.notes, category_id: draft.category_id, reserved, archived: false,
-            kind: draft.kind, target_date: draft.target_date, paid };
+            kind: draft.kind, target_date: draft.target_date, paid, achieved_date: None };
         wish.id = store.put_wish(&wish)?;
         if let Some(items) = &draft.items { store.replace_wish_items(wish.id, items)?; }
         Ok(wish)
@@ -172,6 +174,29 @@ pub fn restore_wish(store: &mut Store, snapshot: &Wish) -> Result<Wish> {
         Ok(snapshot.clone())
     })
 }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletedWish { pub wish: Wish, pub entries: Vec<EntryRow> }
+/// Completes a goal: records its expense on `account` (one per unpaid line item, or one for the price when it has
+/// none; paid items were already paid) and archives it as an achievement dated `today`. All or nothing.
+pub fn complete_wish(store: &mut Store, id: Id, account: Id, today: NaiveDate) -> Result<CompletedWish> {
+    store.transaction(|store| {
+        let mut wish = find(store, id)?;
+        if wish.archived { return Err(invalid("Archived wishes cannot be edited")); }
+        let items: Vec<_> = store.wish_items()?.into_iter().filter(|i| i.wish_id == id).collect();
+        let note = |part: Option<&str>| match part { Some(p) => format!("{} · {p}", wish.name), None if wish.kind == WishKind::Compra => "Compra de un deseo".into(), None => "Meta cumplida".into() };
+        let charges: Vec<(Cents, String)> = if items.is_empty() { vec![(wish.price, note(None))] }
+            else { items.iter().filter(|i| !i.paid).map(|i| (i.amount, note(Some(&i.name)))).collect() };
+        let entries = charges.into_iter().map(|(amount, notes)| super::add_entry(store, super::NewEntry { date: today, amount: -amount, account_id: account,
+            payee: Some(wish.name.clone()), category_id: wish.category_id, notes, cleared: true })).collect::<Result<Vec<_>>>()?;
+        wish.archived = true;
+        wish.reserved = 0;
+        wish.achieved_date = Some(today);
+        store.put_wish(&wish)?;
+        Ok(CompletedWish { wish, entries })
+    })
+}
+
 pub fn archive_wish(store: &mut Store, id: Id) -> Result<Wish> {
     store.transaction(|store| {
         let mut wish = find(store, id)?;

@@ -266,6 +266,7 @@ fn wishes_carry_goal_kind_target_date_and_plan() {
     let mut s = Seed::new();
     let plain = s.call("save_wish", json!({"name":"Bici", "price":900}));
     assert_eq!((plain["kind"].clone(), plain["targetDate"].clone()), (json!("compra"), Value::Null));
+    assert_eq!(plain["achievedDate"], Value::Null);
     let trip = s.call("save_wish", json!({"name":"Cancún", "price":800, "kind":"viaje", "targetDate":"2027-01-15"}));
     assert_eq!((trip["kind"].clone(), trip["targetDate"].clone()), (json!("viaje"), json!("2027-01-15")));
     let listed = s.call("list_wishes", json!({}));

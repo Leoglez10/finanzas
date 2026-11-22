@@ -64,7 +64,7 @@ fn category(a: &Args<'_>, store: &Store) -> Result<Option<i64>, ToolError> {
 fn wish_json(w: service::Wish) -> Value {
     json!({"id":id("Wish",w.id),"name":w.name,"price":dec(w.price),"url":w.url,"notes":w.notes,
         "categoryId":oid("Category",w.category_id),"reserved":dec(w.reserved),"archived":w.archived,
-        "kind":w.kind.as_str(),"targetDate":w.target_date.map(|d| d.to_string()),"paid":dec(w.paid)})
+        "kind":w.kind.as_str(),"targetDate":w.target_date.map(|d| d.to_string()),"paid":dec(w.paid),"achievedDate":w.achieved_date.map(|d| d.to_string())})
 }
 fn plan_json(p: service::WishPlan) -> Value {
     json!({"targetDate":p.target_date.to_string(),"remaining":dec(p.remaining),"monthsLeft":p.months_left,"monthly":dec(p.monthly),"overdue":p.overdue})

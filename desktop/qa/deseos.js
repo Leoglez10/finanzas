@@ -103,6 +103,17 @@
     await ok(() => card('Silla ergonómica')?.querySelector('.history summary')?.textContent.includes('movimiento'), () => `the card gets a history: "${card('Silla ergonómica')?.querySelector('.history summary')?.textContent}"`);
     card('Silla ergonómica').querySelector('.history summary').click(); await wait(200);
     await ok(() => card('Silla ergonómica').querySelector('.history li')?.textContent.includes('Apartaste $50.00') && !!card('Silla ergonómica').querySelector('.spark polyline'), () => 'it lists "Apartaste $50.00" and draws the chart');
+
+    // Completing the trip records one expense per item and keeps it as an achievement.
+    btn(card('QA Mérida'), 'Cumplida').click(); await wait(1500);
+    await ok(() => !card('QA Mérida'), () => 'Cumplida takes the trip off the active list');
+    location.hash = 'movimientos'; await wait(1000);
+    const rows = () => [...document.querySelectorAll('tr.tx')].map(r => r.textContent);
+    await ok(() => rows().some(t => t.includes('QA Mérida · Vuelo') && t.includes('-$3,000.00')) && rows().some(t => t.includes('QA Mérida · Hotel') && t.includes('-$2,000.00')), () => 'it records one expense per item');
+    location.hash = 'deseos'; await wait(1000);
+    btn($('.topbar'), 'Archivados').click(); await wait(1000);
+    await ok(() => card('QA Mérida')?.querySelector('.chip.ok')?.textContent.includes('Logro'), () => `it shows as an achievement: "${card('QA Mérida')?.querySelector('.chip')?.textContent}"`);
+    btn($('.topbar'), 'Ver activos').click(); await wait(800);
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

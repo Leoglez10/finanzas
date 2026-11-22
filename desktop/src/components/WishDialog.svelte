@@ -59,7 +59,7 @@
   <form method="dialog" novalidate onsubmit={submit}>
     <div class="steps" aria-hidden="true"><span class="on"></span><span class:on={step === 2}></span></div>
     <div class="dlg-h"><div><h2 id="wish-title">{wishDialog.wish ? "Editar deseo" : "Nuevo deseo"}</h2><p>Paso {step} de 2 · {step === 1 ? "Qué quieres comprar" : "Revisa antes de guardar"}</p></div>
-      <button class="btn icon ghost" value="cancel" formnovalidate aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       {#if step === 1}
         <label class="field">Nombre
@@ -90,8 +90,8 @@
       {/if}
     </div>
     <div class="dlg-f">
-      {#if step === 2}<button class="btn ghost" value="back" formnovalidate style="margin-right:auto"><Icon name="left" />Atrás</button>{/if}
-      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      {#if step === 2}<button class="btn ghost" type="button" onclick={() => step = 1} style="margin-right:auto"><Icon name="left" />Atrás</button>{/if}
+      <button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button>
       <button class="btn primary" value="next" disabled={saving}>{step === 1 ? "Continuar" : "Guardar deseo"}</button>
     </div>
   </form>

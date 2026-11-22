@@ -57,7 +57,7 @@
 <dialog bind:this={dialog} class="import" aria-labelledby="import-title" onclose={() => importDialog.open = false}>
   <form method="dialog" onsubmit={submit}>
     <div class="dlg-h"><div><h2 id="import-title">Importar movimientos</h2><p>{importDialog.file?.name}</p></div>
-      <button class="btn icon ghost" value="cancel" aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       {#if !rows.length}
         <p class="muted">{ctx ? "No encontré filas en este archivo." : "Leyendo…"}</p>
@@ -92,7 +92,7 @@
     <div class="dlg-f">
       <label class="left">Cuenta destino
         <select class="input" bind:value={accountId} style="min-height:32px;width:auto">{#each app.accounts.filter(a => !a.closed) as a (a.id)}<option value={a.id}>{a.name}</option>{/each}</select></label>
-      <button class="btn" value="cancel">Cancelar</button>
+      <button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button>
       <!-- svelte-ignore a11y_autofocus (the main action of the preview gets focus) -->
       <button class="btn primary" value="import" disabled={!chosen.length || saving} autofocus>Importar {chosen.length} movimiento{chosen.length === 1 ? "" : "s"}</button>
     </div>

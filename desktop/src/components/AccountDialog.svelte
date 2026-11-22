@@ -30,7 +30,7 @@
 <dialog bind:this={dialog} aria-labelledby="account-title" onclose={() => accountDialog.open = false}>
   <form method="dialog" novalidate onsubmit={submit}>
     <div class="dlg-h"><div><h2 id="account-title">Nueva cuenta</h2><p>Banco, efectivo, tarjeta de crédito…</p></div>
-      <button class="btn icon ghost" value="cancel" formnovalidate aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       <!-- svelte-ignore a11y_autofocus (inside a modal <dialog> autofocus picks the first field, as intended) -->
       <label class="field">Nombre<input class="input" bind:value={name} placeholder="Cuenta principal" autofocus /></label>
@@ -41,6 +41,6 @@
       <label class="setting" style="padding-bottom:0"><div class="grow"><b>Fuera del presupuesto</b><p>Para inversiones o ahorros que no usas en el día a día.</p></div><input type="checkbox" role="switch" class="switch" bind:checked={offBudget} /></label>
       {#if error}<p class="err" role="alert">{error}</p>{/if}
     </div>
-    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Cancelar</button><button class="btn primary" value="save" disabled={saving}>Crear cuenta</button></div>
+    <div class="dlg-f"><button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button><button class="btn primary" value="save" disabled={saving}>Crear cuenta</button></div>
   </form>
 </dialog>

@@ -67,7 +67,7 @@
 <dialog bind:this={dialog} aria-labelledby="tx-title" onclose={() => entryDialog.open = false}>
   <form method="dialog" novalidate onsubmit={save}>
     <div class="dlg-h"><div><h2 id="tx-title">{entryDialog.row ? "Editar movimiento" : "Nuevo movimiento"}</h2><p>Se registra en la cuenta que elijas.</p></div>
-      <button class="btn icon ghost" value="cancel" formnovalidate aria-label="Cerrar"><Icon name="x" /></button></div>
+      <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
       <fieldset class="kind"><legend class="sr">Tipo</legend>
         <label><input type="radio" bind:group={kind} value="gasto" /><Icon name="down" />Gasto</label>
@@ -93,7 +93,7 @@
       <label class="field"><span>Notas <span class="opt">· opcional</span></span><textarea class="input" bind:value={notes} placeholder="Algo para recordar"></textarea></label>
     </div>
     <div class="dlg-f"><span class="left"><kbd>esc</kbd> para cerrar</span>
-      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button>
       <button class="btn primary" value="save" disabled={saving}>{entryDialog.row ? "Guardar" : "Agregar"} {kind}</button></div>
   </form>
 </dialog>

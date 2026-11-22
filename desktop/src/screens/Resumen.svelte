@@ -68,7 +68,12 @@
     const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
     const column = (grid.clientWidth + gap) / 6;
     dragId = id;
-    track(ev => { layout = resize(layout, id, (ev.clientX - left + gap) / column); }, () => { dragId = null; });
+    // Pointer moves fire ~120 times a second; the grid only changes when the width crosses a column.
+    let span = layout.find(s => s.id === id)!.span;
+    track(ev => {
+      const next = Math.max(2, Math.min(6, Math.round((ev.clientX - left + gap) / column)));
+      if (next !== span) { span = next; layout = resize(layout, id, next); }
+    }, () => { dragId = null; });
   }
 
   $effect(() => {
@@ -151,7 +156,7 @@
     {/each}
   </div>
   {#if ghost}
-    <div class="ghost" aria-hidden="true" style="left:{ghost.x - ghost.dx}px;top:{ghost.y - ghost.dy}px;width:{ghost.w}px;height:{ghost.h}px">{@render widget(ghost.id)}</div>
+    <div class="ghost" aria-hidden="true" style="width:{ghost.w}px;height:{ghost.h}px;transform:translate({ghost.x - ghost.dx}px, {ghost.y - ghost.dy}px) var(--lift)">{@render widget(ghost.id)}</div>
   {/if}
 {/if}
 
@@ -297,10 +302,10 @@
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 6px 0; cursor: ew-resize; touch-action: none; }
-  .ghost { position: fixed; z-index: 50; pointer-events: none; border-radius: var(--radius); transform: rotate(1.5deg) scale(1.03); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
+  .ghost { --lift: rotate(1.5deg) scale(1.03); position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; border-radius: var(--radius); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
   .ghost > :global(*) { height: 100%; }
-  @keyframes lift { from { transform: none; box-shadow: var(--shadow); } }
-  @media (prefers-reduced-motion: reduce) { .ghost { animation: none; transform: none; } }
+  @keyframes lift { from { box-shadow: var(--shadow); } }
+  @media (prefers-reduced-motion: reduce) { .ghost { animation: none; --lift: none; } }
   .w-tools { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 4px; }
   .w-tools .btn { background: var(--surface); box-shadow: var(--shadow); color: var(--text, inherit); }
   .handle { cursor: grab; touch-action: none; }

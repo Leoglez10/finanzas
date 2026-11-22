@@ -1,6 +1,8 @@
 name = "finanzas-feedback"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
 
 [vars]
 REPO = "Leoglez10/finanzas"

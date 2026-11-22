@@ -1,6 +1,6 @@
 // Sends a bug report or idea to the feedback Worker, which opens a GitHub issue.
 // Only the typed text, the app version and the OS are sent; never data from the database.
-export const FEEDBACK_URL = "https://finanzas-feedback.WORKERS_SUBDOMAIN.workers.dev/report";
+export const FEEDBACK_URL = "https://finanzas-feedback.leoeligr10.workers.dev/report";
 export const SECURITY_URL = "https://github.com/Leoglez10/finanzas/security/policy";
 
 export type FeedbackKind = "falla" | "mejora";

@@ -119,6 +119,7 @@
               <p class="t-label">Tu mes</p>
               <a href="#funciones">Presupuesto<span>Sobres por categoría</span></a>
               <a href="#funciones">Movimientos<span>Busca, edita y borra</span></a>
+              <a href="#resumen">Tu resumen<span>Filtros y widgets a tu medida</span></a>
               <a href="#funciones">Gráficas<span>Ingresos contra gastos</span></a>
             </div>
             <div class="menu-col span-3">
@@ -134,7 +135,7 @@
           </div>
         </div>
       </div>
-      <div class="nav__item"><a class="nav__link" href="#deseos">Deseos</a></div>
+      <div class="nav__item"><a class="nav__link" href="#deseos">Metas</a></div>
       <div class="nav__item"><a class="nav__link" href="#privacidad">Privacidad</a></div>
       <div class="nav__item"><a class="nav__link" href="#mcp">MCP</a></div>
       <div class="nav__item"><a class="nav__link" href="#faq">Preguntas</a></div>
@@ -191,22 +192,43 @@
     </div>
   </section>
 
+  <section class="section" id="resumen" aria-labelledby="resumen-h">
+    <div class="wrap">
+      <div class="grid fill">
+        <div class="span-5 stack-5">
+          <h2 id="resumen-h">Tu resumen, a tu medida</h2>
+          <p class="t-lead">Elige el periodo que quieres ver y arma tu pantalla de inicio: mueve los widgets, cambia su tamaño u oculta los que no usas.</p>
+          <ul class="rows">
+            <li>Semana, mes, trimestre, año o un rango en el calendario.</li>
+            <li>Presupuesto, últimos movimientos, saldo por cuenta y metas como widgets.</li>
+            <li>Cada perfil guarda su propio orden.</li>
+          </ul>
+        </div>
+        <div class="frame frame--lit frame--fill span-6 start-7" role="img" aria-label="Pantalla Resumen en modo de edición, en modo oscuro: cada widget con botones para mover, cambiar tamaño y ocultar">
+          <div class="stage stage--fade-br">
+            <div class="at-corner shot" style="--ax:56px;--ay:56px"><img src="img/resumen-panel.webp" srcset="img/resumen-panel-700.webp 700w, img/resumen-panel.webp 1000w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1000" height="1000" loading="lazy" data-source="client" data-subject="Finanzas, Resumen personalizable"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="deseos" aria-labelledby="deseos-h">
     <div class="wrap">
       <div class="grid fill">
         <div class="span-5 stack-5">
-          <h2 id="deseos-h">Deseos: sabe cuánto te falta</h2>
-          <p class="t-lead">Guarda lo que quieres comprar con su precio, enlace y detalles. Finanzas te dice si cabe en tu presupuesto y en tu saldo, y cuánto te falta.</p>
+          <h2 id="deseos-h">Metas: un viaje, una compra o un fondo</h2>
+          <p class="t-lead">Ponle fecha a lo que quieres y Finanzas te dice cuánto apartar cada mes para llegar a tiempo. Un viaje se divide en partidas: vuelo, hotel, comida.</p>
           <ul class="rows">
-            <li>Aparta dinero de una categoría sin registrar un gasto.</li>
-            <li>Cuenta tus pagos de los próximos 30 días.</li>
-            <li>También desde Claude u otro agente con el servidor MCP.</li>
+            <li>Aparta dinero sin registrar un gasto y ve tu historial de aportes.</li>
+            <li>Marca partidas como pagadas y etiqueta tus gastos del viaje para comparar lo gastado con lo planeado.</li>
+            <li>Al cumplirla se registra el gasto y queda como logro.</li>
           </ul>
           <a class="link" href="https://github.com/Leoglez10/finanzas/blob/main/docs/wishes.md">Cómo se calcula</a>
         </div>
-        <div class="frame frame--lit frame--fill span-6 start-7" role="img" aria-label="Pantalla Deseos en modo oscuro: una PlayStation 5 de $500 con $50 apartados y lo que falta en presupuesto y en saldo">
+        <div class="frame frame--lit frame--fill span-6 start-7" role="img" aria-label="Pantalla Deseos y metas en modo oscuro: un viaje a Oaxaca de $10,500 con el vuelo pagado, hotel, comida y tours pendientes, su historial de aportes y aparta $600 al mes hasta el 15 de junio">
           <div class="stage stage--fade-br">
-            <div class="at-corner shot" style="--ax:56px;--ay:56px"><img src="img/deseos-panel.webp" srcset="img/deseos-panel-700.webp 700w, img/deseos-panel.webp 1000w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1000" height="1000" loading="lazy" data-source="client" data-subject="Finanzas, pantalla Deseos"></div>
+            <div class="at-corner shot" style="--ax:56px;--ay:56px"><img src="img/metas-panel.webp" srcset="img/metas-panel-700.webp 700w, img/metas-panel.webp 1000w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="1000" height="1000" loading="lazy" data-source="client" data-subject="Finanzas, pantalla Deseos y metas"></div>
           </div>
         </div>
       </div>
@@ -239,7 +261,7 @@
       <div class="grid fill">
         <article class="card card--row card--open span-6 m-nolift">
           <h3>Compara ingresos y gastos</h3>
-          <p>El gasto del mes por categoría y las barras de ingresos contra gastos de 6 o 12 meses.</p>
+          <p>El gasto por categoría y las barras de ingresos contra gastos de 6 o 12 meses, para un mes, un trimestre, el año o el rango que elijas.</p>
           <div class="panel" role="img" aria-label="Gráficas de gasto por categoría y de ingresos contra gastos de seis meses, en modo oscuro">
             <div class="stage stage--fade-br"><div class="at-corner shot" style="--ax:32px;--ay:40px"><img src="img/graficas-panel.webp" srcset="img/graficas-panel-700.webp 700w, img/graficas-panel.webp 900w" sizes="(max-width: 639px) 360px, (max-width: 1279px) 50vw, 640px" alt="" width="900" height="560" loading="lazy" data-source="client" data-subject="Finanzas, gráficas del Resumen"></div></div>
           </div>
@@ -354,6 +376,8 @@ brew install --cask finanzas</code></pre>
           <div class="faq__item"><h3>¿Cuánto cuesta Finanzas?</h3><p>Nada. Finanzas es gratis y de código abierto, con licencia MIT.</p></div>
           <div class="faq__item"><h3>¿Dónde guarda Finanzas mis datos?</h3><p>En un solo archivo SQLite en tu computadora. No hay cuenta, ni nube, ni telemetría.</p></div>
           <div class="faq__item"><h3>¿Puedo separar lo personal del negocio?</h3><p>Sí. Crea perfiles como Negocio en Ajustes › Perfil; cada uno guarda sus cuentas, presupuesto y pagos por separado, y puedes renombrarlos, ocultarlos o borrarlos.</p></div>
+          <div class="faq__item"><h3>¿Puedo ver solo un mes o una semana?</h3><p>Sí. Movimientos y cada cuenta se filtran por semana, mes, mes pasado, tres meses, año o un rango que eliges en el calendario; el Resumen, por cualquier rango de meses.</p></div>
+          <div class="faq__item"><h3>¿Puedo planear un viaje?</h3><p>Sí. Crea una meta de tipo Viaje con fecha y partidas. Te dice cuánto apartar al mes y, si etiquetas tus gastos con la meta, cuánto llevas gastado de cada partida.</p></div>
           <div class="faq__item"><h3>¿Tiene modo oscuro?</h3><p>Sí. En Ajustes eliges claro, oscuro o según el sistema, y uno de seis temas de color.</p></div>
           <div class="faq__item"><h3>¿Puedo traer mis datos de otra app?</h3><p>Sí. Arrastra el CSV de tu banco a la ventana, o en Ajustes importa desde Actual Budget o desde la app anterior de Finanzas hecha con SwiftData.</p></div>
           <div class="faq__item"><h3>¿Finanzas funciona en una Mac con Intel?</h3><p>No. El instalador de macOS es para Apple Silicon, M1 o posterior, con macOS 11 o superior.</p></div>

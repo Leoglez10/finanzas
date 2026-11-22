@@ -114,6 +114,21 @@
     btn($('.topbar'), 'Archivados').click(); await wait(1000);
     await ok(() => card('QA Mérida')?.querySelector('.chip.ok')?.textContent.includes('Logro'), () => `it shows as an achievement: "${card('QA Mérida')?.querySelector('.chip')?.textContent}"`);
     btn($('.topbar'), 'Ver activos').click(); await wait(800);
+
+    // Tagging a movement with a goal's line item shows it as spent against that item.
+    location.hash = 'movimientos'; await wait(1000);
+    btn($('.topbar'), 'Gasto').click(); await wait(600);
+    const e = $('dialog[open]');
+    set(e.querySelector('input[inputmode="decimal"]'), '120');
+    set(e.querySelector('input[placeholder="¿Dónde?"]'), 'QA Taxi');
+    const goalSelect = [...e.querySelectorAll('select')].find(s => [...s.options].some(o => o.textContent.includes('Viaje') || o.value.startsWith('w:')));
+    await ok(() => !!goalSelect, () => 'the movement dialog offers goals');
+    const option = [...goalSelect.options].find(o => o.textContent.includes('QA Cancún'));
+    goalSelect.value = option.value; goalSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    e.querySelector('button[value="save"]').click(); await wait(1500);
+    await ok(() => [...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('QA Taxi') && r.textContent.includes('QA Cancún')), () => 'the ledger shows the goal tag');
+    location.hash = 'deseos'; await wait(1000);
+    await ok(() => card('QA Cancún')?.querySelector('.spent-total')?.textContent.includes('$120.00'), () => `the goal shows what was spent: "${card('QA Cancún')?.querySelector('.spent-total')?.textContent}"`);
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

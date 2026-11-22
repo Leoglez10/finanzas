@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 6);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 7);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -325,4 +325,47 @@ fn completing_fails_without_writing_anything() {
     restore_wish(&mut store, &bike).unwrap();
     let back = view(&mut store, bike.id).wish;
     assert_eq!((back.archived, back.achieved_date), (false, None));
+}
+
+fn spend(store: &Store, account: Id, amount: Cents) -> Id {
+    add_entry(store, NewEntry { date: today(), amount, account_id: account, payee: Some("Gasto".into()), category_id: None, notes: String::new(), cleared: true }).unwrap().id
+}
+
+#[test]
+fn movements_tagged_to_a_goal_compare_spent_with_planned_per_item() {
+    let (mut store, account, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, items: Some(vec![item("Hotel", 15_000), item("Comida", 5_000)]), ..draft(Some(category)) }).unwrap();
+    let (hotel, food) = { let v = view(&mut store, trip.id); (v.items[0].id, v.items[1].id) };
+    let night1 = spend(&store, account, -8_000);
+    let tacos = spend(&store, account, -1_200);
+    let taxi = spend(&store, account, -600);
+    tag_entry(&mut store, night1, Some(trip.id), Some(hotel)).unwrap();
+    tag_entry(&mut store, tacos, Some(trip.id), Some(food)).unwrap();
+    let row = tag_entry(&mut store, taxi, Some(trip.id), None).unwrap();
+    assert_eq!((row.wish_id, row.wish_item_id), (Some(trip.id), None));
+    let s = view(&mut store, trip.id).spending;
+    assert_eq!((s.total, s.other), (9_800, 600));
+    assert_eq!(s.items, [ItemSpend { item_id: hotel, spent: 8_000 }, ItemSpend { item_id: food, spent: 1_200 }]);
+    // Untagging and deleting a movement both take it out.
+    tag_entry(&mut store, taxi, None, None).unwrap();
+    delete_entry(&store, tacos).unwrap();
+    let s = view(&mut store, trip.id).spending;
+    assert_eq!((s.total, s.other, s.items.len()), (8_000, 0, 1));
+    assert_eq!(store.entry_row(night1).unwrap().unwrap().wish_item_id, Some(hotel));
+}
+
+#[test]
+fn tags_are_validated_and_completion_tags_its_movements() {
+    let (mut store, account, category) = seed();
+    let a = save_wish(&mut store, None, WishDraft { items: Some(vec![item("X", 100)]), ..draft(Some(category)) }).unwrap();
+    let b = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let a_item = view(&mut store, a.id).items[0].id;
+    let entry = spend(&store, account, -100);
+    assert!(matches!(tag_entry(&mut store, entry, Some(b.id), Some(a_item)), Err(ServiceError::NotFound)), "the item must belong to the goal");
+    assert!(matches!(tag_entry(&mut store, entry, None, Some(a_item)), Err(ServiceError::InvalidWish("Choose the goal of the line item"))));
+    assert!(matches!(tag_entry(&mut store, 9_999, Some(a.id), None), Err(ServiceError::NotFound)));
+    assert!(matches!(tag_entry(&mut store, entry, Some(9_999), None), Err(ServiceError::NotFound)));
+    let done = complete_wish(&mut store, a.id, account, today()).unwrap();
+    assert_eq!((done.entries[0].wish_id, done.entries[0].wish_item_id), (Some(a.id), Some(a_item)));
+    assert_eq!(view(&mut store, a.id).spending.total, 100);
 }

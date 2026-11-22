@@ -66,4 +66,20 @@ impl Store {
             Err(e) => Some(Err(e)),
         }).collect()
     }
+
+    /// Tags a movement with a goal and optional line item; `None` removes the tag.
+    pub(crate) fn tag_entry(&self, entry: Id, tag: Option<(Id, Option<Id>)>) -> Result<()> {
+        match tag {
+            Some((wish, item)) => self.conn.execute("INSERT INTO wish_entry(entry_id,wish_id,item_id) VALUES (?1,?2,?3) ON CONFLICT(entry_id) DO UPDATE SET wish_id=excluded.wish_id, item_id=excluded.item_id", params![entry, wish, item])?,
+            None => self.conn.execute("DELETE FROM wish_entry WHERE entry_id = ?1", params![entry])?,
+        };
+        Ok(())
+    }
+
+    /// (goal, line item, amount) of every tagged movement.
+    pub(crate) fn tagged_amounts(&self) -> Result<Vec<(Id, Option<Id>, i64)>> {
+        let mut stmt = self.conn.prepare("SELECT w.wish_id, w.item_id, e.amount FROM wish_entry w JOIN entry e ON e.id = w.entry_id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect()
+    }
 }

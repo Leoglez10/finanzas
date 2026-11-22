@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Kind, Plan } from "./goals";
 
 export interface AccountOverview { id: number; name: string; offBudget: boolean; closed: boolean; sortOrder: number; balance: number }
-export interface EntryRow { id: number; date: string; amount: number; notes: string; cleared: boolean; accountId: number | null; categoryId: number | null; payeeId: number | null; accountName: string | null; payeeName: string | null; categoryName: string | null }
+export interface EntryRow { id: number; date: string; amount: number; notes: string; cleared: boolean; accountId: number | null; categoryId: number | null; payeeId: number | null; accountName: string | null; payeeName: string | null; categoryName: string | null; wishId: number | null; wishItemId: number | null }
 export interface EntryInput { date: string; amount: number; accountId: number; payee: string; categoryId: number | null; notes: string }
 export interface Category { id: number; name: string; hidden: boolean }
 export interface CategoryGroup { id: number; name: string; isIncome: boolean; categories: Category[] }
@@ -22,7 +22,8 @@ export interface WishEvaluation { status: string; availableForWish: number | nul
 export interface WishItem { id: number; wishId: number; name: string; amount: number; paid: boolean }
 export interface WishItemDraft { id: number | null; name: string; amount: number; paid: boolean }
 export interface WishContribution { wishId: number; date: string; amount: number }
-export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null; items: WishItem[]; contributions: WishContribution[] }
+export interface WishSpending { total: number; other: number; items: { itemId: number; spent: number }[] }
+export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null; items: WishItem[]; contributions: WishContribution[]; spending: WishSpending }
 export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null; kind: Kind; targetDate: string | null; items: WishItemDraft[] | null }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
@@ -79,6 +80,8 @@ export const reserveWish = (id: number, amount: number) => invoke<Wish>("reserve
 export const setWishItemPaid = (id: number, paid: boolean) => invoke<Wish>("set_wish_item_paid", { id, paid });
 /** Records the goal's expense(s) on the account and archives it as an achievement; returns the new movements for undo. */
 export const completeWish = (id: number, accountId: number) => invoke<{ wish: Wish; entries: EntryRow[] }>("complete_wish", { id, accountId });
+/** Tags a movement with a goal and optional line item; `wishId: null` removes the tag. */
+export const tagEntry = (id: number, wishId: number | null, itemId: number | null) => invoke<EntryRow>("tag_entry", { id, wishId, itemId });
 export const archiveWish = (id: number) => invoke<Wish>("archive_wish", { id });
 export const restoreWish = (wish: Wish) => invoke<void>("restore_wish", { wish });
 export const today = () => invoke<string>("today");

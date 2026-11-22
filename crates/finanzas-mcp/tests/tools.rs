@@ -307,5 +307,6 @@ fn list_wishes_returns_the_contribution_log() {
     let wish = s.call("save_wish", json!({"name":"Bici", "price":300, "categoryId":format!("Category/p{}", s.food)}));
     s.call("reserve_wish", json!({"id":wish["id"], "amount":100}));
     s.call("reserve_wish", json!({"id":wish["id"], "amount":40}));
+    assert_eq!(s.call("list_wishes", json!({}))[0]["spending"], json!({"total":0.0,"other":0.0,"items":[]}));
     assert_eq!(s.call("list_wishes", json!({}))[0]["contributions"], json!([{"date":"2026-10-15","amount":100.0},{"date":"2026-10-15","amount":-60.0}]));
 }

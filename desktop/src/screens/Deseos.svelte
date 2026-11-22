@@ -111,9 +111,15 @@
         {#if v.items.length}
           <ul class="items" aria-label="Partidas de {w.name}">
             {#each v.items as it (it.id)}
-              <li><label><input type="checkbox" checked={it.paid} onchange={e => togglePaid(w, it, e.currentTarget.checked)} /><span class:done={it.paid}>{it.name}</span></label><b class="num">{money(it.amount)}</b></li>
+              {@const spent = v.spending.items.find(x => x.itemId === it.id)?.spent ?? 0}
+              <li><label><input type="checkbox" checked={it.paid} onchange={e => togglePaid(w, it, e.currentTarget.checked)} /><span class:done={it.paid}>{it.name}</span></label>
+                <span class="num">{#if spent}<span class:over={spent > it.amount} class="spent">gastado {money(spent)} de </span>{/if}<b>{money(it.amount)}</b></span></li>
             {/each}
           </ul>
+        {/if}
+        {#if v.spending.total}
+          <p class="spent-total"><span class="muted">Gastado (movimientos etiquetados)</span><b class="num" class:over={v.spending.total > w.price}>{money(v.spending.total)} de {money(w.price)}</b></p>
+          {#if v.spending.other}<p class="spent-total"><span class="muted">Sin partida</span><span class="num">{money(v.spending.other)}</span></p>{/if}
         {/if}
         {#if v.contributions.length}
           <details class="history">
@@ -161,5 +167,8 @@
   .history li { display: flex; justify-content: space-between; }
   .spark { display: block; width: 100%; height: 40px; margin-top: 6px; }
   .spark polyline { fill: none; stroke: var(--violet); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .spent { color: var(--muted); font-size: 12px; }
+  .over { color: var(--expense) !important; }
+  .spent-total { display: flex; justify-content: space-between; margin: 0; font-size: 12.5px; }
   .items .done { text-decoration: line-through; color: var(--muted); }
 </style>

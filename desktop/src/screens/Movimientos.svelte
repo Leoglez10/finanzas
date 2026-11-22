@@ -22,14 +22,15 @@
   let categoryFilter = $derived(Number(params.get("categoria")) || 0);
   let rows = $state<api.EntryRow[]>([]);
   let groups = $state<api.CategoryGroup[]>([]);
+  let goalNames = $state(new Map<number, string>());
   let editing = $state<{ id: number; field: "amount" | "category" } | null>(null);
   let error = $state("");
 
   $effect(() => {
     void app.version; const id = accountId;
     // ponytail: loads the whole ledger and filters here; page it in SQL when ledgers pass ~20k rows.
-    Promise.all([api.entries({ accountId: id || undefined }), api.categoriesGrouped()])
-      .then(([r, g]) => { rows = r.rows; groups = g; error = ""; }).catch(e => error = String(e));
+    Promise.all([api.entries({ accountId: id || undefined }), api.categoriesGrouped(), api.wishes(true)])
+      .then(([r, g, w]) => { rows = r.rows; groups = g; goalNames = new Map(w.map(v => [v.wish.id, v.wish.name])); error = ""; }).catch(e => error = String(e));
   });
 
   let account = $derived(app.accounts.find(a => a.id === accountId));
@@ -122,7 +123,7 @@
         <tr><th colspan={accountId ? 5 : 6} class="day" scope="rowgroup">{longDay(date)}<span class="num" class:pos={dayTotal(list) > 0}>{money(dayTotal(list), true)}</span></th></tr>
         {#each list as r (r.id)}
           <tr class="tx">
-            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b>{r.payeeName ?? "Sin comercio"}</b></div></td>
+            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b>{r.payeeName ?? "Sin comercio"}</b>{#if r.wishId}<span class="chip violet" title="Etiquetado con una meta"><Icon name="star" />{goalNames.get(r.wishId) ?? "Meta"}</span>{/if}</div></td>
             <td data-edit ondblclick={() => startEdit(r.id, "category")} title="Doble clic para cambiar">
               {#if editing?.id === r.id && editing?.field === "category"}
                 <select class="input inline" aria-label="Categoría de {r.payeeName ?? 'movimiento'}" use:focusOnMount

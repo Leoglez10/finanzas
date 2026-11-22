@@ -155,6 +155,7 @@ button.chip { cursor: pointer; }
 .chip.ok { background: var(--income-soft); color: var(--income); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .chip.bad { background: var(--expense-soft); color: var(--expense); }
+.chip.violet { background: var(--violet-soft); color: var(--violet); }
 .chip.brand { background: var(--brand-soft); color: var(--brand); }
 
 /* Cards */

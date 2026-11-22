@@ -14,6 +14,8 @@
   let accountId = $state(0), categoryId = $state<number | null>(null);
   let groups = $state<api.CategoryGroup[]>([]), payees = $state<string[]>([]);
   let error = $state(""), saving = $state(false);
+  // Optional goal tag: "" none, "w:ID" a goal, "i:ID" one of its line items.
+  let goals = $state<api.WishView[]>([]), tag = $state("");
   let categoryTouched = false;
 
   // Only the open flag triggers this; untrack keeps the 2 s data poll from resetting a half-typed form.
@@ -28,6 +30,8 @@
     accountId = row?.accountId ?? draft?.accountId ?? app.accounts.find(a => !a.closed)?.id ?? 0;
     categoryId = row?.categoryId ?? draft?.categoryId ?? null;
     api.categoriesGrouped().then(g => groups = g);
+    tag = row?.wishItemId ? `i:${row.wishItemId}` : row?.wishId ? `w:${row.wishId}` : "";
+    api.wishes().then(w => goals = w).catch(() => goals = []);
     if (!dialog.open) dialog.showModal();
   }
 
@@ -47,15 +51,20 @@
     if (!cents || cents < 0) { error = "Escribe un monto mayor a cero, por ejemplo 1,250.50"; return; }
     if (!accountId) { error = "Primero crea una cuenta"; return; }
     const input: api.EntryInput = { date, amount: kind === "gasto" ? -cents : cents, accountId, payee: payee.trim(), categoryId, notes: notes.trim() };
+    const [tagKind, tagId] = tag.split(":"), tagNum = Number(tagId);
+    const itemGoal = tagKind === "i" ? goals.find(g => g.items.some(i => i.id === tagNum))?.wish.id ?? null : null;
+    const wishId = tagKind === "w" ? tagNum : itemGoal, itemId = tagKind === "i" ? tagNum : null;
     saving = true;
     try {
       const row = entryDialog.row;
       if (row) {
         const before = api.inputOf(row);
         await api.updateEntry(row.id, input);
-        remember("Movimiento actualizado", () => api.updateEntry(row.id, before).then(refresh));
+        if (wishId !== row.wishId || itemId !== row.wishItemId) await api.tagEntry(row.id, wishId, itemId);
+        remember("Movimiento actualizado", () => api.updateEntry(row.id, before).then(() => api.tagEntry(row.id, row.wishId, row.wishItemId)).then(refresh));
       } else {
         const created = await api.addEntry(input);
+        if (wishId) await api.tagEntry(created.id, wishId, itemId);
         remember(`Agregado: ${input.payee || "Sin comercio"} ${money(input.amount, true)}`, () => api.deleteEntry(created.id).then(refresh));
       }
       dialog.close();
@@ -90,6 +99,17 @@
           </select></label>
       </div>
       <datalist id="payee-list">{#each payees as p (p)}<option value={p}></option>{/each}</datalist>
+      {#if goals.length}
+        <label class="field"><span>Meta <span class="opt">· opcional, para un viaje o un plan</span></span><select class="input" bind:value={tag}>
+          <option value="">Ninguna</option>
+          {#each goals as g (g.wish.id)}
+            <optgroup label={g.wish.name}>
+              <option value="w:{g.wish.id}">{g.wish.name} (sin partida)</option>
+              {#each g.items as it (it.id)}<option value="i:{it.id}">{g.wish.name} · {it.name}</option>{/each}
+            </optgroup>
+          {/each}
+        </select></label>
+      {/if}
       <label class="field"><span>Notas <span class="opt">· opcional</span></span><textarea class="input" bind:value={notes} placeholder="Algo para recordar"></textarea></label>
     </div>
     <div class="dlg-f"><span class="left"><kbd>esc</kbd> para cerrar</span>

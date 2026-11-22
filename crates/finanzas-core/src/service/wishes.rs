@@ -69,7 +69,39 @@ pub struct WishEvaluation {
 pub struct WishContribution { pub wish_id: Id, pub date: NaiveDate, pub amount: Cents }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan>, pub items: Vec<WishItem>, pub contributions: Vec<WishContribution> }
+pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan>, pub items: Vec<WishItem>, pub contributions: Vec<WishContribution>, pub spending: WishSpending }
+/// What the movements tagged with a goal add up to (expenses count positive): per line item, and `other` for
+/// movements tagged with the goal but no item.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishSpending { pub total: Cents, pub other: Cents, pub items: Vec<ItemSpend> }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemSpend { pub item_id: Id, pub spent: Cents }
+fn spending(tags: &[(Id, Option<Id>, i64)], wish: &Wish, items: &[WishItem]) -> WishSpending {
+    let mine: Vec<_> = tags.iter().filter(|(w, _, _)| *w == wish.id).collect();
+    let spent = |filter: &dyn Fn(Option<Id>) -> bool| -mine.iter().filter(|(_, i, _)| filter(*i)).map(|(_, _, a)| a).sum::<i64>();
+    let items = items.iter().filter(|i| i.wish_id == wish.id).map(|i| ItemSpend { item_id: i.id, spent: spent(&|t| t == Some(i.id)) }).filter(|s| s.spent != 0).collect();
+    WishSpending { total: spent(&|_| true), other: spent(&|t| t.is_none()), items }
+}
+
+/// Tags a movement with a goal and, optionally, one of its line items; `wish: None` removes the tag.
+pub fn tag_entry(store: &mut Store, entry: Id, wish: Option<Id>, item: Option<Id>) -> Result<EntryRow> {
+    store.transaction(|store| {
+        store.entry_row(entry)?.ok_or(ServiceError::NotFound)?;
+        let tag = match (wish, item) {
+            (None, Some(_)) => return Err(invalid("Choose the goal of the line item")),
+            (None, None) => None,
+            (Some(w), item) => {
+                find(store, w)?;
+                if let Some(i) = item { if !store.wish_items()?.iter().any(|x| x.id == i && x.wish_id == w) { return Err(ServiceError::NotFound); } }
+                Some((w, item))
+            }
+        };
+        store.tag_entry(entry, tag)?;
+        store.entry_row(entry)?.ok_or(ServiceError::NotFound)
+    })
+}
 
 fn invalid(message: &'static str) -> ServiceError { ServiceError::InvalidWish(message) }
 fn find(store: &Store, id: Id) -> Result<Wish> {
@@ -185,10 +217,15 @@ pub fn complete_wish(store: &mut Store, id: Id, account: Id, today: NaiveDate) -
         if wish.archived { return Err(invalid("Archived wishes cannot be edited")); }
         let items: Vec<_> = store.wish_items()?.into_iter().filter(|i| i.wish_id == id).collect();
         let note = |part: Option<&str>| match part { Some(p) => format!("{} · {p}", wish.name), None if wish.kind == WishKind::Compra => "Compra de un deseo".into(), None => "Meta cumplida".into() };
-        let charges: Vec<(Cents, String)> = if items.is_empty() { vec![(wish.price, note(None))] }
-            else { items.iter().filter(|i| !i.paid).map(|i| (i.amount, note(Some(&i.name)))).collect() };
-        let entries = charges.into_iter().map(|(amount, notes)| super::add_entry(store, super::NewEntry { date: today, amount: -amount, account_id: account,
-            payee: Some(wish.name.clone()), category_id: wish.category_id, notes, cleared: true })).collect::<Result<Vec<_>>>()?;
+        let charges: Vec<(Cents, String, Option<Id>)> = if items.is_empty() { vec![(wish.price, note(None), None)] }
+            else { items.iter().filter(|i| !i.paid).map(|i| (i.amount, note(Some(&i.name)), Some(i.id))).collect() };
+        // Each movement is tagged with the goal (and its item) so the goal's spending shows it.
+        let entries = charges.into_iter().map(|(amount, notes, item)| {
+            let row = super::add_entry(store, super::NewEntry { date: today, amount: -amount, account_id: account,
+                payee: Some(wish.name.clone()), category_id: wish.category_id, notes, cleared: true })?;
+            store.tag_entry(row.id, Some((id, item)))?;
+            store.entry_row(row.id)?.ok_or(ServiceError::NotFound)
+        }).collect::<Result<Vec<_>>>()?;
         wish.archived = true;
         wish.reserved = 0;
         wish.achieved_date = Some(today);
@@ -258,12 +295,14 @@ pub fn list_wishes(store: &mut Store, today: NaiveDate, include_archived: bool) 
     store.transaction(|store| {
         let items = store.wish_items()?;
         let contributions = store.wish_contributions()?;
+        let tags = store.tagged_amounts()?;
         store.wishes()?.into_iter().filter(|w| include_archived || !w.archived).map(|wish| {
             let evaluation = evaluate(store, &wish, today)?;
             let plan = plan(&wish, today);
-            let items = items.iter().filter(|i| i.wish_id == wish.id).cloned().collect();
+            let items: Vec<WishItem> = items.iter().filter(|i| i.wish_id == wish.id).cloned().collect();
             let contributions = contributions.iter().filter(|c| c.wish_id == wish.id).cloned().collect();
-            Ok(WishView { wish, evaluation, plan, items, contributions })
+            let spending = spending(&tags, &wish, &items);
+            Ok(WishView { wish, evaluation, plan, items, contributions, spending })
         }).collect()
     })
 }

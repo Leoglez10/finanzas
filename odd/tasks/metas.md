@@ -17,7 +17,7 @@ Branch: feat/period-filters-dashboard (continues) · Delivery: ask-on-risk · Ru
 - T2 [S3] inline — line items table (schema v4), total = sum, paid flag; paid counts as progress and releases what it covers. Risk: item 1. Status: done (core 95+15, MCP 27, QA deseos.js 25/25).
 - T3 [S4] inline — contribution log (schema v5) on reserve and on paid-item releases, history chart on cards. Risk: item 1. Status: done (core 95+16, MCP 28, front 31, QA deseos.js 27/27).
 - T4 [S5] inline — complete_wish in core (schema v6 achieved_date): one expense per unpaid item or one for the price, archived as achievement; UI Cumplida + Logro chip, undo. Risk: item 1. Status: done (core 95+19, MCP 28, QA deseos.js 30/30).
-- T5 [S6] inline — tag movements with a goal; spent vs planned per item. Status: pending.
+- T5 [S6] inline — wish_entry table (schema v7) tags movements with a goal/item; spent vs planned per item on cards, goal chip in ledger, goal selector in movement dialog; completion tags its movements. Risk: item 1. Status: done (core 95+21, MCP 28, QA deseos.js 33/33).
 
 ## Log
 

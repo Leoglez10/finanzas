@@ -115,6 +115,10 @@ fn save_wish(state: State<'_, AppState>, id: Option<i64>, draft: service::WishDr
 }
 /// `amount` is the new total set aside, not a delta (0 releases everything).
 #[tauri::command(async)]
+fn tag_entry(state: State<'_, AppState>, id: i64, wish_id: Option<i64>, item_id: Option<i64>) -> Result<finanzas_core::store::EntryRow, String> {
+    let row = state.with_store(|s| service::tag_entry(s, id, wish_id, item_id).map_err(|e| e.to_string()))?; state.changed(); Ok(row)
+}
+#[tauri::command(async)]
 fn complete_wish(state: State<'_, AppState>, id: i64, account_id: i64) -> Result<service::CompletedWish, String> {
     let done = state.with_store(|s| service::complete_wish(s, id, account_id, Local::now().date_naive()).map_err(|e| e.to_string()))?; state.changed(); Ok(done)
 }
@@ -260,7 +264,7 @@ pub fn run() {
             #[cfg(debug_assertions)]
             if _payload.event() == tauri::webview::PageLoadEvent::Finished && _webview.label() == "main" && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
         })
-        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, save_wish, reserve_wish, set_wish_item_paid, complete_wish, archive_wish, restore_wish, today, parse_amount, qa_log, qa_sleep,
+        .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, save_wish, reserve_wish, set_wish_item_paid, complete_wish, tag_entry, archive_wish, restore_wish, today, parse_amount, qa_log, qa_sleep,
             features::budget, features::assign_budget, features::create_account, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, prefs::get_settings, prefs::update_settings, prefs::profiles, prefs::switch_profile, prefs::create_profile, prefs::rename_profile, prefs::delete_profile, prefs::test_notification, prefs::agents, prefs::database_path, features::import_availability, features::import_data, features::read_csv, features::pick_csv, features::import_entries, tray::refresh_tray, menu::show_quick, menu::hide_quick])
         .build(tauri::generate_context!()).expect("error al iniciar la aplicación")
         .run(|app, event| {

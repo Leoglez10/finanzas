@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     schedule("Nómina", 320_000, soon(12), false, account, salary, "Empresa SA")?;
 
     for (name, price, reserve, category) in [("PlayStation 5", 50_000, 0, categories[3]), ("Audífonos inalámbricos", 15_000, 15_000, categories[2]), ("Silla ergonómica", 32_000, 12_000, categories[0])] {
-        let wish = service::save_wish(&mut store, None, service::WishDraft { name: name.into(), price, url: String::new(), notes: String::new(), category_id: Some(category) })?;
+        let wish = service::save_wish(&mut store, None, service::WishDraft { name: name.into(), price, url: String::new(), notes: String::new(), category_id: Some(category), kind: service::WishKind::Compra, target_date: None })?;
         if reserve > 0 { service::reserve_wish(&mut store, wish.id, reserve, today)?; }
     }
     println!("Base demo creada en {path}");

@@ -1,5 +1,6 @@
 // Typed wrappers over the Rust commands in src-tauri. Money is always integer cents.
 import { invoke } from "@tauri-apps/api/core";
+import type { Kind, Plan } from "./goals";
 
 export interface AccountOverview { id: number; name: string; offBudget: boolean; closed: boolean; sortOrder: number; balance: number }
 export interface EntryRow { id: number; date: string; amount: number; notes: string; cleared: boolean; accountId: number | null; categoryId: number | null; payeeId: number | null; accountName: string | null; payeeName: string | null; categoryName: string | null }
@@ -16,10 +17,10 @@ export interface Overview {
 }
 export interface EntriesResult { rows: EntryRow[]; total: number; sum: number }
 export interface UpcomingItem { scheduleId: number; name: string; date: string; amount: number; accountId: number | null; account: string | null; autoPost: boolean; overdue: boolean; projectedBalance: number | null }
-export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean }
+export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean; kind: Kind; targetDate: string | null }
 export interface WishEvaluation { status: string; availableForWish: number | null; budgetShortfall: number | null; reservationDeficit: number; cashBalance: number | null; upcomingOutflows: number; cashShortfall: number | null; reasons: string[] }
-export interface WishView { wish: Wish; evaluation: WishEvaluation }
-export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null }
+export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null }
+export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null; kind: Kind; targetDate: string | null }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";

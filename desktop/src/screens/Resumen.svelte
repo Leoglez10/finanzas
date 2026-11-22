@@ -9,6 +9,7 @@
   import MonthPicker from "../components/MonthPicker.svelte";
   import { WIDGETS, readLayout, placeAt, toggle, resize, type Slot } from "../lib/dashboard";
   import { flip } from "svelte/animate";
+  import { kindOf, planText } from "../lib/goals";
   import Topbar from "../components/Topbar.svelte";
 
   let month = $state(monthKey(app.today));
@@ -311,13 +312,14 @@
       </article>
     {:else if id === "deseos"}
       <article class="card">
-        <div class="card-h"><h2>Deseos</h2><button class="link" onclick={() => go("deseos")}>Ver todos</button></div>
+        <div class="card-h"><h2>Deseos y metas</h2><button class="link" onclick={() => go("deseos")}>Ver todos</button></div>
         <div class="list">
-          {#each data.wishes.slice(0, 5) as { wish } (wish.id)}
+          {#each data.wishes.slice(0, 5) as { wish, plan } (wish.id)}
             {@const share = wish.price > 0 ? Math.min(100, wish.reserved / wish.price * 100) : 0}
             <div class="row" style="display:grid;gap:6px">
-              <div style="display:flex;justify-content:space-between;gap:8px"><b>{wish.name}</b><span class="muted num">{money(wish.reserved)} de {money(wish.price)}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px"><b style="display:inline-flex;align-items:center;gap:6px"><Icon name={kindOf(wish.kind).icon} />{wish.name}</b><span class="muted num">{money(wish.reserved)} de {money(wish.price)}</span></div>
               <div class="bar" role="img" aria-label="{wish.name}: {share.toFixed(0)}% apartado"><span style="width:{share}%;--c:var(--violet)"></span></div>
+              {#if plan}<p class="meta" style="margin:0" class:neg={plan.overdue}>{planText(plan)}</p>{/if}
             </div>
           {:else}<p class="muted">Sin deseos guardados.</p>{/each}
         </div>

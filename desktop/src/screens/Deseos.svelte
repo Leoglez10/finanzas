@@ -6,6 +6,7 @@
   import { isoDay, money } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember, toast } from "../lib/undo.svelte";
+  import { kindOf, planText } from "../lib/goals";
   import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
   import Money from "../components/Money.svelte";
@@ -53,37 +54,38 @@
   }
   const archive = (w: api.Wish) => act(`Archivado: ${w.name}`, async () => { await api.archiveWish(w.id); return () => api.restoreWish(w); });
   // Buying records the expense and archives the wish; undo removes both changes.
-  const buy = (w: api.Wish) => act(`Comprado: ${w.name} ${money(-w.price)}`, async () => {
+  const buy = (w: api.Wish) => act(`${kindOf(w.kind).done}: ${w.name} ${money(-w.price)}`, async () => {
     const account = app.accounts.find(a => !a.closed && !a.offBudget) ?? app.accounts.find(a => !a.closed);
     if (!account) throw new Error("Primero crea una cuenta");
-    const entry = await api.addEntry({ date: isoDay(app.today), amount: -w.price, accountId: account.id, payee: w.name, categoryId: w.categoryId, notes: "Compra de un deseo" });
+    const entry = await api.addEntry({ date: isoDay(app.today), amount: -w.price, accountId: account.id, payee: w.name, categoryId: w.categoryId, notes: w.kind === "compra" ? "Compra de un deseo" : `Meta cumplida (${kindOf(w.kind).label.toLowerCase()})` });
     await api.archiveWish(w.id);
     return async () => { await api.deleteEntry(entry.id); await api.restoreWish(w); };
   });
 </script>
 
-<Topbar title="Deseos" sub="Aparta dinero sin registrar un gasto">
+<Topbar title="Deseos y metas" sub="Aparta dinero para compras, viajes y más, sin registrar un gasto">
   {#snippet actions()}
     <button class="btn" aria-pressed={showArchived} onclick={() => showArchived = !showArchived}><Icon name="archive" />{showArchived ? "Ver activos" : "Archivados"}</button>
-    <button class="btn primary" onclick={() => openWish()}><Icon name="plus" />Nuevo deseo</button>
+    <button class="btn primary" onclick={() => openWish()}><Icon name="plus" />Nueva meta</button>
   {/snippet}
 </Topbar>
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 {#if !showArchived}
   <section class="kpis">
-    <Kpi icon="gift" tone="violet" label="Total de deseos" cents={active.reduce((s, v) => s + v.wish.price, 0)} note="{active.length} deseo{active.length === 1 ? '' : 's'}" />
+    <Kpi icon="gift" tone="violet" label="Total de metas" cents={active.reduce((s, v) => s + v.wish.price, 0)} note="{active.length} meta{active.length === 1 ? '' : 's'}" />
     <Kpi icon="wallet" label="Ya apartado" cents={active.reduce((s, v) => s + v.wish.reserved, 0)} />
-    <Kpi icon="check" tone="ok" label="Listos para comprar" value={String(active.filter(v => v.wish.reserved >= v.wish.price).length)} />
+    <Kpi icon="cal" label="Aparta este mes" cents={active.reduce((s, v) => s + (v.plan && !v.plan.overdue ? v.plan.monthly : 0), 0)} note="Según las fechas de tus metas" />
+    <Kpi icon="check" tone="ok" label="Listas" value={String(active.filter(v => v.wish.reserved >= v.wish.price).length)} />
   </section>
 {/if}
 
 <section class="wishes">
   {#each views as v (v.wish.id)}
-    {@const w = v.wish}{@const pct = Math.min(100, w.reserved / w.price * 100)}{@const [tone, text] = verdict(v)}
+    {@const w = v.wish}{@const k = kindOf(w.kind)}{@const pct = Math.min(100, w.reserved / w.price * 100)}{@const [tone, text] = verdict(v)}
     <article class="card wish">
-      <div class="wish-top"><div class="ic violet"><Icon name="gift" /></div>
-        <div style="flex:1;min-width:0"><h3>{w.name}</h3><p class="muted" style="font-size:13px">{categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
+      <div class="wish-top"><div class="ic violet" title={k.label}><Icon name={k.icon} /></div>
+        <div style="flex:1;min-width:0"><h3>{w.name}</h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
       <Money cents={w.price} class="price" />
       {#if w.archived}
         <span class="chip">Archivado</span>
@@ -92,6 +94,7 @@
           <div class="bar" style="--c:var(--violet)"><span style="width:{pct}%"></span></div>
           <div style="display:flex;justify-content:space-between;font-size:12.5px"><span class="muted">Apartado {money(w.reserved)} de {money(w.price)}</span><b class="num">{pct.toFixed(0)}%</b></div>
         </div>
+        {#if v.plan}<p class="plan" class:late={v.plan.overdue}><Icon name={v.plan.overdue ? "alert" : "cal"} />{planText(v.plan)}</p>{/if}
         <div><span class="chip {tone}">{text}</span></div>
         {#if reserving === w.id}
           <form class="reserve" onsubmit={e => { e.preventDefault(); addReserve(w, (e.currentTarget.elements.namedItem("amount") as HTMLInputElement).value); }}>
@@ -101,10 +104,10 @@
           </form>
         {:else}
           <div class="foot">
-            {#if w.reserved >= w.price}<button class="btn sm primary" onclick={() => buy(w)}><Icon name="check" />Lo compré</button>
+            {#if w.reserved >= w.price}<button class="btn sm primary" onclick={() => buy(w)}><Icon name="check" />{k.done}</button>
             {:else}<button class="btn sm primary" onclick={() => reserving = w.id}>Apartar más</button>{/if}
             {#if w.reserved}<button class="btn sm" onclick={() => setReserved(w, 0, `Liberaste ${money(w.reserved)} de ${w.name}`)}>Liberar</button>{/if}
-            {#if w.url}<button class="btn sm ghost" onclick={() => openUrl(w.url).catch(e => toast(String(e)))}>Ver producto</button>{/if}
+            {#if w.url}<button class="btn sm ghost" onclick={() => openUrl(w.url).catch(e => toast(String(e)))}>{w.kind === "compra" ? "Ver producto" : "Ver enlace"}</button>{/if}
             <span class="spacer"></span>
             <button class="btn icon sm ghost" aria-label="Editar {w.name}" onclick={() => openWish(w)}><Icon name="edit" /></button>
             <button class="btn icon sm ghost" aria-label="Archivar {w.name}" onclick={() => archive(w)}><Icon name="archive" /></button>
@@ -114,6 +117,11 @@
     </article>
   {/each}
   {#if !showArchived}
-    <button class="card empty-add" onclick={() => openWish()}><Icon name="plus" /><b>Agregar un deseo</b><span style="font-size:13px">Guarda algo que quieras comprar</span></button>
-  {:else if !views.length}<p class="muted">No tienes deseos archivados.</p>{/if}
+    <button class="card empty-add" onclick={() => openWish()}><Icon name="plus" /><b>Agregar una meta</b><span style="font-size:13px">Una compra, un viaje, una experiencia o un fondo</span></button>
+  {:else if !views.length}<p class="muted">No tienes metas archivadas.</p>{/if}
 </section>
+
+<style>
+  .plan { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 550; color: var(--brand); }
+  .plan.late { color: var(--expense); }
+</style>

@@ -13,7 +13,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: "presupuesto", title: "Presupuesto", span: 3 },
   { id: "recientes", title: "Últimos movimientos", span: 3 },
   { id: "cuentas", title: "Saldo por cuenta", span: 3 },
-  { id: "deseos", title: "Deseos", span: 3 },
+  { id: "deseos", title: "Deseos y metas", span: 3 },
 ];
 
 const MIN = 2, MAX = 6;

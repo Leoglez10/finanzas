@@ -14,7 +14,7 @@ fn seed() -> (Store, Id, Id) {
     (store, account, category)
 }
 fn draft(category: Option<Id>) -> WishDraft {
-    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category }
+    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category, kind: WishKind::Compra, target_date: None }
 }
 #[test]
 fn wish_details_and_partial_reservations_do_not_double_allocate() {
@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 2);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 3);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -154,4 +154,56 @@ fn restore_wish_undoes_an_archive_including_its_reservation() {
     assert_eq!((views.len(), views[0].wish.reserved, views[0].wish.archived), (1, 20_000, false));
     let missing = Wish { id: wish.id + 99, ..before };
     assert!(matches!(restore_wish(&mut store, &missing), Err(ServiceError::NotFound)));
+}
+
+fn day(y: i32, m: u32, d: u32) -> NaiveDate { NaiveDate::from_ymd_opt(y, m, d).unwrap() }
+
+#[test]
+fn goal_kind_and_target_date_are_saved_and_listed() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { name: "Cancún".into(), kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    let plain = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let listed = list_wishes(&mut store, today(), false).unwrap();
+    let found = |id| listed.iter().find(|v| v.wish.id == id).unwrap();
+    assert_eq!((found(trip.id).wish.kind, found(trip.id).wish.target_date), (WishKind::Viaje, Some(day(2027, 6, 15))));
+    assert_eq!((found(plain.id).wish.kind, found(plain.id).wish.target_date), (WishKind::Compra, None));
+    assert_eq!(serde_json::to_value(&found(trip.id).wish).unwrap()["kind"], "viaje");
+}
+
+#[test]
+fn a_target_date_gives_the_monthly_amount_to_set_aside() {
+    let (mut store, _, category) = seed();
+    // From Nov 10 2026 to Jun 15 2027 there are 8 monthly set-asides: Nov 10, Dec 10, … Jun 10.
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    let plan = |store: &mut Store| list_wishes(store, today(), false).unwrap().into_iter().find(|v| v.wish.id == trip.id).unwrap().plan.unwrap();
+    let p = plan(&mut store);
+    assert_eq!((p.months_left, p.monthly, p.remaining, p.overdue), (8, 6_250, 50_000, false));
+    reserve_wish(&mut store, trip.id, 10_000, today()).unwrap();
+    assert_eq!((plan(&mut store).monthly, plan(&mut store).remaining), (5_000, 40_000));
+    // The amount rounds up so the goal is reached on time.
+    save_wish(&mut store, Some(trip.id), WishDraft { price: 50_001, target_date: Some(day(2027, 6, 15)), ..draft(Some(category)) }).unwrap();
+    assert_eq!(plan(&mut store).monthly, 5_001);
+}
+
+#[test]
+fn a_past_target_date_is_overdue_and_no_date_has_no_plan() {
+    let (mut store, _, category) = seed();
+    let late = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 10, 1)), ..draft(Some(category)) }).unwrap();
+    let open = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let views = list_wishes(&mut store, today(), false).unwrap();
+    let late = views.iter().find(|v| v.wish.id == late.id).unwrap().plan.as_ref().unwrap();
+    assert_eq!((late.overdue, late.months_left, late.monthly), (true, 0, 50_000));
+    assert!(views.iter().find(|v| v.wish.id == open.id).unwrap().plan.is_none());
+    // Same month as the target: one last set-aside covers the rest.
+    let soon = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 11, 30)), ..draft(Some(category)) }).unwrap();
+    let soon = list_wishes(&mut store, today(), false).unwrap().into_iter().find(|v| v.wish.id == soon.id).unwrap().plan.unwrap();
+    assert_eq!((soon.months_left, soon.monthly, soon.overdue), (1, 50_000, false));
+}
+
+#[test]
+fn archived_goals_have_no_plan() {
+    let (mut store, _, category) = seed();
+    let late = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 10, 1)), ..draft(Some(category)) }).unwrap();
+    archive_wish(&mut store, late.id).unwrap();
+    assert!(list_wishes(&mut store, today(), true).unwrap()[0].plan.is_none());
 }

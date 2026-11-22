@@ -260,3 +260,22 @@ fn wishes_public_tools_save_evaluate_reserve_edit_and_archive() {
         assert_eq!(tool.read_only, name == "list_wishes" || name == "evaluate_wish");
     }
 }
+
+#[test]
+fn wishes_carry_goal_kind_target_date_and_plan() {
+    let mut s = Seed::new();
+    let plain = s.call("save_wish", json!({"name":"Bici", "price":900}));
+    assert_eq!((plain["kind"].clone(), plain["targetDate"].clone()), (json!("compra"), Value::Null));
+    let trip = s.call("save_wish", json!({"name":"Cancún", "price":800, "kind":"viaje", "targetDate":"2027-01-15"}));
+    assert_eq!((trip["kind"].clone(), trip["targetDate"].clone()), (json!("viaje"), json!("2027-01-15")));
+    let listed = s.call("list_wishes", json!({}));
+    let view = listed.as_array().unwrap().iter().find(|v| v["wish"]["id"] == trip["id"]).unwrap();
+    // From Oct 15 to Jan 15: four monthly set-asides of $200.
+    assert_eq!(view["plan"], json!({"targetDate":"2027-01-15","remaining":800.0,"monthsLeft":4,"monthly":200.0,"overdue":false}));
+    assert_eq!(listed.as_array().unwrap().iter().find(|v| v["wish"]["id"] == plain["id"]).unwrap()["plan"], Value::Null);
+    for (args, message) in [(json!({"name":"X","price":1,"kind":"crucero"}), "kind: expected compra, viaje, experiencia or fondo"), (json!({"name":"X","price":1,"targetDate":"15/01/2027"}), "targetDate: expected YYYY-MM-DD")] {
+        assert_eq!(call(&mut s.store, "save_wish", &args, day(10, 15)).unwrap_err().0, message);
+    }
+    let spec = specs().into_iter().find(|t| t.name == "save_wish").unwrap();
+    assert_eq!(spec.input_schema["properties"]["kind"]["enum"], json!(["compra","viaje","experiencia","fondo"]));
+}

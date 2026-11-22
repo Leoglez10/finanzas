@@ -31,7 +31,7 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("list_schedules", "List scheduled payments with id, name, payee, account, amount, frequency, interval, next date, completed and auto-post flags.", json!({}), &[], true, false),
         spec("skip_schedule", "Skip the next occurrence of a scheduled payment once, or with `through` keep skipping every occurrence dated on or before that day (max 500 skips per call). Completed schedules cannot be skipped.", json!({"id":{"type":"string","description":"Schedule id (see list_schedules)"},"through":{"type":"string","description":"YYYY-MM-DD; skip all occurrences up to and including this date"}}), &["id"], false, false),
         spec("list_wishes", "List wishes and current-month affordability evaluations. Amounts are decimal currency units.", json!({"includeArchived":{"type":"boolean","description":"Include archived wishes (default false)"}}), &[], true, false),
-        spec("save_wish", "Create a wish or replace details when id is supplied. Changing category releases funds. Does not record a purchase.", json!({"id":{"type":"string"},"name":{"type":"string"},"price":{"type":"number","exclusiveMinimum":0},"url":{"type":"string","description":"HTTP(S) link; default empty"},"notes":{"type":"string"},"categoryId":{"type":["string","null"],"description":"Expense category; omitted/null clears it"}}), &["name","price"], false, false),
+        spec("save_wish", "Create a wish or replace details when id is supplied. Changing category releases funds. Does not record a purchase.", json!({"id":{"type":"string"},"name":{"type":"string"},"price":{"type":"number","exclusiveMinimum":0},"url":{"type":"string","description":"HTTP(S) link; default empty"},"notes":{"type":"string"},"categoryId":{"type":["string","null"],"description":"Expense category; omitted/null clears it"},"kind":{"type":"string","enum":["compra","viaje","experiencia","fondo"],"description":"Goal type; default compra"},"targetDate":{"type":["string","null"],"description":"YYYY-MM-DD the goal is for; omitted/null clears it"}}), &["name","price"], false, false),
         spec("reserve_wish", "Set absolute reserved amount, not a delta. Zero releases funds. Partial reservations allowed; increases require unreserved current-month category funds. Does not move money or create expenses.", json!({"id":{"type":"string"},"amount":{"type":"number","minimum":0}}), &["id","amount"], false, false),
         spec("archive_wish", "Archive a wish and release its reservation. Keeps history and does not create or delete transactions.", json!({"id":{"type":"string"}}), &["id"], false, false),
         spec("evaluate_wish", "Evaluate current-month budget and outgoing payments for 30 days including overdue ones. Reports budget/cash shortfalls and unknown data. No future income or off-budget/closed accounts; not a guarantee.", json!({"id":{"type":"string"}}), &["id"], true, false),
@@ -63,7 +63,18 @@ fn category(a: &Args<'_>, store: &Store) -> Result<Option<i64>, ToolError> {
 }
 fn wish_json(w: service::Wish) -> Value {
     json!({"id":id("Wish",w.id),"name":w.name,"price":dec(w.price),"url":w.url,"notes":w.notes,
-        "categoryId":oid("Category",w.category_id),"reserved":dec(w.reserved),"archived":w.archived})
+        "categoryId":oid("Category",w.category_id),"reserved":dec(w.reserved),"archived":w.archived,
+        "kind":w.kind.as_str(),"targetDate":w.target_date.map(|d| d.to_string())})
+}
+fn plan_json(p: service::WishPlan) -> Value {
+    json!({"targetDate":p.target_date.to_string(),"remaining":dec(p.remaining),"monthsLeft":p.months_left,"monthly":dec(p.monthly),"overdue":p.overdue})
+}
+fn kind(a: &Args) -> Result<service::WishKind, ToolError> {
+    match a.optional_string("kind")? {
+        None => Ok(service::WishKind::Compra),
+        Some(text) => ["compra","viaje","experiencia","fondo"].contains(&text).then(|| service::WishKind::parse(text))
+            .ok_or_else(|| ToolError("kind: expected compra, viaje, experiencia or fondo".into())),
+    }
 }
 fn evaluation_json(e: service::WishEvaluation) -> Value {
     json!({"status":e.status,"asOf":e.as_of.to_string(),"horizonDays":e.horizon_days,
@@ -76,11 +87,11 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
     let a = Args(args);
     Ok(match name {
         "list_wishes" => json!(service::list_wishes(store, today, a.bool("includeArchived")?.unwrap_or(false)).map_err(err)?.into_iter()
-            .map(|v| json!({"wish":wish_json(v.wish),"evaluation":evaluation_json(v.evaluation)})).collect::<Vec<_>>()),
+            .map(|v| json!({"wish":wish_json(v.wish),"evaluation":evaluation_json(v.evaluation),"plan":v.plan.map(plan_json)})).collect::<Vec<_>>()),
         "save_wish" => {
             let draft = service::WishDraft { name:a.required_string("name")?.into(), price:a.cents("price")?,
                 url:a.optional_string("url")?.unwrap_or("").into(), notes:a.optional_string("notes")?.unwrap_or("").into(),
-                category_id:category(&a,store)? };
+                category_id:category(&a,store)?, kind:kind(&a)?, target_date:a.optional_date("targetDate")? };
             wish_json(service::save_wish(store,a.id("id","Wish")?,draft).map_err(err)?)
         }
         "reserve_wish" => {

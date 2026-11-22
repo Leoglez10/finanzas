@@ -3,16 +3,43 @@ use crate::{store::Store, Cents, Id, domain::month};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+/// What a goal is for. Stored as its lowercase Spanish name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WishKind { #[default] Compra, Viaje, Experiencia, Fondo }
+impl WishKind {
+    pub fn as_str(self) -> &'static str { match self { Self::Compra => "compra", Self::Viaje => "viaje", Self::Experiencia => "experiencia", Self::Fondo => "fondo" } }
+    /// Unknown text falls back to a purchase; the column's CHECK keeps it from happening.
+    pub fn parse(s: &str) -> Self { match s { "viaje" => Self::Viaje, "experiencia" => Self::Experiencia, "fondo" => Self::Fondo, _ => Self::Compra } }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WishDraft {
     pub name: String, pub price: Cents, pub url: String, pub notes: String, pub category_id: Option<Id>,
+    #[serde(default)] pub kind: WishKind, #[serde(default)] pub target_date: Option<NaiveDate>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Wish {
     pub id: Id, pub name: String, pub price: Cents, pub url: String, pub notes: String,
     pub category_id: Option<Id>, pub reserved: Cents, pub archived: bool,
+    #[serde(default)] pub kind: WishKind, #[serde(default)] pub target_date: Option<NaiveDate>,
+}
+/// How to reach a goal with a target date: set aside `monthly` on each of `months_left` monthly dates
+/// (today's day of the month, up to the target). Overdue goals ask for everything now; archived goals have no plan.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishPlan { pub target_date: NaiveDate, pub remaining: Cents, pub months_left: i64, pub monthly: Cents, pub overdue: bool }
+pub fn plan(wish: &Wish, today: NaiveDate) -> Option<WishPlan> {
+    use chrono::Datelike;
+    if wish.archived { return None; }
+    let target = wish.target_date?;
+    let remaining = (wish.price - wish.reserved).max(0);
+    let overdue = target < today && remaining > 0;
+    let months = (target.year() - today.year()) as i64 * 12 + target.month() as i64 - today.month() as i64;
+    let months_left = if target < today { 0 } else { months - i64::from(target.day() < today.day()) + 1 };
+    let monthly = if months_left == 0 { remaining } else { (remaining + months_left - 1) / months_left };
+    Some(WishPlan { target_date: target, remaining, months_left, monthly, overdue })
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +52,7 @@ pub struct WishEvaluation {
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation }
+pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan> }
 
 fn invalid(message: &'static str) -> ServiceError { ServiceError::InvalidWish(message) }
 fn find(store: &Store, id: Id) -> Result<Wish> {
@@ -59,7 +86,8 @@ pub fn save_wish(store: &mut Store, id: Option<Id>, draft: WishDraft) -> Result<
         let reserved = old.as_ref().filter(|w| w.category_id == draft.category_id).map_or(0, |w| w.reserved);
         if reserved > draft.price { return Err(invalid("Release reserved funds before reducing the price")); }
         let mut wish = Wish { id: id.unwrap_or(0), name: draft.name.trim().into(), price: draft.price,
-            url: draft.url.trim().into(), notes: draft.notes, category_id: draft.category_id, reserved, archived: false };
+            url: draft.url.trim().into(), notes: draft.notes, category_id: draft.category_id, reserved, archived: false,
+            kind: draft.kind, target_date: draft.target_date };
         wish.id = store.put_wish(&wish)?;
         Ok(wish)
     })
@@ -150,5 +178,5 @@ pub fn evaluate_wish(store: &mut Store, id: Id, today: NaiveDate) -> Result<Wish
 }
 pub fn list_wishes(store: &mut Store, today: NaiveDate, include_archived: bool) -> Result<Vec<WishView>> {
     store.transaction(|store| store.wishes()?.into_iter().filter(|w| include_archived || !w.archived)
-        .map(|wish| { let evaluation = evaluate(store, &wish, today)?; Ok(WishView { wish, evaluation }) }).collect())
+        .map(|wish| { let evaluation = evaluate(store, &wish, today)?; let plan = plan(&wish, today); Ok(WishView { wish, evaluation, plan }) }).collect())
 }

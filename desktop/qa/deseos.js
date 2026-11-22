@@ -1,4 +1,4 @@
-// Deseos: reserve/release with undo, Spanish core errors, buy + undo, two-step editor ("11,000"), archive + undo.
+// Deseos: reserve/release with undo, Spanish core errors, buy + undo, two-step editor ("11,000"), archive + undo, trip goal with a date.
 (async () => {
   const wait = ms => window.__TAURI_INTERNALS__.invoke('qa_sleep', { ms }); // webview timers stop when the window is covered
   const log = document.createElement('pre');
@@ -43,7 +43,7 @@
     await ok(() => ![...document.querySelectorAll('tr.tx')].some(r => r.textContent.includes('Audífonos')), () => 'and removes the expense');
     location.hash = 'deseos'; await wait(1000);
 
-    btn($('.topbar'), 'Nuevo deseo').click(); await wait(500);
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
     const d = $('dialog[open]');
     set(d.querySelector('input[placeholder="PlayStation 5"]'), 'QA Bici');
     set(d.querySelector('input[placeholder="11,000.00"]'), '1,2');
@@ -62,6 +62,22 @@
     btn($('.topbar'), 'Ver activos').click(); await wait(800);
     await undo();
     await ok(() => !!card('QA Bici'), () => 'undo restores the archived wish');
+
+    // A trip with a date ~6 months out: the card shows its type and the monthly amount to set aside.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const t = $('dialog[open]');
+    btn(t, 'Viaje').click(); await wait(200);
+    await ok(() => !!t.querySelector('input[placeholder="Viaje a Cancún"]'), () => 'choosing Viaje changes the example name');
+    set(t.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Cancún');
+    set(t.querySelector('input[placeholder="25,000.00"]'), '8,400');
+    const now = new Date(), target = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+    const iso = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-01`;
+    set(t.querySelector('input[type="date"]'), iso);
+    t.querySelector('button[value="next"]').click(); await wait(300);
+    await ok(() => t.querySelector('.review')?.textContent.includes('Viaje'), () => 'the review names the type');
+    t.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Cancún')?.textContent.includes('Viaje') && /Aparta \$[\d,.]+ al mes · \d+ meses/.test(card('QA Cancún')?.querySelector('.plan')?.textContent ?? ''),
+      () => `the trip card shows its plan: "${card('QA Cancún')?.querySelector('.plan')?.textContent}"`);
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

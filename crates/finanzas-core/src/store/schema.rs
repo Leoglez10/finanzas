@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 2;
+pub(super) const CURRENT_VERSION: i64 = 3;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -38,6 +38,16 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))
             );
             CREATE INDEX IF NOT EXISTS wish_category_idx ON wish(category_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 2)?;
+        tx.commit()?;
+    }
+    if version < 3 {
+        // Goals: a wish can be a trip, an experience or a savings fund, with an optional target date (YYYY-MM-DD).
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "ALTER TABLE wish ADD COLUMN kind TEXT NOT NULL DEFAULT 'compra' CHECK(kind IN ('compra','viaje','experiencia','fondo'));
+             ALTER TABLE wish ADD COLUMN target_date TEXT;"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

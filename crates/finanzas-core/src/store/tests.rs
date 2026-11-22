@@ -357,3 +357,29 @@ fn profiles_create_list_rename_and_delete() {
     assert_eq!(Store::profiles_beside(&home), ["personal", "otro"]);
     assert!(home.exists(), "personal is never touched");
 }
+
+#[test]
+fn version_2_wishes_become_purchases_without_a_date() {
+    let path = unique_db_path("wish-v2");
+    let mut conn = rusqlite::Connection::open(&path).unwrap();
+    super::schema::migrate(&mut conn).unwrap();
+    // Rebuild the version-2 wish table and mark the file as version 2.
+    conn.execute_batch("DROP TABLE wish;
+        CREATE TABLE wish (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL CHECK(price > 0), url TEXT NOT NULL, notes TEXT NOT NULL,
+            category_id INTEGER REFERENCES category(id) ON DELETE SET NULL, reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0 AND reserved <= price),
+            archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)));
+        INSERT INTO wish(name, price, url, notes) VALUES ('Bici', 900000, '', 'roja');
+        INSERT INTO wish(name, price, url, notes, reserved, archived) VALUES ('Tele', 1000, 'u', 'n', 400, 0), ('Viejo', 500, '', '', 0, 1);
+        PRAGMA user_version = 2;").unwrap();
+    drop(conn);
+    let store = Store::open(&path).unwrap();
+    let wishes = store.wishes().unwrap();
+    assert_eq!((wishes[0].name.as_str(), wishes[0].price, wishes[0].notes.as_str()), ("Bici", 900_000, "roja"));
+    assert!(wishes.iter().all(|w| w.kind == crate::service::WishKind::Compra && w.target_date.is_none()));
+    assert_eq!((wishes[1].reserved, wishes[1].archived, wishes[2].archived), (400, false, true));
+    let version: i64 = store.conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 3);
+    assert!(store.conn.execute("UPDATE wish SET kind = 'otro'", []).is_err(), "kind is limited to the four types");
+    drop(store);
+    assert_eq!(Store::open(&path).unwrap().wishes().unwrap().len(), 3, "reopening is idempotent");
+}

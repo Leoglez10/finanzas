@@ -30,6 +30,7 @@ Everything stays on your computer: no account, cloud or telemetry.
 - [Limitations](#limitations)
 - [Development](#development)
 - [Releasing](#releasing)
+- [Feedback Worker](#feedback-worker)
 - [Legacy Swift app](#legacy-swift-app)
 
 ## Quick start
@@ -281,6 +282,19 @@ Update signatures need the repository secrets `TAURI_SIGNING_PRIVATE_KEY` (the k
 `desktop/src-tauri/tauri.conf.json`; losing the private key means existing installs can no longer update.
 `bash scripts/build.sh` makes the same bundles locally. The website in `site/` is published by `pages.yml`
 whenever `site/` changes on `main`.
+
+## Feedback Worker
+
+**Ajustes → Fallas y mejoras** sends a bug report or idea to `worker/feedback`, a Cloudflare Worker that opens a GitHub issue labeled `bug` or `enhancement` plus `desde-la-app`. It sends only the typed text, the app version and the OS, and allows 5 reports per minute per IP. Security issues go through [SECURITY.md](SECURITY.md), never this form.
+
+```bash
+cd worker/feedback
+npm test                                  # validation rules
+npx wrangler@4 secret put GITHUB_TOKEN    # fine-grained token: Issues read/write on this repo only
+npx wrangler@4 deploy
+```
+
+When the token expires, reports fail with "No se pudo crear el reporte" until you upload a new one.
 
 ## Legacy Swift app
 

@@ -348,8 +348,10 @@
   .floating > :global(*) { height: 100%; }
   @keyframes lift { from { rotate: 0deg; scale: 1; } }
   @media (prefers-reduced-motion: reduce) { .floating { animation: none; rotate: none; scale: none; } }
-  .w-tools { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 4px; }
-  .w-tools .btn { background: var(--surface); box-shadow: var(--shadow); color: var(--text, inherit); }
+  /* The tools float on the widget's top edge, so they never cover its title or links. */
+  .w-tools { position: absolute; top: -17px; right: 14px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .w-tools .btn { border: 0; background: none; box-shadow: none; color: var(--text, inherit); }
+  .editing { row-gap: 34px; padding-top: 14px; }
   .handle { cursor: grab; touch-action: none; }
   .dash-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface); }
   .dash-tray .muted { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }

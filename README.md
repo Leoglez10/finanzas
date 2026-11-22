@@ -24,6 +24,7 @@ Everything stays on your computer: no account, cloud or telemetry.
 - [Using the app](#using-the-app)
 - [Install](#install)
 - [Data location and backups](#data-location-and-backups)
+- [Goals and wishes](#goals-and-wishes)
 - [MCP server](#mcp-server)
 - [Import](#import)
 - [Troubleshooting](#troubleshooting)
@@ -41,17 +42,21 @@ Everything stays on your computer: no account, cloud or telemetry.
 
 ## Features
 
-- **Resumen** — the selected month at a glance: how much is left after scheduled payments (Gastado / Por pagar / Libre),
-  payments due, income and expenses against last month, money set aside for wishes, spending by category and
-  income vs expenses for 6 or 12 months. Every chart column and category opens its movements.
+- **Resumen** — any month or range of months at a glance (this month, last month, 3 or 6 months, this or last year,
+  or a hand-picked range): how much is left after scheduled payments (Gastado / Por pagar / Libre), payments due,
+  income and expenses against the same span before, spending by category and income vs expenses.
+  **Personalizar** lets you drag widgets anywhere, resize them by column and hide them; the layout is saved per profile.
+  Widgets include budget, recent movements, balance per account and goals. Every chart column and category opens its movements.
   A **Primeros pasos** checklist guides a new database.
-- **Movimientos** — all accounts or one, grouped by day, with search, type and month/category filters.
-  Double-click an amount or a category to change it in place.
+- **Movimientos** — all accounts or one, grouped by day, with search, type, category and period filters
+  (this week, this month, last month, 3 months, this year or a day range picked on a calendar); inflow and outflow
+  follow the period. Double-click an amount or a category to change it in place.
 - **Presupuesto** — monthly envelope budget: type an amount, `+100` / `-50` to add or subtract, or math such as `550*2`;
   copy last month's amounts; each category shows its progress and whether it is on track, close or over.
 - **Próximos pagos** — overdue, this week and later payments with projected balances; register or skip each one,
   and schedule recurring payments that can register themselves.
-- **Deseos** — set money aside for things you want to buy without recording an expense (see [Wishes](#wishes-and-savings-goals)).
+- **Deseos y metas** — purchases, trips, experiences and savings funds with a target date, the monthly amount to
+  set aside, line items, history, achievements and movement tags (see [Goals](#goals-and-wishes)).
 - **Undo instead of "are you sure?"** — deleting, registering, importing or editing shows **Deshacer** (or press ⌘Z).
   Only deleting a whole profile asks first, because it removes its database.
 - **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
@@ -65,6 +70,10 @@ Everything stays on your computer: no account, cloud or telemetry.
   reminders, import, database location, MCP agents and updates.
 - A local **MCP server** for AI assistants (see [MCP server](#mcp-server)).
 
+<p align="center">
+  <img src="site/img/resumen-panel.webp" width="440" alt="Resumen in edit mode: widgets with move, resize and hide buttons">
+  <img src="site/img/metas-panel.webp" width="440" alt="A trip goal with line items, history and the monthly amount to set aside">
+</p>
 <p align="center">
   <img src="site/img/presupuesto-light.webp" width="440" alt="Presupuesto screen">
   <img src="site/img/proximos-dark.webp" width="440" alt="Próximos pagos screen in dark mode">
@@ -152,16 +161,19 @@ same folder, and settings are shared. Deleting a profile removes its file perman
 `finanzas.db-shm` if present). **Restore:** with the app closed, put the copies back in the same folder.
 **Ajustes › Datos** shows which database the app is using.
 
-## Wishes and savings goals
+## Goals and wishes
 
-Open **Deseos** to save a purchase with its target price, product link, details and expense category.
-Reserve part or all of the price from available category funds; set the reservation to zero to release it.
-The app explains budget fit, missing funds and recorded upcoming-payment constraints separately.
-Reservations do not create expenses or move account balances, and cannot claim the same category funds twice.
-Archive a wish to release funds and keep its history; or use **Lo compré** to record the expense and archive it in one step.
+Open **Deseos y metas** and choose **Nueva meta**: a purchase, a trip, an experience or a savings fund.
 
-See [reservation and evaluation rules](docs/wishes.md), including unknown results, the 30-day horizon,
-and the automatic version 1 → 2 database migration. Back up before upgrading; older binaries cannot open version 2.
+- **Target date** — the card says how much to set aside each month to get there on time, or that it is overdue.
+- **Line items** — split a trip into flight, hotel, food…; the price is their sum and each item can be marked as paid.
+- **Set money aside** from available category funds without recording an expense; every change is kept in a dated
+  history with a chart. Reservations never move account balances and cannot claim the same category funds twice.
+- **Cumplida** records the expense (one movement per unpaid item) and keeps the goal as an achievement.
+- **Tag movements** with a goal and item from the movement dialog to compare spent with planned.
+
+See [the rules](docs/wishes.md): evaluation, the 30-day horizon, the monthly amount and the database migrations
+(schema version 7). Back up before upgrading; an older app refuses a newer database without changing it.
 
 ## MCP server
 
@@ -191,8 +203,8 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 
 | Tool | Purpose |
 |---|---|
-| `list_wishes` | List active wishes and evaluations (`includeArchived` optional) |
-| `save_wish` | Create or replace details (`id` optional, `name` and `price` required) |
+| `list_wishes` | List active goals with evaluation, monthly plan, line items, history and tagged spending (`includeArchived` optional) |
+| `save_wish` | Create or replace details (`id` optional, `name` and `price` required; `kind`, `targetDate`, `items` optional) |
 | `reserve_wish` | Set an absolute reservation (`id`, `amount`; zero releases funds) |
 | `archive_wish` | Archive a wish and release funds (`id`) |
 | `evaluate_wish` | Explain budget fit and 30-day cash shortfalls (`id`) |

@@ -102,7 +102,8 @@
     await reserve('Silla ergonómica', '50');
     await ok(() => card('Silla ergonómica')?.querySelector('.history summary')?.textContent.includes('movimiento'), () => `the card gets a history: "${card('Silla ergonómica')?.querySelector('.history summary')?.textContent}"`);
     card('Silla ergonómica').querySelector('.history summary').click(); await wait(200);
-    await ok(() => card('Silla ergonómica').querySelector('.history li')?.textContent.includes('Apartaste $50.00') && !!card('Silla ergonómica').querySelector('.spark polyline'), () => 'it lists "Apartaste $50.00" and draws the chart');
+    // All changes are from today: the list shows them, the chart waits for a second day.
+    await ok(() => card('Silla ergonómica').querySelector('.history li')?.textContent.includes('Apartaste $50.00') && !card('Silla ergonómica').querySelector('.spark'), () => 'it lists "Apartaste $50.00"; no chart for a single day');
 
     // Completing the trip records one expense per item and keeps it as an achievement.
     btn(card('QA Mérida'), 'Cumplida').click(); await wait(1500);

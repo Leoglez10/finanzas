@@ -57,7 +57,7 @@
     await api.setWishItemPaid(it.id, paid);
     return () => api.setWishItemPaid(it.id, !paid).then(() => api.restoreWish(w));
   });
-  /** Step line of the set-aside total, as SVG points in a 100×40 box (full height = the goal's price). */
+  /** Step line of the set-aside total, as SVG points in a 100×40 box (full height = what is left to cover once paid items are out). */
   function spark(log: api.WishContribution[], price: number) {
     const pts = runningTotal(log), y = (t: number) => (40 - Math.max(0, Math.min(1, t / price)) * 36).toFixed(1);
     let last = "40", out = "0,40";
@@ -124,7 +124,7 @@
         {#if v.contributions.length}
           <details class="history">
             <summary>Historial · {v.contributions.length} movimiento{v.contributions.length === 1 ? "" : "s"}</summary>
-            <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Avance de lo apartado para {w.name}"><polyline points={spark(v.contributions, w.price)} /></svg>
+            {#if runningTotal(v.contributions).length > 1}<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Avance de lo apartado para {w.name}"><polyline points={spark(v.contributions, Math.max(1, w.price - w.paid))} /></svg>{/if}
             <ul>{#each v.contributions.slice(-5).reverse() as c, i (i)}<li><span class="muted">{shortDay(c.date)}</span><b class="num" class:pos={c.amount > 0}>{c.amount > 0 ? "Apartaste" : "Liberaste"} {money(Math.abs(c.amount))}</b></li>{/each}</ul>
           </details>
         {/if}

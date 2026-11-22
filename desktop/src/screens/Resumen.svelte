@@ -40,7 +40,9 @@
   const widgetTitle = (id: string) => WIDGETS.find(w => w.id === id)?.title ?? id;
   let dragId = $state<string | null>(null);
   // While dragging, a copy of the widget floats under the pointer; its slot in the grid stays as a dashed gap.
-  let ghost = $state<{ id: string; x: number; y: number; dx: number; dy: number; w: number; h: number } | null>(null);
+  // Its position is written straight to the element once per frame, outside Svelte's reactivity.
+  let ghost = $state<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
+  let floatEl = $state<HTMLDivElement>();
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const widgetOf = (e: PointerEvent) => (e.currentTarget as HTMLElement).closest(".w") as HTMLElement;
   /** Follows the pointer until it is released, then saves the layout. */
@@ -54,13 +56,14 @@
     e.preventDefault();
     const r = widgetOf(e).getBoundingClientRect();
     dragId = id;
-    ghost = { id, x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
+    const dx = e.clientX - r.left, dy = e.clientY - r.top;
+    ghost = { id, x: r.left, y: r.top, w: r.width, h: r.height };
     const grid = widgetOf(e).parentElement!;
     let settleUntil = 0, frame = 0;
     track(ev => {
-      if (ghost) { ghost.x = ev.clientX; ghost.y = ev.clientY; }
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        if (floatEl) floatEl.style.translate = `${ev.clientX - dx}px ${ev.clientY - dy}px`;
         // While the others slide (animate:flip) their boxes are mid-move; wait so the drop spot does not flicker.
         if (performance.now() < settleUntil) return;
         const next = dropSpot(grid, id, ev.clientX, ev.clientY);
@@ -90,10 +93,14 @@
     dragId = id;
     // Pointer moves fire ~120 times a second; the grid only changes when the width crosses a column.
     let span = layout.find(s => s.id === id)!.span;
+    let frame = 0;
     track(ev => {
-      const next = Math.max(2, Math.min(6, Math.round((ev.clientX - left + gap) / column)));
-      if (next !== span) { span = next; layout = resize(layout, id, next); }
-    }, () => { dragId = null; });
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = Math.max(2, Math.min(6, Math.round((ev.clientX - left + gap) / column)));
+        if (next !== span) { span = next; layout = resize(layout, id, next); }
+      });
+    }, () => { cancelAnimationFrame(frame); dragId = null; });
   }
 
   $effect(() => {
@@ -175,7 +182,7 @@
     {/each}
   </div>
   {#if ghost}
-    <div class="floating" aria-hidden="true" style="width:{ghost.w}px;height:{ghost.h}px;transform:translate({ghost.x - ghost.dx}px, {ghost.y - ghost.dy}px) var(--lift)">{@render widget(ghost.id)}</div>
+    <div bind:this={floatEl} class="floating" aria-hidden="true" style="width:{ghost.w}px;height:{ghost.h}px;translate:{ghost.x}px {ghost.y}px">{@render widget(ghost.id)}</div>
   {/if}
 {/if}
 
@@ -311,7 +318,8 @@
 
 <style>
   .dash { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px; grid-auto-flow: row dense; }
-  .w { position: relative; min-width: 0; }
+  .w { position: relative; min-width: 0; contain: layout style; }
+  .moving :global(*) { transition: none !important; }
   .w > :global(.card) { height: 100%; }
   @media (width < 1000px) { .w { grid-column: span 6 !important; } }
   .editing .w { outline: 2px dashed var(--border); outline-offset: 4px; border-radius: var(--radius); }
@@ -322,10 +330,10 @@
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 6px 0; cursor: ew-resize; touch-action: none; }
-  .floating { --lift: rotate(1.5deg) scale(1.03); position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; border-radius: var(--radius); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
+  .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--radius); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
   .floating > :global(*) { height: 100%; }
-  @keyframes lift { from { box-shadow: var(--shadow); } }
-  @media (prefers-reduced-motion: reduce) { .floating { animation: none; --lift: none; } }
+  @keyframes lift { from { rotate: 0deg; scale: 1; } }
+  @media (prefers-reduced-motion: reduce) { .floating { animation: none; rotate: none; scale: none; } }
   .w-tools { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 4px; }
   .w-tools .btn { background: var(--surface); box-shadow: var(--shadow); color: var(--text, inherit); }
   .handle { cursor: grab; touch-action: none; }

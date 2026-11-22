@@ -33,6 +33,10 @@
   let layout = $state<Slot[]>(readLayout(null));
   $effect(() => { layout = readLayout(localStorage.getItem(storeKey)); });
   const save = (next: Slot[]) => { layout = next; localStorage.setItem(storeKey, JSON.stringify(next)); };
+  /** Hiding sends a widget to the end, where edit mode shows it greyed out. */
+  const hide = (id: string) => save(placeAt(toggle(layout, id), id, null, true));
+  // Edit mode lists hidden widgets after the visible ones; otherwise they are not drawn.
+  let shown = $derived([...layout.filter(s => !s.hidden), ...(editing ? layout.filter(s => s.hidden) : [])]);
   const widgetTitle = (id: string) => WIDGETS.find(w => w.id === id)?.title ?? id;
   let dragId = $state<string | null>(null);
   // While dragging, a copy of the widget floats under the pointer; its slot in the grid stays as a dashed gap.
@@ -68,7 +72,7 @@
   /** The layout with `id` dropped next to the widget nearest the pointer: before it when the pointer is on its
    *  left (or above it), after it otherwise, and at the end when the pointer is below every widget. */
   function dropSpot(grid: HTMLElement, id: string, x: number, y: number): Slot[] {
-    const boxes = [...grid.querySelectorAll<HTMLElement>("[data-widget]")].filter(el => el.dataset.widget !== id).map(el => ({ id: el.dataset.widget!, r: el.getBoundingClientRect() }));
+    const boxes = [...grid.querySelectorAll<HTMLElement>("[data-widget]:not(.off)")].filter(el => el.dataset.widget !== id).map(el => ({ id: el.dataset.widget!, r: el.getBoundingClientRect() }));
     if (!boxes.length) return layout;
     if (y > Math.max(...boxes.map(b => b.r.bottom))) return placeAt(layout, id, null, true);
     const gapTo = (r: DOMRect) => Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
@@ -148,22 +152,21 @@
   {/if}
   {#if editing}
     <div class="dash-tray" role="region" aria-label="Personalizar resumen">
-      <span class="muted">Arrastra con <Icon name="list" /> para mover · <Icon name="x" /> para ocultar.</span>
-      {#each layout.filter(s => s.hidden) as s (s.id)}
-        <button class="chip brand" onclick={() => save(toggle(layout, s.id))}><Icon name="plus" />{widgetTitle(s.id)}</button>
-      {/each}
+      <span class="muted">Arrastra con <Icon name="list" /> para mover · <Icon name="x" /> para ocultar · los ocultos quedan abajo en gris.</span>
       <button class="btn sm ghost" style="margin-left:auto" onclick={() => save(readLayout(null))}>Restablecer</button>
     </div>
   {/if}
   <div class="dash" class:editing class:moving={dragId !== null}>
-    {#each layout.filter(s => !s.hidden) as s (s.id)}
-      <div class="w" style:grid-column="span {s.span}" class:dragging={ghost?.id === s.id} class:sizing={dragId === s.id && !ghost} data-widget={s.id} animate:flip={{ duration: reduceMotion ? 0 : FLIP_MS }}>
-        {#if editing}
+    {#each shown as s (s.id)}
+      <div class="w" class:off={s.hidden} style:grid-column="span {s.span}" class:dragging={ghost?.id === s.id} class:sizing={dragId === s.id && !ghost} data-widget={s.id} animate:flip={{ duration: reduceMotion ? 0 : FLIP_MS }}>
+        {#if s.hidden}
+          <div class="w-tools"><button class="btn sm" aria-label="Mostrar {widgetTitle(s.id)}" onclick={() => save(toggle(layout, s.id))}><Icon name="plus" />Mostrar</button></div>
+        {:else if editing}
           <div class="w-tools">
             <button class="btn icon sm handle" aria-label="Mover {widgetTitle(s.id)}" onpointerdown={e => startDrag(e, s.id)}><Icon name="list" /></button>
             <button class="btn icon sm" aria-label="Hacer más angosto {widgetTitle(s.id)}" disabled={s.span <= 2} onclick={() => save(resize(layout, s.id, s.span - 1))}><Icon name="minus" /></button>
             <button class="btn icon sm" aria-label="Hacer más ancho {widgetTitle(s.id)}" disabled={s.span >= 6} onclick={() => save(resize(layout, s.id, s.span + 1))}><Icon name="plus" /></button>
-            <button class="btn icon sm" aria-label="Ocultar {widgetTitle(s.id)}" onclick={() => save(toggle(layout, s.id))}><Icon name="x" /></button>
+            <button class="btn icon sm" aria-label="Ocultar {widgetTitle(s.id)}" onclick={() => hide(s.id)}><Icon name="x" /></button>
           </div>
           <span class="grip" aria-hidden="true" title="Arrastra para cambiar el tamaño" onpointerdown={e => startResize(e, s.id)}></span>
         {/if}
@@ -314,6 +317,7 @@
   .editing .w { outline: 2px dashed var(--border); outline-offset: 4px; border-radius: var(--radius); }
   .editing .w > :not(.w-tools, .grip) { pointer-events: none; }
   .moving { user-select: none; cursor: grabbing; }
+  .w.off > :not(.w-tools) { filter: grayscale(1); opacity: .4; }
   .w.dragging { outline: 2px dashed var(--brand); background: var(--brand-soft); }
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); }

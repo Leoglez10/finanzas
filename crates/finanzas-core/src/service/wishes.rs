@@ -17,13 +17,24 @@ impl WishKind {
 pub struct WishDraft {
     pub name: String, pub price: Cents, pub url: String, pub notes: String, pub category_id: Option<Id>,
     #[serde(default)] pub kind: WishKind, #[serde(default)] pub target_date: Option<NaiveDate>,
+    /// Some: the goal's line items become exactly these (their sum is the price when not empty). None: they stay as they are.
+    #[serde(default)] pub items: Option<Vec<WishItemDraft>>,
 }
+/// A line item to save; `id` is set for an item the goal already has.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishItemDraft { #[serde(default)] pub id: Option<Id>, pub name: String, pub amount: Cents, #[serde(default)] pub paid: bool }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishItem { pub id: Id, pub wish_id: Id, pub name: String, pub amount: Cents, pub paid: bool }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Wish {
     pub id: Id, pub name: String, pub price: Cents, pub url: String, pub notes: String,
     pub category_id: Option<Id>, pub reserved: Cents, pub archived: bool,
     #[serde(default)] pub kind: WishKind, #[serde(default)] pub target_date: Option<NaiveDate>,
+    /// Sum of the paid line items: money already spent toward the goal. Read-only, derived from the items.
+    #[serde(default)] pub paid: Cents,
 }
 /// How to reach a goal with a target date: set aside `monthly` on each of `months_left` monthly dates
 /// (today's day of the month, up to the target). Overdue goals ask for everything now; archived goals have no plan.
@@ -34,7 +45,7 @@ pub fn plan(wish: &Wish, today: NaiveDate) -> Option<WishPlan> {
     use chrono::Datelike;
     if wish.archived { return None; }
     let target = wish.target_date?;
-    let remaining = (wish.price - wish.reserved).max(0);
+    let remaining = (wish.price - wish.paid - wish.reserved).max(0);
     let overdue = target < today && remaining > 0;
     let months = (target.year() - today.year()) as i64 * 12 + target.month() as i64 - today.month() as i64;
     let months_left = if target < today { 0 } else { months - i64::from(target.day() < today.day()) + 1 };
@@ -52,7 +63,7 @@ pub struct WishEvaluation {
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan> }
+pub struct WishView { pub wish: Wish, pub evaluation: WishEvaluation, pub plan: Option<WishPlan>, pub items: Vec<WishItem> }
 
 fn invalid(message: &'static str) -> ServiceError { ServiceError::InvalidWish(message) }
 fn find(store: &Store, id: Id) -> Result<Wish> {
@@ -78,17 +89,48 @@ fn validate(store: &Store, draft: &WishDraft) -> Result<()> {
     Ok(())
 }
 
-pub fn save_wish(store: &mut Store, id: Option<Id>, draft: WishDraft) -> Result<Wish> {
+pub fn save_wish(store: &mut Store, id: Option<Id>, mut draft: WishDraft) -> Result<Wish> {
     store.transaction(|store| {
+        if let Some(items) = draft.items.as_ref().filter(|items| !items.is_empty()) {
+            if items.iter().any(|i| i.name.trim().is_empty()) { return Err(invalid("Line item name must not be empty")); }
+            if items.iter().any(|i| i.amount <= 0) { return Err(invalid("Line item amount must be greater than zero")); }
+            draft.price = items.iter().try_fold(0i64, |sum, i| sum.checked_add(i.amount)).ok_or_else(|| invalid("Line item total is too large"))?;
+        }
+        if draft.items.is_none() {
+            // Items kept as they are still decide the price.
+            let kept: Vec<_> = store.wish_items()?.into_iter().filter(|i| Some(i.wish_id) == id).collect();
+            if !kept.is_empty() { draft.price = kept.iter().map(|i| i.amount).sum(); }
+        }
         validate(store, &draft)?;
         let old = id.map(|id| find(store, id)).transpose()?;
         if old.as_ref().is_some_and(|w| w.archived) { return Err(invalid("Archived wishes cannot be edited")); }
+        let paid = match &draft.items {
+            Some(items) => {
+                let own: Vec<Id> = store.wish_items()?.into_iter().filter(|i| Some(i.wish_id) == id).map(|i| i.id).collect();
+                if items.iter().filter_map(|i| i.id).any(|item| !own.contains(&item)) { return Err(ServiceError::NotFound); }
+                items.iter().filter(|i| i.paid).map(|i| i.amount).sum()
+            }
+            None => old.as_ref().map_or(0, |w| w.paid),
+        };
         let reserved = old.as_ref().filter(|w| w.category_id == draft.category_id).map_or(0, |w| w.reserved);
-        if reserved > draft.price { return Err(invalid("Release reserved funds before reducing the price")); }
+        if reserved > draft.price - paid { return Err(invalid("Release reserved funds before reducing the price")); }
         let mut wish = Wish { id: id.unwrap_or(0), name: draft.name.trim().into(), price: draft.price,
             url: draft.url.trim().into(), notes: draft.notes, category_id: draft.category_id, reserved, archived: false,
-            kind: draft.kind, target_date: draft.target_date };
+            kind: draft.kind, target_date: draft.target_date, paid };
         wish.id = store.put_wish(&wish)?;
+        if let Some(items) = &draft.items { store.replace_wish_items(wish.id, items)?; }
+        Ok(wish)
+    })
+}
+
+/// Marks a line item as paid (or not). Money set aside beyond what is still unpaid is released: the payment used it.
+pub fn set_wish_item_paid(store: &mut Store, item: Id, paid: bool) -> Result<Wish> {
+    store.transaction(|store| {
+        let wish_id = store.set_wish_item_paid(item, paid)?.ok_or(ServiceError::NotFound)?;
+        let mut wish = find(store, wish_id)?;
+        if wish.archived { return Err(invalid("Archived wishes cannot be edited")); }
+        let unpaid = (wish.price - wish.paid).max(0);
+        if wish.reserved > unpaid { wish.reserved = unpaid; store.put_wish(&wish)?; }
         Ok(wish)
     })
 }
@@ -99,7 +141,7 @@ pub fn reserve_wish(store: &mut Store, id: Id, amount: Cents, today: NaiveDate) 
     store.transaction(|store| {
         let mut wish = find(store, id)?;
         if wish.archived { return Err(invalid("Archived wishes cannot reserve funds")); }
-        if amount < 0 || amount > wish.price { return Err(invalid("Reservation must be between zero and the wish price")); }
+        if amount < 0 || amount > wish.price - wish.paid { return Err(invalid("Reservation must be between zero and the wish price")); }
         if amount > wish.reserved {
             let category = wish.category_id.ok_or_else(|| invalid("Choose an expense category before reserving"))?;
             let budget = budget_month(store, month::month_of(today))?;
@@ -139,7 +181,9 @@ fn evaluate(store: &Store, wish: &Wish, today: NaiveDate) -> Result<WishEvaluati
     let other_category_claims = total_reserved(&wishes, |w| w.id != wish.id && w.category_id == wish.category_id)?;
     let category_claims = total_reserved(&wishes, |w| w.category_id == wish.category_id)?;
     let available_for_wish = category_available.map(|a| a.saturating_sub(other_category_claims).max(0));
-    let budget_shortfall = available_for_wish.map(|a| wish.price.saturating_sub(a).max(0));
+    // Paid line items are already spent; only the unpaid part has to fit the budget and the cash.
+    let due = (wish.price - wish.paid).max(0);
+    let budget_shortfall = available_for_wish.map(|a| due.saturating_sub(a).max(0));
     let reservation_deficit = category_available.map_or(0, |a| category_claims.saturating_sub(a.max(0)).max(0));
     let accounts: Vec<_> = store.list_accounts()?.into_iter().filter(|a| !a.closed && !a.off_budget).map(|a| a.id).collect();
     let balances = store.account_balances()?;
@@ -156,7 +200,7 @@ fn evaluate(store: &Store, wish: &Wish, today: NaiveDate) -> Result<WishEvaluati
         }
     }
     let other_claims = total_reserved(&wishes, |w| w.id != wish.id)?;
-    let cash_shortfall = cash_balance.map(|cash| wish.price.saturating_sub(cash.saturating_sub(upcoming_outflows).saturating_sub(other_claims).max(0)).max(0));
+    let cash_shortfall = cash_balance.map(|cash| due.saturating_sub(cash.saturating_sub(upcoming_outflows).saturating_sub(other_claims).max(0)).max(0));
     let status = if wish.archived { "archived" }
         else if category_available.is_none() || cash_balance.is_none() || unknown_payments { "unknown" }
         else if reservation_deficit > 0 { "reservation_deficit" }
@@ -177,6 +221,13 @@ pub fn evaluate_wish(store: &mut Store, id: Id, today: NaiveDate) -> Result<Wish
     store.transaction(|store| evaluate(store, &find(store, id)?, today))
 }
 pub fn list_wishes(store: &mut Store, today: NaiveDate, include_archived: bool) -> Result<Vec<WishView>> {
-    store.transaction(|store| store.wishes()?.into_iter().filter(|w| include_archived || !w.archived)
-        .map(|wish| { let evaluation = evaluate(store, &wish, today)?; let plan = plan(&wish, today); Ok(WishView { wish, evaluation, plan }) }).collect())
+    store.transaction(|store| {
+        let items = store.wish_items()?;
+        store.wishes()?.into_iter().filter(|w| include_archived || !w.archived).map(|wish| {
+            let evaluation = evaluate(store, &wish, today)?;
+            let plan = plan(&wish, today);
+            let items = items.iter().filter(|i| i.wish_id == wish.id).cloned().collect();
+            Ok(WishView { wish, evaluation, plan, items })
+        }).collect()
+    })
 }

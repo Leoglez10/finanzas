@@ -279,3 +279,22 @@ fn wishes_carry_goal_kind_target_date_and_plan() {
     let spec = specs().into_iter().find(|t| t.name == "save_wish").unwrap();
     assert_eq!(spec.input_schema["properties"]["kind"]["enum"], json!(["compra","viaje","experiencia","fondo"]));
 }
+
+#[test]
+fn wishes_take_line_items_and_keep_them_when_omitted() {
+    let mut s = Seed::new();
+    let trip = s.call("save_wish", json!({"name":"Cancún", "price":1, "kind":"viaje", "items":[{"name":"Vuelo","amount":300},{"name":"Hotel","amount":200,"paid":true}]}));
+    assert_eq!((trip["price"].clone(), trip["paid"].clone()), (json!(500.0), json!(200.0)));
+    let items = s.call("list_wishes", json!({}))[0]["items"].clone();
+    assert_eq!(items.as_array().unwrap().iter().map(|i| (i["name"].clone(), i["amount"].clone(), i["paid"].clone())).collect::<Vec<_>>(),
+        [(json!("Vuelo"), json!(300.0), json!(false)), (json!("Hotel"), json!(200.0), json!(true))]);
+    assert!(items[0]["id"].as_str().unwrap().starts_with("WishItem/p"));
+    // Editing without items keeps them (and their sum as the price).
+    let edited = s.call("save_wish", json!({"id":trip["id"], "name":"Cancún 2027", "price":1, "kind":"viaje"}));
+    assert_eq!(edited["price"], 500.0);
+    assert_eq!(s.call("list_wishes", json!({}))[0]["items"].as_array().unwrap().len(), 2);
+    // Keeping one item by id and dropping the other.
+    let kept = s.call("save_wish", json!({"id":trip["id"], "name":"Cancún", "price":1, "kind":"viaje", "items":[{"id":items[0]["id"],"name":"Vuelo","amount":350}]}));
+    assert_eq!((kept["price"].clone(), kept["paid"].clone()), (json!(350.0), json!(0.0)));
+    assert_eq!(call(&mut s.store, "save_wish", &json!({"name":"X","price":1,"items":[{"name":"","amount":1}]}), day(10, 15)).unwrap_err().0, "Line item name must not be empty");
+}

@@ -14,7 +14,7 @@ fn seed() -> (Store, Id, Id) {
     (store, account, category)
 }
 fn draft(category: Option<Id>) -> WishDraft {
-    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category, kind: WishKind::Compra, target_date: None }
+    WishDraft { name: "PlayStation".into(), price: 50_000, url: "https://example.com/ps5".into(), notes: "Con mando".into(), category_id: category, kind: WishKind::Compra, target_date: None, items: None }
 }
 #[test]
 fn wish_details_and_partial_reservations_do_not_double_allocate() {
@@ -138,7 +138,7 @@ fn v1_migration_preserves_ledger_and_new_wishes_survive_reopen() {
     assert_eq!(reopened.account_balances().unwrap()[&account], 12345);
     drop(reopened);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 3);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 4);
     drop(conn);
     std::fs::remove_file(path).unwrap();
 }
@@ -206,4 +206,66 @@ fn archived_goals_have_no_plan() {
     let late = save_wish(&mut store, None, WishDraft { target_date: Some(day(2026, 10, 1)), ..draft(Some(category)) }).unwrap();
     archive_wish(&mut store, late.id).unwrap();
     assert!(list_wishes(&mut store, today(), true).unwrap()[0].plan.is_none());
+}
+
+fn item(name: &str, amount: Cents) -> WishItemDraft { WishItemDraft { id: None, name: name.into(), amount, paid: false } }
+fn view(store: &mut Store, id: Id) -> WishView { list_wishes(store, today(), true).unwrap().into_iter().find(|v| v.wish.id == id).unwrap() }
+
+#[test]
+fn line_items_set_the_price_and_keep_their_ids_across_edits() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, items: Some(vec![item("Vuelo", 30_000), item("Hotel", 15_000)]), ..draft(Some(category)) }).unwrap();
+    assert_eq!(trip.price, 45_000, "the price is the sum of the items");
+    let v = view(&mut store, trip.id);
+    assert_eq!(v.items.iter().map(|i| (i.name.as_str(), i.amount, i.paid)).collect::<Vec<_>>(), [("Vuelo", 30_000, false), ("Hotel", 15_000, false)]);
+    let flight = v.items[0].id;
+    // Edit: keep the flight (new amount), drop the hotel, add food.
+    let edited = save_wish(&mut store, Some(trip.id), WishDraft { kind: WishKind::Viaje, items: Some(vec![WishItemDraft { id: Some(flight), name: "Vuelo".into(), amount: 32_000, paid: false }, item("Comida", 8_000)]), ..draft(Some(category)) }).unwrap();
+    assert_eq!(edited.price, 40_000);
+    let v = view(&mut store, trip.id);
+    assert_eq!(v.items.iter().map(|i| (i.name.as_str(), i.amount)).collect::<Vec<_>>(), [("Vuelo", 32_000), ("Comida", 8_000)]);
+    assert_eq!(v.items[0].id, flight, "an edited item keeps its id");
+    // No items in the draft (None) keeps them; an empty list removes them and uses the draft price.
+    save_wish(&mut store, Some(trip.id), WishDraft { price: 1, ..draft(Some(category)) }).unwrap();
+    assert_eq!((view(&mut store, trip.id).items.len(), view(&mut store, trip.id).wish.price), (2, 40_000));
+    save_wish(&mut store, Some(trip.id), WishDraft { items: Some(vec![]), ..draft(Some(category)) }).unwrap();
+    assert_eq!((view(&mut store, trip.id).items.len(), view(&mut store, trip.id).wish.price), (0, 50_000));
+}
+
+#[test]
+fn line_items_are_validated() {
+    let (mut store, _, category) = seed();
+    for (items, message) in [(vec![item(" ", 100)], "Line item name must not be empty"), (vec![item("Hotel", 0)], "Line item amount must be greater than zero")] {
+        let err = save_wish(&mut store, None, WishDraft { items: Some(items), ..draft(Some(category)) }).unwrap_err();
+        assert_eq!(err.to_string(), message);
+    }
+    let other = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 100)]), ..draft(Some(category)) }).unwrap();
+    let foreign = view(&mut store, other.id).items[0].id;
+    let mine = save_wish(&mut store, None, draft(Some(category))).unwrap();
+    let err = save_wish(&mut store, Some(mine.id), WishDraft { items: Some(vec![WishItemDraft { id: Some(foreign), name: "A".into(), amount: 100, paid: false }]), ..draft(Some(category)) }).unwrap_err();
+    assert!(matches!(err, ServiceError::NotFound), "an item id from another goal is refused");
+    // Items cannot bring the price under what is already set aside.
+    let reserved = save_wish(&mut store, None, WishDraft { items: Some(vec![item("A", 30_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, reserved.id, 20_000, today()).unwrap();
+    let err = save_wish(&mut store, Some(reserved.id), WishDraft { items: Some(vec![item("A", 10_000)]), ..draft(Some(category)) }).unwrap_err();
+    assert_eq!(err.to_string(), "Release reserved funds before reducing the price");
+}
+
+#[test]
+fn paid_items_count_as_progress_and_release_what_they_cover() {
+    let (mut store, _, category) = seed();
+    let trip = save_wish(&mut store, None, WishDraft { kind: WishKind::Viaje, target_date: Some(day(2027, 6, 15)), items: Some(vec![item("Vuelo", 30_000), item("Hotel", 20_000)]), ..draft(Some(category)) }).unwrap();
+    reserve_wish(&mut store, trip.id, 25_000, today()).unwrap();
+    let flight = view(&mut store, trip.id).items[0].id;
+    // Paying the flight: 50,000 - 30,000 paid leaves 20,000 to cover, so 5,000 of the 25,000 set aside is released.
+    let after = set_wish_item_paid(&mut store, flight, true).unwrap();
+    assert_eq!((after.paid, after.reserved), (30_000, 20_000));
+    let v = view(&mut store, trip.id);
+    assert!(v.items[0].paid);
+    assert_eq!(v.plan.unwrap().remaining, 0);
+    assert!(reserve_wish(&mut store, trip.id, 20_001, today()).is_err(), "the reservation limit is what is still unpaid");
+    // Unmarking restores the room to reserve again but does not re-reserve.
+    let back = set_wish_item_paid(&mut store, flight, false).unwrap();
+    assert_eq!((back.paid, back.reserved), (0, 20_000));
+    assert!(matches!(set_wish_item_paid(&mut store, 9_999, true), Err(ServiceError::NotFound)));
 }

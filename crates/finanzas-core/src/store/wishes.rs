@@ -1,14 +1,16 @@
 use super::Store;
-use crate::service::{Wish, WishKind};
+use crate::service::{Wish, WishItem, WishItemDraft, WishKind};
+use crate::Id;
 use chrono::NaiveDate;
 use rusqlite::{params, Result};
 
 impl Store {
     pub(crate) fn wishes(&self) -> Result<Vec<Wish>> {
-        let mut stmt = self.conn.prepare("SELECT id,name,price,url,notes,category_id,reserved,archived,kind,target_date FROM wish ORDER BY id")?;
+        let mut stmt = self.conn.prepare("SELECT id,name,price,url,notes,category_id,reserved,archived,kind,target_date,\n            (SELECT COALESCE(SUM(amount),0) FROM wish_item i WHERE i.wish_id = wish.id AND i.paid = 1) FROM wish ORDER BY id")?;
         let rows = stmt.query_map([], |r| Ok(Wish { id: r.get(0)?, name: r.get(1)?, price: r.get(2)?,
             url: r.get(3)?, notes: r.get(4)?, category_id: r.get(5)?, reserved: r.get(6)?, archived: r.get(7)?,
-            kind: WishKind::parse(&r.get::<_, String>(8)?), target_date: r.get::<_, Option<String>>(9)?.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok()) }))?;
+            kind: WishKind::parse(&r.get::<_, String>(8)?), target_date: r.get::<_, Option<String>>(9)?.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok()),
+            paid: r.get(10)? }))?;
         rows.collect()
     }
 
@@ -22,5 +24,32 @@ impl Store {
                 params![wish.name,wish.price,wish.url,wish.notes,wish.category_id,wish.reserved,wish.archived,wish.kind.as_str(),wish.target_date.map(|d| d.to_string()),wish.id])?;
             Ok(wish.id)
         }
+    }
+
+    pub(crate) fn wish_items(&self) -> Result<Vec<WishItem>> {
+        let mut stmt = self.conn.prepare("SELECT id,wish_id,name,amount,paid FROM wish_item ORDER BY wish_id, sort_order, id")?;
+        let rows = stmt.query_map([], |r| Ok(WishItem { id: r.get(0)?, wish_id: r.get(1)?, name: r.get(2)?, amount: r.get(3)?, paid: r.get(4)? }))?;
+        rows.collect()
+    }
+
+    /// Makes `items` the goal's line items in that order: listed ids are updated, new ones inserted, the rest deleted.
+    pub(crate) fn replace_wish_items(&self, wish_id: Id, items: &[WishItemDraft]) -> Result<()> {
+        let kept: Vec<String> = items.iter().filter_map(|i| i.id).map(|id| id.to_string()).collect();
+        self.conn.execute(&format!("DELETE FROM wish_item WHERE wish_id = ?1 AND id NOT IN ({})", kept.join(",")), params![wish_id])?;
+        for (order, item) in items.iter().enumerate() {
+            match item.id {
+                Some(id) => self.conn.execute("UPDATE wish_item SET name=?1, amount=?2, paid=?3, sort_order=?4 WHERE id=?5 AND wish_id=?6",
+                    params![item.name.trim(), item.amount, item.paid, order as i64, id, wish_id])?,
+                None => self.conn.execute("INSERT INTO wish_item(wish_id,name,amount,paid,sort_order) VALUES (?1,?2,?3,?4,?5)",
+                    params![wish_id, item.name.trim(), item.amount, item.paid, order as i64])?,
+            };
+        }
+        Ok(())
+    }
+
+    /// Returns the goal the item belongs to, or None when there is no such item.
+    pub(crate) fn set_wish_item_paid(&self, id: Id, paid: bool) -> Result<Option<Id>> {
+        use rusqlite::OptionalExtension;
+        self.conn.query_row("UPDATE wish_item SET paid = ?1 WHERE id = ?2 RETURNING wish_id", params![paid, id], |r| r.get(0)).optional()
     }
 }

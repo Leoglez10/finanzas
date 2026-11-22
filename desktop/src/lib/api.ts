@@ -17,10 +17,12 @@ export interface Overview {
 }
 export interface EntriesResult { rows: EntryRow[]; total: number; sum: number }
 export interface UpcomingItem { scheduleId: number; name: string; date: string; amount: number; accountId: number | null; account: string | null; autoPost: boolean; overdue: boolean; projectedBalance: number | null }
-export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean; kind: Kind; targetDate: string | null }
+export interface Wish { id: number; name: string; price: number; url: string; notes: string; categoryId: number | null; reserved: number; archived: boolean; kind: Kind; targetDate: string | null; paid: number }
 export interface WishEvaluation { status: string; availableForWish: number | null; budgetShortfall: number | null; reservationDeficit: number; cashBalance: number | null; upcomingOutflows: number; cashShortfall: number | null; reasons: string[] }
-export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null }
-export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null; kind: Kind; targetDate: string | null }
+export interface WishItem { id: number; wishId: number; name: string; amount: number; paid: boolean }
+export interface WishItemDraft { id: number | null; name: string; amount: number; paid: boolean }
+export interface WishView { wish: Wish; evaluation: WishEvaluation; plan: Plan | null; items: WishItem[] }
+export interface WishDraft { name: string; price: number; url: string; notes: string; categoryId: number | null; kind: Kind; targetDate: string | null; items: WishItemDraft[] | null }
 export interface BudgetCategory { id: number; name: string; hidden: boolean; budgeted: number; activity: number; available: number; spentShare: number }
 export interface BudgetView { month: number; toBudget: number; income: number; assigned: number; hint: string; uncategorizedIncome: number; groups: { id: number; name: string; isIncome: boolean; categories: BudgetCategory[] }[] }
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -72,6 +74,8 @@ export const wishes = (archived = false) => invoke<WishView[]>("wishes", { archi
 export const saveWish = (id: number | null, draft: WishDraft) => invoke<Wish>("save_wish", { id, draft });
 /** `amount` is the new total set aside (0 releases it), not a delta. */
 export const reserveWish = (id: number, amount: number) => invoke<Wish>("reserve_wish", { id, amount });
+/** Marks a line item paid or not; money set aside beyond what is still unpaid is released. */
+export const setWishItemPaid = (id: number, paid: boolean) => invoke<Wish>("set_wish_item_paid", { id, paid });
 export const archiveWish = (id: number) => invoke<Wish>("archive_wish", { id });
 export const restoreWish = (wish: Wish) => invoke<void>("restore_wish", { wish });
 export const today = () => invoke<string>("today");

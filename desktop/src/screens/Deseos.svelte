@@ -32,7 +32,7 @@
     budget_overassigned: ["warn", "Tu presupuesto tiene dinero asignado de más"],
   };
   function verdict(v: api.WishView): [string, string] {
-    if (v.wish.reserved >= v.wish.price) return ["ok", "Listo para comprar"];
+    if (v.wish.reserved + v.wish.paid >= v.wish.price) return ["ok", v.wish.kind === "compra" ? "Listo para comprar" : "Meta completa"];
     const [tone, text] = STATUS[v.evaluation.status] ?? ["", "Faltan datos para evaluarlo"];
     const gap = v.evaluation.status === "budget_shortfall" ? v.evaluation.budgetShortfall : v.evaluation.status === "cash_shortfall" ? v.evaluation.cashShortfall : null;
     return [tone, gap ? `${text}: faltan ${money(gap)}` : text];
@@ -52,6 +52,11 @@
     const total = Math.min(w.price, w.reserved + cents);
     void setReserved(w, total, `Apartaste ${money(total - w.reserved)} para ${w.name}`);
   }
+  // Paying an item can release money set aside; undo unmarks it and puts the exact snapshot back.
+  const togglePaid = (w: api.Wish, it: api.WishItem, paid: boolean) => act(`${it.name}: ${paid ? "pagado" : "pendiente"}`, async () => {
+    await api.setWishItemPaid(it.id, paid);
+    return () => api.setWishItemPaid(it.id, !paid).then(() => api.restoreWish(w));
+  });
   const archive = (w: api.Wish) => act(`Archivado: ${w.name}`, async () => { await api.archiveWish(w.id); return () => api.restoreWish(w); });
   // Buying records the expense and archives the wish; undo removes both changes.
   const buy = (w: api.Wish) => act(`${kindOf(w.kind).done}: ${w.name} ${money(-w.price)}`, async () => {
@@ -76,13 +81,13 @@
     <Kpi icon="gift" tone="violet" label="Total de metas" cents={active.reduce((s, v) => s + v.wish.price, 0)} note="{active.length} meta{active.length === 1 ? '' : 's'}" />
     <Kpi icon="wallet" label="Ya apartado" cents={active.reduce((s, v) => s + v.wish.reserved, 0)} />
     <Kpi icon="cal" label="Aparta este mes" cents={active.reduce((s, v) => s + (v.plan && !v.plan.overdue ? v.plan.monthly : 0), 0)} note="Según las fechas de tus metas" />
-    <Kpi icon="check" tone="ok" label="Listas" value={String(active.filter(v => v.wish.reserved >= v.wish.price).length)} />
+    <Kpi icon="check" tone="ok" label="Listas" value={String(active.filter(v => v.wish.reserved + v.wish.paid >= v.wish.price).length)} />
   </section>
 {/if}
 
 <section class="wishes">
   {#each views as v (v.wish.id)}
-    {@const w = v.wish}{@const k = kindOf(w.kind)}{@const pct = Math.min(100, w.reserved / w.price * 100)}{@const [tone, text] = verdict(v)}
+    {@const w = v.wish}{@const k = kindOf(w.kind)}{@const pct = Math.min(100, (w.reserved + w.paid) / w.price * 100)}{@const [tone, text] = verdict(v)}
     <article class="card wish">
       <div class="wish-top"><div class="ic violet" title={k.label}><Icon name={k.icon} /></div>
         <div style="flex:1;min-width:0"><h3>{w.name}</h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
@@ -92,8 +97,15 @@
       {:else}
         <div style="display:grid;gap:6px">
           <div class="bar" style="--c:var(--violet)"><span style="width:{pct}%"></span></div>
-          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span class="muted">Apartado {money(w.reserved)} de {money(w.price)}</span><b class="num">{pct.toFixed(0)}%</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span class="muted">{w.paid ? `Pagado ${money(w.paid)} · ` : ""}Apartado {money(w.reserved)} de {money(w.price)}</span><b class="num">{pct.toFixed(0)}%</b></div>
         </div>
+        {#if v.items.length}
+          <ul class="items" aria-label="Partidas de {w.name}">
+            {#each v.items as it (it.id)}
+              <li><label><input type="checkbox" checked={it.paid} onchange={e => togglePaid(w, it, e.currentTarget.checked)} /><span class:done={it.paid}>{it.name}</span></label><b class="num">{money(it.amount)}</b></li>
+            {/each}
+          </ul>
+        {/if}
         {#if v.plan}<p class="plan" class:late={v.plan.overdue}><Icon name={v.plan.overdue ? "alert" : "cal"} />{planText(v.plan)}</p>{/if}
         <div><span class="chip {tone}">{text}</span></div>
         {#if reserving === w.id}
@@ -104,12 +116,12 @@
           </form>
         {:else}
           <div class="foot">
-            {#if w.reserved >= w.price}<button class="btn sm primary" onclick={() => buy(w)}><Icon name="check" />{k.done}</button>
+            {#if w.reserved + w.paid >= w.price}<button class="btn sm primary" onclick={() => buy(w)}><Icon name="check" />{k.done}</button>
             {:else}<button class="btn sm primary" onclick={() => reserving = w.id}>Apartar más</button>{/if}
             {#if w.reserved}<button class="btn sm" onclick={() => setReserved(w, 0, `Liberaste ${money(w.reserved)} de ${w.name}`)}>Liberar</button>{/if}
             {#if w.url}<button class="btn sm ghost" onclick={() => openUrl(w.url).catch(e => toast(String(e)))}>{w.kind === "compra" ? "Ver producto" : "Ver enlace"}</button>{/if}
             <span class="spacer"></span>
-            <button class="btn icon sm ghost" aria-label="Editar {w.name}" onclick={() => openWish(w)}><Icon name="edit" /></button>
+            <button class="btn icon sm ghost" aria-label="Editar {w.name}" onclick={() => openWish(w, v.items)}><Icon name="edit" /></button>
             <button class="btn icon sm ghost" aria-label="Archivar {w.name}" onclick={() => archive(w)}><Icon name="archive" /></button>
           </div>
         {/if}
@@ -124,4 +136,8 @@
 <style>
   .plan { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 550; color: var(--brand); }
   .plan.late { color: var(--expense); }
+  .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+  .items li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .items label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .items .done { text-decoration: line-through; color: var(--muted); }
 </style>

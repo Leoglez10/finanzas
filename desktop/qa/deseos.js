@@ -78,6 +78,25 @@
     t.querySelector('button[value="next"]').click(); await wait(1500);
     await ok(() => card('QA Cancún')?.textContent.includes('Viaje') && /Aparta \$[\d,.]+ al mes · \d+ meses/.test(card('QA Cancún')?.querySelector('.plan')?.textContent ?? ''),
       () => `the trip card shows its plan: "${card('QA Cancún')?.querySelector('.plan')?.textContent}"`);
+
+    // Line items: the price is their sum, and paying one counts as progress.
+    btn($('.topbar'), 'Nueva meta').click(); await wait(500);
+    const li = $('dialog[open]');
+    btn(li, 'Viaje').click(); await wait(200);
+    set(li.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Mérida');
+    btn(li, '+ Vuelo').click(); await wait(100); btn(li, '+ Hotel').click(); await wait(200);
+    set(li.querySelector('input[aria-label="Monto de la partida 1"]'), '3,000');
+    set(li.querySelector('input[aria-label="Monto de la partida 2"]'), '2,000');
+    await wait(200);
+    await ok(() => [...li.querySelectorAll('input[readonly]')].some(i => i.value === '$5,000.00'), () => 'two items add up to $5,000.00');
+    li.querySelector('button[value="next"]').click(); await wait(300);
+    await ok(() => li.querySelector('.review')?.textContent.includes('Vuelo $3,000.00'), () => 'the review lists the items');
+    li.querySelector('button[value="next"]').click(); await wait(1500);
+    await ok(() => card('QA Mérida')?.querySelectorAll('.items li').length === 2, () => 'the card lists both items');
+    card('QA Mérida').querySelector('.items input[type="checkbox"]').click(); await wait(1500);
+    await ok(() => saved('QA Mérida')?.includes('Pagado $3,000.00'), () => `paying the flight counts as progress: "${saved('QA Mérida')}"`);
+    await undo();
+    await ok(() => !saved('QA Mérida')?.includes('Pagado'), () => 'undo unmarks it');
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

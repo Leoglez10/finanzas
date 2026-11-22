@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 3;
+pub(super) const CURRENT_VERSION: i64 = 4;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -48,6 +48,20 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
         tx.execute_batch(
             "ALTER TABLE wish ADD COLUMN kind TEXT NOT NULL DEFAULT 'compra' CHECK(kind IN ('compra','viaje','experiencia','fondo'));
              ALTER TABLE wish ADD COLUMN target_date TEXT;"
+        )?;
+        tx.pragma_update(None, "user_version", 3)?;
+        tx.commit()?;
+    }
+    if version < 4 {
+        // Line items of a goal (flight, hotel…): the goal's price is their sum; paid ones count as progress.
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS wish_item (
+                id INTEGER PRIMARY KEY, wish_id INTEGER NOT NULL REFERENCES wish(id) ON DELETE CASCADE,
+                name TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+                paid INTEGER NOT NULL DEFAULT 0 CHECK(paid IN (0,1)), sort_order INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS wish_item_wish_idx ON wish_item(wish_id);"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

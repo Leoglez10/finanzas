@@ -291,6 +291,8 @@ whenever `site/` changes on `main`.
 cd worker/feedback
 npm test                                  # validation rules
 npx wrangler@4 secret put GITHUB_TOKEN    # fine-grained token: Issues read/write on this repo only
+npx wrangler@4 secret put RESEND_API_KEY  # optional: email on every report, via Resend
+npx wrangler@4 secret put NOTIFY_EMAIL    # the Resend account address that receives it
 npx wrangler@4 deploy
 ```
 

@@ -25,3 +25,14 @@ test("long fields are cut", () => {
   assert.equal(issue.title.length, "Falla: ".length + 120);
   assert.ok(issue.body.length < 5200);
 });
+
+test("the notification email names the issue and links it", async () => {
+  const { notification } = await import("../src/mail.js");
+  const issue = buildIssue({ kind: "falla", title: "Café no guarda", body: "Pasó algo raro" }).issue;
+  assert.deepEqual(notification({ to: "yo@example.com", issue, number: 7, url: "https://x/7" }), {
+    from: "Finanzas <onboarding@resend.dev>",
+    to: ["yo@example.com"],
+    subject: "#7 Falla: Café no guarda",
+    text: "Falla: Café no guarda\nhttps://x/7\n\n> Pasó algo raro\n\n---\nEnviado desde la app · versión desconocida · desconocido\n",
+  });
+});

@@ -62,8 +62,8 @@ fn data_version(state: State<'_, AppState>) -> Result<String, String> {
     state.with_store(|s| Ok(format!("{}:{}", s.data_version().map_err(|e| e.to_string())?, state.revision.load(Ordering::Relaxed))))
 }
 #[tauri::command(async)]
-fn overview(state: State<'_, AppState>, month: i32, chart_months: u32) -> Result<service::Overview, String> {
-    state.with_store(|s| service::overview(s, month, chart_months).map_err(|e| e.to_string()))
+fn overview(state: State<'_, AppState>, month: i32, chart_months: u32, span: Option<u32>) -> Result<service::Overview, String> {
+    state.with_store(|s| service::overview_span(s, month, span.unwrap_or(1), chart_months).map_err(|e| e.to_string()))
 }
 #[tauri::command(async)]
 fn entries(state: State<'_, AppState>, filter: Filter) -> Result<EntriesResult, String> {

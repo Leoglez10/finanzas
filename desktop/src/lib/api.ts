@@ -35,7 +35,8 @@ export interface ImportSummary { accounts: number; categories: number; payees: n
 export const startupError = () => invoke<string | null>("startup_error");
 export const accountsOverview = () => invoke<AccountOverview[]>("accounts_overview");
 export const dataVersion = () => invoke<string>("data_version");
-export const overview = (month: number, chartMonths: number) => invoke<Overview>("overview", { month, chartMonths });
+/** `span` months ending at `month` are added up; `previous` is the same number of months before them. */
+export const overview = (month: number, chartMonths: number, span = 1) => invoke<Overview>("overview", { month, chartMonths, span });
 export const entries = (filter: { accountId?: number; search?: string; limit?: number }) => invoke<EntriesResult>("entries", { filter });
 export const addEntry = (entry: EntryInput) => invoke<EntryRow>("add_entry", { entry });
 export const updateEntry = (id: number, entry: EntryInput) => invoke<EntryRow>("update_entry", { id, entry });

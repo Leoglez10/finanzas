@@ -83,24 +83,34 @@
     const inRow = y >= near.r.top && y <= near.r.bottom;
     return placeAt(layout, id, near.id, inRow ? x > near.r.left + near.r.width / 2 : y > near.r.top + near.r.height / 2);
   }
-  // The corner grip snaps the width to whole columns of the 6-column grid.
+  // The corner grip snaps the width to whole columns of the 6-column grid. While dragging only an outline of the new
+  // width is drawn (written straight to the DOM); the grid reflows once, on release, instead of at every column.
   function startResize(e: PointerEvent, id: string) {
     e.preventDefault();
-    const left = widgetOf(e).getBoundingClientRect().left;
-    const grid = widgetOf(e).parentElement!;
+    const cell = widgetOf(e);
+    const left = cell.getBoundingClientRect().left;
+    const grid = cell.parentElement!;
     const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
     const column = (grid.clientWidth + gap) / 6;
+    const start = layout.find(s => s.id === id)!.span;
+    let span = start, frame = 0;
+    const outline = Object.assign(document.createElement("div"), { className: "size-preview" });
+    const draw = () => { outline.style.width = `${span * column - gap}px`; outline.dataset.label = `${span} de 6 columnas`; };
+    draw();
+    cell.append(outline);
     dragId = id;
-    // Pointer moves fire ~120 times a second; the grid only changes when the width crosses a column.
-    let span = layout.find(s => s.id === id)!.span;
-    let frame = 0;
     track(ev => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const next = Math.max(2, Math.min(6, Math.round((ev.clientX - left + gap) / column)));
-        if (next !== span) { span = next; layout = resize(layout, id, next); }
+        if (next !== span) { span = next; draw(); }
       });
-    }, () => { cancelAnimationFrame(frame); dragId = null; });
+    }, () => {
+      cancelAnimationFrame(frame);
+      outline.remove();
+      dragId = null;
+      if (span !== start) layout = resize(layout, id, span);
+    });
   }
 
   $effect(() => {
@@ -328,7 +338,9 @@
   .w.off > :not(.w-tools) { filter: grayscale(1); opacity: .4; }
   .w.dragging { outline: 2px dashed var(--brand); background: var(--brand-soft); }
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
-  .w.sizing { outline-color: var(--brand); }
+  .w.sizing { outline-color: var(--brand); z-index: 5; }
+  .w :global(.size-preview) { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; pointer-events: none; border: 2px dashed var(--brand); border-radius: var(--radius); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: 99px; background: var(--brand); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 6px 0; cursor: ew-resize; touch-action: none; }
   .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--radius); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
   .floating > :global(*) { height: 100%; }

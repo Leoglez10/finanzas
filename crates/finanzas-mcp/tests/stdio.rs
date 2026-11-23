@@ -19,7 +19,7 @@ fn stdio_initializes_lists_and_calls_tools() {
     send(&mut input,json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}));
     let list=recv(&mut output); let tools=list["result"]["tools"].as_array().unwrap();
     let names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming"]);
+    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts"]);
     assert_eq!(tools[0]["annotations"]["readOnlyHint"],true); assert_eq!(tools[7]["annotations"]["destructiveHint"],true);
     send(&mut input,json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_accounts","arguments":{}}}));
     let result=recv(&mut output); assert_eq!(result["result"]["content"][0]["text"],"[]"); assert_ne!(result["result"]["isError"],true);

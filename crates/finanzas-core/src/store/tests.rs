@@ -378,9 +378,11 @@ fn version_2_wishes_become_purchases_without_a_date() {
     assert!(wishes.iter().all(|w| w.kind == crate::service::WishKind::Compra && w.target_date.is_none()));
     assert_eq!((wishes[1].reserved, wishes[1].archived, wishes[2].archived), (400, false, true));
     let version: i64 = store.conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 8);
     let tags: i64 = store.conn.query_row("SELECT COUNT(*) FROM wish_entry", [], |r| r.get(0)).unwrap();
     assert_eq!(tags, 0);
+    let cards: i64 = store.conn.query_row("SELECT (SELECT COUNT(*) FROM credit_card) + (SELECT COUNT(*) FROM installment)", [], |r| r.get(0)).unwrap();
+    assert_eq!(cards, 0);
     assert_eq!(wishes[0].achieved_date, None);
     let contributions: i64 = store.conn.query_row("SELECT COUNT(*) FROM wish_contribution", [], |r| r.get(0)).unwrap();
     assert_eq!(contributions, 1, "the 400 already set aside on Tele opens its history");

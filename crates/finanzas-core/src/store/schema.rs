@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 7;
+pub(super) const CURRENT_VERSION: i64 = 8;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -98,6 +98,28 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 item_id INTEGER REFERENCES wish_item(id) ON DELETE SET NULL
             );
             CREATE INDEX IF NOT EXISTS wish_entry_wish_idx ON wish_entry(wish_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 7)?;
+        tx.commit()?;
+    }
+    if version < 8 {
+        // Credit-card terms (every field optional; rates in basis points, 4500 = 45%) and purchases paid in installments.
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS credit_card (
+                account_id INTEGER PRIMARY KEY REFERENCES account(id) ON DELETE CASCADE,
+                credit_limit INTEGER CHECK(credit_limit IS NULL OR credit_limit > 0),
+                cut_day INTEGER CHECK(cut_day IS NULL OR cut_day BETWEEN 1 AND 31),
+                due_day INTEGER CHECK(due_day IS NULL OR due_day BETWEEN 1 AND 31),
+                annual_rate INTEGER CHECK(annual_rate IS NULL OR annual_rate BETWEEN 0 AND 100000),
+                min_payment INTEGER CHECK(min_payment IS NULL OR min_payment BETWEEN 0 AND 10000)
+            );
+            CREATE TABLE IF NOT EXISTS installment (
+                id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+                name TEXT NOT NULL, total INTEGER NOT NULL CHECK(total > 0), months INTEGER NOT NULL CHECK(months BETWEEN 1 AND 120),
+                start_date TEXT NOT NULL, annual_rate INTEGER NOT NULL DEFAULT 0 CHECK(annual_rate BETWEEN 0 AND 100000)
+            );
+            CREATE INDEX IF NOT EXISTS installment_account_idx ON installment(account_id);"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

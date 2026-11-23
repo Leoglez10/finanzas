@@ -23,6 +23,9 @@
   import WishDialog from "./components/WishDialog.svelte";
   import ScheduleDialog from "./components/ScheduleDialog.svelte";
   import Ajustes from "./screens/Ajustes.svelte";
+  import Deudas from "./screens/Deudas.svelte";
+  import CardDialog from "./components/CardDialog.svelte";
+  import InstallmentDialog from "./components/InstallmentDialog.svelte";
 
   // The quick-capture window loads this same page at #quick and shows only that.
   const quickWindow = location.hash === "#quick";
@@ -81,6 +84,8 @@
           <Resumen />
         {:else if screen === "deseos"}
           <Deseos />
+        {:else if screen === "deudas" && app.settings?.debts_page}
+          <Deudas />
         {:else if screen === "proximos"}
           <Proximos />
         {:else if screen === "presupuesto"}
@@ -103,6 +108,8 @@
   <Palette />
   <ImportDialog />
   <AccountDialog />
+  <CardDialog />
+  <InstallmentDialog />
   {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
   <Toast />
 {/if}

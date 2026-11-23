@@ -17,3 +17,9 @@ export const importDialog = $state({ open: false, file: null as CsvFile | null }
 export function openImport(file: CsvFile) { Object.assign(importDialog, { open: true, file }); }
 export const accountDialog = $state({ open: false });
 export function openAccount() { accountDialog.open = true; }
+import type { DebtView, Installment } from "./api";
+export const cardDialog = $state({ open: false, debt: null as DebtView | null });
+/** Without a debt it turns an existing account into a card. */
+export function openCard(debt: DebtView | null = null) { Object.assign(cardDialog, { open: true, debt }); }
+export const installmentDialog = $state({ open: false, accountId: 0, plan: null as Installment | null });
+export function openInstallment(accountId: number, plan: Installment | null = null) { Object.assign(installmentDialog, { open: true, accountId, plan }); }

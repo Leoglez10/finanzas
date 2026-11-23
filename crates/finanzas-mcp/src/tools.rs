@@ -36,6 +36,7 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("archive_wish", "Archive a wish and release its reservation. Keeps history and does not create or delete transactions.", json!({"id":{"type":"string"}}), &["id"], false, false),
         spec("evaluate_wish", "Evaluate current-month budget and outgoing payments for 30 days including overdue ones. Reports budget/cash shortfalls and unknown data. No future income or off-budget/closed accounts; not a guarantee.", json!({"id":{"type":"string"}}), &["id"], true, false),
         spec("get_upcoming", "Upcoming scheduled payments from overdue ones through the next `days` days (default 30), oldest first, with each account's projected balance after the payment.", json!({"days":{"type":"integer","minimum":0,"maximum":365,"description":"Days ahead (default 30)"}}), &[], true, false),
+        spec("get_debts", "Debts: credit cards (with optional terms) and other accounts with a negative balance, highest rate first. Per debt: amount owed, credit limit and available, last/next cut, due date and overdue flag, statement balance, amount left to pay to avoid interest, minimum payment, estimated interest if only the minimum is paid (16% VAT included), installment purchases, and `missing` card terms. Null fields need terms that were not entered.", json!({}), &[], true, false),
     ]
 }
 /// The `perfil` argument, `personal` when omitted.
@@ -151,6 +152,20 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             let mut rows = service::schedule_views(store).map_err(err)?;
             rows.sort_by(|a,b| a.schedule.name.cmp(&b.schedule.name));
             json!(rows.into_iter().map(|v| json!({"id":id("Schedule",v.schedule.id),"name":v.schedule.name,"amount":dec(v.schedule.amount),"payee":v.payee,"accountId":oid("Account",v.schedule.account_id),"account":v.account,"frequency":v.schedule.recurrence.as_ref().map(|r| r.frequency),"interval":v.schedule.recurrence.as_ref().map(|r| r.interval).unwrap_or(1),"nextDate":v.next_date.map(|d| d.to_string()),"completed":v.schedule.completed,"autoPost":v.schedule.auto_post})).collect::<Vec<_>>())
+        }
+        "get_debts" => {
+            let v = service::debts(store, today).map_err(err)?;
+            let pct = |bp: Option<i64>| bp.map(|b| b as f64 / 100.0);
+            json!({"total":dec(v.total),"monthlyInstallments":dec(v.monthly_installments),"debts":v.debts.into_iter().map(|d| {
+                let t = d.terms.clone().unwrap_or_default();
+                json!({"accountId":id("Account",d.account_id),"name":d.name,"isCard":d.is_card,"debt":dec(d.debt),
+                    "creditLimit":t.credit_limit.map(dec),"available":d.available.map(dec),"annualRatePercent":pct(t.annual_rate),"minPaymentPercent":pct(t.min_payment),
+                    "cutDay":t.cut_day,"dueDay":t.due_day,"lastCut":d.last_cut.map(|x| x.to_string()),"nextCut":d.next_cut.map(|x| x.to_string()),
+                    "dueDate":d.due_date.map(|x| x.to_string()),"overdue":d.overdue,"statement":d.statement.map(dec),"toAvoidInterest":d.to_avoid_interest.map(dec),
+                    "minimum":d.minimum.map(dec),"interestIfMinimum":d.interest_if_minimum.map(dec),"missing":d.missing,
+                    "installments":d.installments.into_iter().map(|p| json!({"name":p.installment.name,"total":dec(p.installment.total),"months":p.installment.months,
+                        "startDate":p.installment.start_date.to_string(),"annualRatePercent":p.installment.annual_rate as f64 / 100.0,"monthly":dec(p.monthly),"monthsLeft":p.left,"remaining":dec(p.remaining)})).collect::<Vec<_>>()})
+            }).collect::<Vec<_>>()})
         }
         "get_upcoming" => {
             let days = a.int("days",30,0,365)?;

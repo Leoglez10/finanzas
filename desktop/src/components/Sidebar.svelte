@@ -9,7 +9,8 @@
   const current = (id: string) => app.route === id || app.route.startsWith(id + "/") || app.route.startsWith(id + "?");
   let open = $derived(app.accounts.filter(a => !a.closed));
   let closed = $derived(app.accounts.filter(a => a.closed));
-  const menu = [["resumen", "Resumen", "home"], ["movimientos", "Movimientos", "list"], ["presupuesto", "Presupuesto", "pie"], ["proximos", "Próximos pagos", "cal"], ["deseos", "Deseos", "gift"]];
+  const MENU = [["resumen", "Resumen", "home"], ["movimientos", "Movimientos", "list"], ["presupuesto", "Presupuesto", "pie"], ["proximos", "Próximos pagos", "cal"], ["deudas", "Deudas", "card"], ["deseos", "Deseos", "gift"]];
+  let menu = $derived(MENU.filter(([id]) => id !== "deudas" || app.settings?.debts_page));
   let index = $derived(Math.max(0, app.profiles.list.findIndex(p => p.slug === app.profiles.active)));
   let active = $derived(app.profiles.list[index]);
   let profile = $derived({ name: active?.label ?? "Personal", color: active ? profileColor(active, index) : "var(--violet)" });

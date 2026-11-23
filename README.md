@@ -57,6 +57,11 @@ Everything stays on your computer: no account, cloud or telemetry.
   and schedule recurring payments that can register themselves.
 - **Deseos y metas** — purchases, trips, experiences and savings funds with a target date, the monthly amount to
   set aside, line items, history, achievements and movement tags (see [Goals](#goals-and-wishes)).
+- **Deudas** (turn it on in **Ajustes → Deudas**) — credit cards and loans in one place. Card details (limit,
+  cut and due days, annual rate, minimum payment) are all optional; the more you add, the more it tells you: what
+  to pay before the due date to avoid interest, the minimum, the interest if you only pay that, and which debt to
+  pay first. Purchases in monthly installments (MSI or with interest) show what is billed each cut and what is left.
+  Also available as a Resumen widget.
 - **Undo instead of "are you sure?"** — deleting, registering, importing or editing shows **Deshacer** (or press ⌘Z).
   Only deleting a whole profile asks first, because it removes its database.
 - **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
@@ -220,6 +225,7 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 | `list_schedules` | List scheduled payments |
 | `skip_schedule` | Skip a scheduled payment |
 | `get_upcoming` | Get upcoming payments and projected balances |
+| `get_debts` | Credit cards and loans: what you owe, what to pay to avoid interest, minimum and installments |
 
 ## Import
 

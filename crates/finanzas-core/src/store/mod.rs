@@ -2,6 +2,7 @@
 
 mod crud;
 mod wishes;
+mod debts;
 mod records;
 mod entries;
 pub use entries::{EntryFilter, EntryRow};

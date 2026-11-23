@@ -5,6 +5,8 @@ use serde::Serialize;
 mod wishes;
 pub use wishes::*;
 mod entries;
+mod debts;
+pub use debts::*;
 mod schedules;
 mod overview;
 pub use overview::*;
@@ -18,13 +20,14 @@ pub enum ServiceError {
     IncomeCategory,
     CompletedSchedule,
     InvalidWish(&'static str),
+    InvalidDebt(&'static str),
 }
 impl From<rusqlite::Error> for ServiceError {
     fn from(error: rusqlite::Error) -> Self { Self::Store(error) }
 }
 impl std::fmt::Display for ServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self { Self::InvalidWish(message) => f.write_str(message), Self::Store(e) => e.fmt(f), Self::NotFound => write!(f, "not found"), Self::IncomeCategory => write!(f, "Income categories cannot be budgeted"), Self::CompletedSchedule => write!(f, "Schedule has no remaining occurrence") }
+        match self { Self::InvalidWish(message) | Self::InvalidDebt(message) => f.write_str(message), Self::Store(e) => e.fmt(f), Self::NotFound => write!(f, "not found"), Self::IncomeCategory => write!(f, "Income categories cannot be budgeted"), Self::CompletedSchedule => write!(f, "Schedule has no remaining occurrence") }
     }
 }
 impl std::error::Error for ServiceError {}

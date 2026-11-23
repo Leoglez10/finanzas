@@ -32,3 +32,4 @@ Branch: feat/deudas-tarjetas · Delivery: ask-on-risk · Runner: `cargo test -p 
 - L5 QA: ajustes.js expected 8 sub-tabs; now 9 with Deudas (updated). Visual check: zero interest fact hidden when the statement is 0.
 - L6 Follow-ups not done: MCP tool for debts; interest already charged on installments with rate is not in the ledger (user records it as an expense if wanted).
 - L7 (2026-11-23) User: "y esto que plan hay para que se haga solo por ejemplo para usuario de apps pasadas? y lo demas hazlo que falta" → S8, S9. PR #19 opened before this; new commit goes to the same branch.
+- L8 (2026-11-23) User: "el diseño lo podemos mejorar aqui" → chose compact rows for debts without card details, summary + detail cards, guide text in KPIs, two groups. Shipped as 0.7.1.

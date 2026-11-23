@@ -38,6 +38,11 @@ const list = (items: string[]) => items.length < 2 ? items.join("") : `${items.s
 export const missingText = (d: DebtView) => list(d.missing.map(m => MISSING[m] ?? m));
 const longDate = (iso: string) => parseDay(iso).toLocaleDateString("es-MX", { day: "numeric", month: "long" });
 
+const CARD_NAME = /tarjeta|\btdc\b|cr[eé]dito|visa|master ?card|amex|american express/i;
+/** Accounts that look like debts: worth offering the Deudas page to someone who has not turned it on. */
+export const debtCandidates = (accounts: { name: string; balance: number; closed: boolean }[]) =>
+  accounts.filter(a => !a.closed && (a.balance < 0 || CARD_NAME.test(a.name)));
+
 export interface Advice { tone: "bad" | "warn" | "ok" | "info"; text: string }
 /** What to do, most urgent first. */
 export function advice(debts: DebtView[]): Advice[] {

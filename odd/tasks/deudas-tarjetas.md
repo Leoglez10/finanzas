@@ -11,7 +11,8 @@ Branch: feat/deudas-tarjetas · Delivery: ask-on-risk · Runner: `cargo test -p 
 - S6 Dashboard widget (first message): "un nuevo widget en el dashboard".
 - S7 Rates: entered by hand with a hint of where to find them on the statement; no researched rate table (rates are per customer).
 - Assumption: a debt is any open credit-card account, plus any open account with a negative balance (loans).
-- Assumption: MCP tool for debts deferred.
+- S8 Existing users: "y esto que plan hay para que se haga solo por ejemplo para usuario de apps pasadas? y lo demas hazlo que falta". Migration is automatic; the Resumen offers the Deudas page once when an account is in debt or named like a card (Activar / Ahora no). Nothing is marked as a card automatically.
+- S9 MCP `get_debts` (read-only), the follow-up left in L6.
 
 ## Tasks
 
@@ -19,6 +20,8 @@ Branch: feat/deudas-tarjetas · Delivery: ask-on-risk · Runner: `cargo test -p 
 - T2 [S1,S2,S3] inline — Tauri commands + card/installment dialogs, AccountDialog toggle. Risk: none. Status: done.
 - T3 [S2,S4,S5,S7] inline — `debts_page` setting, Ajustes "Deudas" section, sidebar entry, Deudas screen with advice, palette command "Ir a Deudas". Risk: none. Status: done.
 - T4 [S6] inline — "Deudas" Resumen widget, hidden while the page is off. Risk: none. Status: done (front 36 tests, svelte-check 0, QA deudas.js 22/22, cuentas/ajustes/comandos green).
+- T5 [S8] inline — `debtCandidates` + Resumen offer banner, dismissal in localStorage. Risk: none. Status: done (front 37, QA deudas.js 27/27 twice).
+- T6 [S9] inline — MCP `get_debts`, README tool table. Risk: none (adds a tool). Status: done (MCP 29 + stdio).
 
 ## Log
 
@@ -28,3 +31,4 @@ Branch: feat/deudas-tarjetas · Delivery: ask-on-risk · Runner: `cargo test -p 
 - L4 Test fix: expected monthly for 12 months at 24% + IVA was miscalculated by hand (11,495); recomputed 11,571 matches the amortization formula.
 - L5 QA: ajustes.js expected 8 sub-tabs; now 9 with Deudas (updated). Visual check: zero interest fact hidden when the statement is 0.
 - L6 Follow-ups not done: MCP tool for debts; interest already charged on installments with rate is not in the ledger (user records it as an expense if wanted).
+- L7 (2026-11-23) User: "y esto que plan hay para que se haga solo por ejemplo para usuario de apps pasadas? y lo demas hazlo que falta" → S8, S9. PR #19 opened before this; new commit goes to the same branch.

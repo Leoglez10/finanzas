@@ -175,7 +175,7 @@ fn bounded_integer_reports_its_range() {
 #[test]
 fn every_spec_has_an_object_schema() {
     let specs = specs();
-    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming"]);
+    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts"]);
     assert!(specs.iter().all(|s| s.input_schema["type"] == "object"));
 }
 #[test]
@@ -309,4 +309,22 @@ fn list_wishes_returns_the_contribution_log() {
     s.call("reserve_wish", json!({"id":wish["id"], "amount":40}));
     assert_eq!(s.call("list_wishes", json!({}))[0]["spending"], json!({"total":0.0,"other":0.0,"items":[]}));
     assert_eq!(s.call("list_wishes", json!({}))[0]["contributions"], json!([{"date":"2026-10-15","amount":100.0},{"date":"2026-10-15","amount":-60.0}]));
+}
+
+#[test]
+fn get_debts_reports_cards_with_their_payments_and_loans() {
+    let store = Store::open_in_memory().unwrap();
+    let card = store.insert_account(&Account { id:0, name:"Visa".into(), off_budget:false, closed:false, sort_order:1.0 }).unwrap();
+    store.insert_entry(&Entry { id:0, date:day(11,2), amount:-300000, notes:String::new(), cleared:true, account_id:Some(card), category_id:None, payee_id:None, schedule_id:None }).unwrap();
+    finanzas_core::service::set_card_terms(&store, card, Some(finanzas_core::service::CardTerms { credit_limit:Some(5000000), cut_day:Some(5), due_day:Some(25), annual_rate:Some(6000), min_payment:Some(1000) })).unwrap();
+    let mut store = store;
+    let r = call(&mut store, "get_debts", &json!({}), day(11,10)).unwrap();
+    assert_eq!(r["total"], 3000.0);
+    let d = &r["debts"][0];
+    assert_eq!((d["accountId"].as_str(), d["isCard"].as_bool(), d["debt"].as_f64()), (Some(format!("Account/p{card}").as_str()), Some(true), Some(3000.0)));
+    assert_eq!((d["available"].as_f64(), d["toAvoidInterest"].as_f64(), d["dueDate"].as_str()), (Some(47000.0), Some(3000.0), Some("2026-11-25")));
+    assert_eq!((d["annualRatePercent"].as_f64(), d["interestIfMinimum"].as_f64()), (Some(60.0), Some(156.6)));
+    assert_eq!(d["missing"], json!([]));
+    let tool = specs().into_iter().find(|t| t.name == "get_debts").unwrap();
+    assert!(tool.read_only && !tool.destructive);
 }

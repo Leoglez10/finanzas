@@ -225,6 +225,7 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 | `list_schedules` | List scheduled payments |
 | `skip_schedule` | Skip a scheduled payment |
 | `get_upcoming` | Get upcoming payments and projected balances |
+| `get_debts` | Credit cards and loans: what you owe, what to pay to avoid interest, minimum and installments |
 
 ## Import
 

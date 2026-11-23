@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as api from "../lib/api";
-  import { app, go } from "../lib/app.svelte";
+  import { app, go, updateSettings } from "../lib/app.svelte";
   import { openAccount, openEntry } from "../lib/dialogs.svelte";
   import { money, monthKey, monthTitle, monthShort, shiftMonth, change, categoryColor, parseDay, daysBetween, dayNumber, dayMonth, monthDate, isoDay, monthSpan } from "../lib/format";
   import Icon from "../components/Icon.svelte";
@@ -10,6 +10,7 @@
   import { WIDGETS, readLayout, placeAt, toggle, resize, type Slot } from "../lib/dashboard";
   import { flip } from "svelte/animate";
   import { kindOf, planText } from "../lib/goals";
+  import { debtCandidates } from "../lib/debts";
   import Topbar from "../components/Topbar.svelte";
 
   let month = $state(monthKey(app.today));
@@ -37,6 +38,12 @@
   /** Hiding sends a widget to the end, where edit mode shows it greyed out. */
   const hide = (id: string) => save(placeAt(toggle(layout, id), id, null, true));
   // Edit mode lists hidden widgets after the visible ones; otherwise they are not drawn.
+  // People coming from an earlier version: offer the Deudas page once, only when they have something that looks like a debt.
+  const DEBTS_OFFER = "finanzas.offer.deudas";
+  let offerDismissed = $state(localStorage.getItem(DEBTS_OFFER) === "1");
+  let debtOffer = $derived(!offerDismissed && app.settings && !app.settings.debts_page ? debtCandidates(app.accounts) : []);
+  const dismissOffer = () => { localStorage.setItem(DEBTS_OFFER, "1"); offerDismissed = true; };
+  async function enableDebts() { dismissOffer(); await updateSettings({ debts_page: true }); go("deudas"); }
   let available = $derived(layout.filter(s => s.id !== "deudas" || app.settings?.debts_page));
   let shown = $derived([...available.filter(s => !s.hidden), ...(editing ? available.filter(s => s.hidden) : [])]);
   const widgetTitle = (id: string) => WIDGETS.find(w => w.id === id)?.title ?? id;
@@ -167,6 +174,15 @@
           </div>
         {/each}
       </div>
+    </article>
+  {/if}
+  {#if debtOffer.length}
+    <article class="card offer" role="status">
+      <span class="ic sm"><Icon name="card" /></span>
+      <div class="grow"><p class="title">Nuevo: página Deudas</p>
+        <p class="meta">Vemos {debtOffer.length === 1 ? `“${debtOffer[0].name}”` : `${debtOffer.length} cuentas`} que parece{debtOffer.length === 1 ? "" : "n"} deuda o tarjeta. Junta tus tarjetas y préstamos y te dice cuánto pagar para no generar intereses.</p></div>
+      <button class="btn sm primary" onclick={enableDebts}>Activar</button>
+      <button class="btn sm ghost" onclick={dismissOffer}>Ahora no</button>
     </article>
   {/if}
   {#if editing}
@@ -349,6 +365,9 @@
 {/snippet}
 
 <style>
+  .offer { display: flex; align-items: center; gap: 12px; }
+  .offer .title { margin: 0; }
+  .offer .meta { margin: 2px 0 0; }
   .dash { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px; grid-auto-flow: row dense; }
   .w { position: relative; min-width: 0; contain: layout style; }
   .moving :global(*) { transition: none !important; }

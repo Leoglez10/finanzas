@@ -13,8 +13,16 @@
   const field = (d, label) => [...d.querySelectorAll('label.field')].find(l => l.textContent.trim().startsWith(label))?.querySelector('input,select');
   const main = () => $('#main').textContent;
   try {
+    localStorage.removeItem('finanzas.offer.deudas');
+    location.hash = 'ajustes'; await wait(300); location.hash = 'resumen';
     await wait(1200);
     say(!nav('Deudas'), 'Deudas is not in the sidebar until enabled');
+    const offer = () => $('#main .offer');
+    await ok(() => offer()?.textContent.includes('Nuevo: página Deudas'), () => 'an account in debt makes the Resumen offer the Deudas page');
+    [...offer().querySelectorAll('button')].find(b => b.textContent === 'Ahora no').click();
+    await ok(() => !offer(), () => '"Ahora no" hides the offer');
+    location.hash = 'movimientos'; await wait(300); location.hash = 'resumen'; await wait(800);
+    say(!offer(), 'and it stays hidden');
     location.hash = 'ajustes/deudas';
     await ok(() => $('input[role=switch]') && main().includes('Mostrar la página Deudas'), () => 'Ajustes has a Deudas section');
     const sw = [...document.querySelectorAll('label.setting')].find(l => l.textContent.includes('Mostrar la página Deudas')).querySelector('input');
@@ -68,6 +76,11 @@
     await ok(() => !nav('Deudas'), () => 'turning it off removes Deudas from the sidebar');
     location.hash = 'resumen';
     await ok(() => main().includes('Saldo por cuenta') && ![...document.querySelectorAll('#main h2')].some(h => h.textContent === 'Deudas'), () => 'and hides the widget');
+    localStorage.removeItem('finanzas.offer.deudas');
+    location.hash = 'movimientos'; await wait(300); location.hash = 'resumen';
+    await ok(() => offer(), () => 'the offer comes back while the page is off and was not dismissed');
+    [...offer().querySelectorAll('button')].find(b => b.textContent === 'Activar').click();
+    await ok(() => location.hash === '#deudas' && nav('Deudas') && main().includes('Debes en total'), () => '"Activar" turns the page on and opens it');
   } catch (e) { say(false, 'exception: ' + e); }
   inv('qa_log', { line: 'DONE' });
 })();

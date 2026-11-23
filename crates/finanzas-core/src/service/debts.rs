@@ -137,7 +137,7 @@ pub fn debts(store: &Store, today: NaiveDate) -> Result<DebtsView> {
 }
 
 /// `None` stops treating the account as a credit card (its installments stay).
-pub fn set_card_terms(store: &mut Store, account_id: Id, terms: Option<CardTerms>) -> Result<()> {
+pub fn set_card_terms(store: &Store, account_id: Id, terms: Option<CardTerms>) -> Result<()> {
     if !store.account_exists(account_id)? { return Err(ServiceError::NotFound); }
     if let Some(t) = &terms {
         if t.credit_limit.is_some_and(|l| l <= 0) { return Err(invalid("El límite debe ser mayor a cero")); }

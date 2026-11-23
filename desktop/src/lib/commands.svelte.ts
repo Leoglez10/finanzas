@@ -18,6 +18,8 @@ export const COMMANDS: Command[] = [
   { id: "go-movimientos", label: "Ir a Movimientos", group: "Navegar", icon: "list", keys: "⌘2", run: () => go("movimientos") },
   { id: "go-presupuesto", label: "Ir a Presupuesto", group: "Navegar", icon: "pie", keys: "⌘3", run: () => go("presupuesto") },
   { id: "go-proximos", label: "Ir a Próximos pagos", group: "Navegar", icon: "cal", keys: "⌘4", run: () => go("proximos") },
+  // Off until enabled in Ajustes: then the command opens that switch instead.
+  { id: "go-deudas", label: "Ir a Deudas", group: "Navegar", icon: "card", keys: "", run: () => go(app.settings?.debts_page ? "deudas" : "ajustes/deudas") },
   { id: "go-deseos", label: "Ir a Deseos", group: "Navegar", icon: "gift", keys: "⌘5", run: () => go("deseos") },
   { id: "go-ajustes", label: "Abrir Ajustes", group: "Navegar", icon: "gear", keys: "⌘,", run: () => go("ajustes") },
   { id: "new-gasto", label: "Nuevo gasto", group: "Acciones", icon: "down", keys: "⌘N", run: () => openEntry("gasto") },

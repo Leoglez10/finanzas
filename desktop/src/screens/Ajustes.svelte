@@ -11,7 +11,7 @@
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
 
-  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["comentarios", "Fallas y mejoras", "alert"], ["atajos", "Atajos", "command"]];
+  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["deudas", "Deudas", "card"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["comentarios", "Fallas y mejoras", "alert"], ["atajos", "Atajos", "command"]];
   const PALETTES: [string, string, string][] = [["petroleo", "Petróleo", "El original"], ["bosque", "Bosque", "Verde oliva sobrio"], ["ciruela", "Ciruela", "Violeta profundo"], ["grafito", "Grafito", "Casi sin color"], ["arena", "Arena", "Cálido, tonos café"], ["sistema", "Sistema", "Acento de macOS"]];
   let tab = $derived(TABS.find(t => t[0] === app.route.split("/")[1]) ?? TABS[0]);
   let s = $derived(app.settings);
@@ -73,7 +73,7 @@
   }
 </script>
 
-{#snippet toggle(key: "enabled" | "tray" | "autostart", title: string, text: string)}
+{#snippet toggle(key: "enabled" | "tray" | "autostart" | "debts_page", title: string, text: string)}
   <label class="setting"><div class="grow"><b>{title}</b><p>{text}</p></div><input type="checkbox" role="switch" class="switch" checked={s?.[key]} onchange={e => save({ [key]: e.currentTarget.checked })} /></label>
 {/snippet}
 {#snippet stepper(key: "days" | "hour", label: string, value: string, min: number, max: number)}
@@ -152,6 +152,12 @@
         <div class="card-h"><h2>Sistema</h2></div>
         {@render toggle("tray", "Mostrar en la barra de menú", "Saldo y próximo pago a un clic; cerrar la ventana no cierra la app.")}
         {@render toggle("autostart", "Abrir al iniciar sesión", "Así los avisos llegan aunque no abras Finanzas.")}
+      </article>
+    {:else if tab[0] === "deudas"}
+      <article class="card">
+        <div class="card-h"><h2>Deudas</h2></div>
+        {@render toggle("debts_page", "Mostrar la página Deudas", "Junta tus tarjetas de crédito, préstamos y compras a meses, con cuánto pagar para no generar intereses.")}
+        {#if s.debts_page}<p class="muted" style="font-size:13px">Ya aparece en la barra lateral. <button class="link" onclick={() => go("deudas")}>Abrir Deudas</button></p>{/if}
       </article>
     {:else if tab[0] === "avisos"}
       <article class="card">

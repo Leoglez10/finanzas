@@ -25,7 +25,7 @@
   let periodQuery = $derived(span === 1 ? `mes=${month}` : `desde=${isoDay(monthDate(start))}&hasta=${isoDay(new Date(Math.floor(month / 100), month % 100, 0))}`);
   let title = $derived(monthSpan(start, month));
   let against = $derived(span === 1 ? undefined : `los ${span} meses anteriores`);
-  let data = $state<{ overview: api.Overview; upcoming: api.UpcomingItem[]; wishes: api.WishView[]; reserved: number } | null>(null);
+  let data = $state<{ overview: api.Overview; upcoming: api.UpcomingItem[]; wishes: api.WishView[]; reserved: number; debts: api.DebtsView } | null>(null);
   let error = $state("");
 
   // Widget layout: order and visibility, saved per profile. "Personalizar" turns on drag handles and hide buttons.
@@ -37,7 +37,8 @@
   /** Hiding sends a widget to the end, where edit mode shows it greyed out. */
   const hide = (id: string) => save(placeAt(toggle(layout, id), id, null, true));
   // Edit mode lists hidden widgets after the visible ones; otherwise they are not drawn.
-  let shown = $derived([...layout.filter(s => !s.hidden), ...(editing ? layout.filter(s => s.hidden) : [])]);
+  let available = $derived(layout.filter(s => s.id !== "deudas" || app.settings?.debts_page));
+  let shown = $derived([...available.filter(s => !s.hidden), ...(editing ? available.filter(s => s.hidden) : [])]);
   const widgetTitle = (id: string) => WIDGETS.find(w => w.id === id)?.title ?? id;
   let dragId = $state<string | null>(null);
   // While dragging, a copy of the widget floats under the pointer; its slot in the grid stays as a dashed gap.
@@ -116,8 +117,8 @@
 
   $effect(() => {
     void app.version; const m = month, r = range, n = span;
-    Promise.all([api.overview(m, r, n), api.upcoming(), api.wishes()])
-      .then(([overview, upcoming, wishes]) => { data = { overview, upcoming, wishes, reserved: wishes.reduce((s, w) => s + w.wish.reserved, 0) }; error = ""; })
+    Promise.all([api.overview(m, r, n), api.upcoming(), api.wishes(), api.debts()])
+      .then(([overview, upcoming, wishes, debts]) => { data = { overview, upcoming, wishes, reserved: wishes.reduce((s, w) => s + w.wish.reserved, 0), debts }; error = ""; })
       .catch(e => error = String(e));
   });
 
@@ -309,6 +310,25 @@
             </button>
           {:else}<p class="muted">Aún no tienes cuentas.</p>{/each}
         </div>
+      </article>
+    {:else if id === "deudas"}
+      <article class="card">
+        <div class="card-h"><h2>Deudas</h2><button class="link" onclick={() => go("deudas")}>Ver todas</button></div>
+        {#if data.debts.debts.length}
+          <p style="margin:0 0 8px"><span class="muted">Debes</span> <b class="num" style="font-size:20px">{money(data.debts.total)}</b>{#if data.debts.monthlyInstallments}<span class="muted"> · {money(data.debts.monthlyInstallments)} al mes a meses</span>{/if}</p>
+          <div class="list">
+            {#each data.debts.debts.slice(0, 4) as d (d.accountId)}
+              {@const pct = Math.min(100, Math.round((d.utilization ?? 0) * 100))}
+              <div class="row" style="display:grid;gap:6px">
+                <div style="display:flex;justify-content:space-between;gap:8px"><b>{d.name}</b><span class="num">{money(d.debt)}</span></div>
+                {#if d.utilization !== null}<div class="bar" role="img" aria-label="{d.name}: usas {pct}% del límite"><span style="width:{pct}%;--c:{pct > 30 ? 'var(--warn)' : 'var(--brand)'}"></span></div>{/if}
+                {#if d.overdue}<p class="meta neg" style="margin:0">Pago vencido: {money(d.toAvoidInterest ?? 0)}</p>
+                {:else if (d.toAvoidInterest ?? 0) > 0}<p class="meta" style="margin:0">Paga {money(d.toAvoidInterest!)}{d.dueDate ? ` antes del ${dayNumber(parseDay(d.dueDate))} ${dayMonth(parseDay(d.dueDate))}` : ""} para no pagar intereses</p>
+                {:else if d.missing.length}<p class="meta" style="margin:0">Completa sus datos para recibir recomendaciones</p>{/if}
+              </div>
+            {/each}
+          </div>
+        {:else}<p class="muted">No tienes deudas.</p>{/if}
       </article>
     {:else if id === "deseos"}
       <article class="card">

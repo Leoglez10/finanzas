@@ -32,9 +32,21 @@ export interface Recurrence { start: string; frequency: Frequency; interval: num
 export interface Schedule { id: number; name: string; amount: number; autoPost: boolean; completed: boolean; nextDate: string | null; recurrence: Recurrence | null; accountId: number | null; categoryId: number | null; payeeId: number | null }
 export interface ScheduleView { schedule: Schedule; nextDate: string | null; label: string; payee: string | null; account: string | null }
 export interface ScheduleDraft { name: string; amount: number; accountId: number; categoryId: number | null; payee: string; frequency: Frequency; interval: number; start: string; skipWeekend: boolean; autoPost: boolean }
-export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean; profile: string; profile_colors: Record<string, string> }
+export interface Settings { enabled: boolean; days: number; hour: number; hidden_profiles: string[]; dark: boolean | null; palette: string; tray: boolean; autostart: boolean; auto_update: boolean; profile: string; profile_colors: Record<string, string>; debts_page: boolean }
 export interface ProfileView { slug: string; label: string; hidden: boolean; color: string | null }
 export interface Profiles { active: string; list: ProfileView[] }
+/** Every field optional; rates in basis points (4550 = 45.5%). */
+export interface CardTerms { creditLimit: number | null; cutDay: number | null; dueDay: number | null; annualRate: number | null; minPayment: number | null }
+export interface Installment { id: number; accountId: number; name: string; total: number; months: number; startDate: string; annualRate: number }
+export type InstallmentDraft = Omit<Installment, "id">;
+export interface InstallmentView { installment: Installment; monthly: number; billed: number; left: number; remaining: number }
+export interface DebtView {
+  accountId: number; name: string; isCard: boolean; terms: CardTerms | null; debt: number; available: number | null; utilization: number | null;
+  lastCut: string | null; nextCut: string | null; dueDate: string | null; overdue: boolean;
+  statement: number | null; toAvoidInterest: number | null; minimum: number | null; interestIfMinimum: number | null;
+  installments: InstallmentView[]; missing: string[];
+}
+export interface DebtsView { total: number; monthlyInstallments: number; debts: DebtView[] }
 export interface ImportSummary { accounts: number; categories: number; payees: number; entries: number; schedules: number }
 
 export const startupError = () => invoke<string | null>("startup_error");
@@ -67,7 +79,13 @@ export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
 /** All rows or none; returns the new ids so the import can be undone. */
 export const importEntries = (entries: EntryInput[]) => invoke<number[]>("import_entries", { entries });
 /** Returns the new account id; a non-zero `opening` becomes a "Saldo inicial" movement dated `date`. */
-export const createAccount = (name: string, offBudget: boolean, opening: number | null, date: string) => invoke<number>("create_account", { name, offBudget, opening, date });
+export const createAccount = (name: string, offBudget: boolean, opening: number | null, date: string, card: CardTerms | null = null) => invoke<number>("create_account", { name, offBudget, opening, date, card });
+export const debts = () => invoke<DebtsView>("debts");
+/** `terms: null` stops treating the account as a credit card. */
+export const setCardTerms = (accountId: number, terms: CardTerms | null) => invoke<void>("set_card_terms", { accountId, terms });
+export const saveInstallment = (id: number | null, draft: InstallmentDraft) => invoke<Installment>("save_installment", { id, draft });
+/** Returns the removed plan, for undo. */
+export const deleteInstallment = (id: number) => invoke<Installment>("delete_installment", { id });
 export interface AgentView { name: string; connected: boolean; instructions: string; config: string }
 export const agents = () => invoke<AgentView[]>("agents");
 export const databasePath = () => invoke<string>("database_path");

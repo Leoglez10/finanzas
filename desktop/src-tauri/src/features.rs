@@ -16,7 +16,7 @@ pub fn assign_budget(state: State<'_, AppState>, month: i32, category_id: i64, t
 }
 /// New account, with its opening balance as a "Saldo inicial" movement (same as the Rune app). Returns its id.
 #[tauri::command(async)]
-pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool, opening: Option<i64>, date: chrono::NaiveDate) -> Result<i64, String> {
+pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool, opening: Option<i64>, date: chrono::NaiveDate, card: Option<service::CardTerms>) -> Result<i64, String> {
     let name = name.trim(); if name.is_empty() { return Err("Escribe un nombre".into()); }
     let id = state.with_store(|s| s.transaction(|s| {
         let order = s.list_accounts()?.iter().map(|a| a.sort_order).fold(0.0, f64::max) + 1.0;
@@ -24,9 +24,29 @@ pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool
         if let Some(amount) = opening.filter(|v| *v != 0) {
             s.insert_entry(&finanzas_core::Entry { id: 0, date, amount, notes: "Saldo inicial".into(), cleared: true, account_id: Some(id), category_id: None, payee_id: None, schedule_id: None })?;
         }
+        if card.is_some() { service::set_card_terms(s, id, card)?; }
         Ok::<_, service::ServiceError>(id)
     }).map_err(|e| e.to_string()))?;
     state.changed(); Ok(id)
+}
+#[tauri::command(async)]
+pub fn debts(state: State<'_, AppState>) -> Result<service::DebtsView, String> { state.with_store(|s| service::debts(s, Local::now().date_naive()).map_err(|e| e.to_string())) }
+/// `terms: None` stops treating the account as a credit card.
+#[tauri::command(async)]
+pub fn set_card_terms(state: State<'_, AppState>, account_id: i64, terms: Option<service::CardTerms>) -> Result<(), String> {
+    state.with_store(|s| service::set_card_terms(s, account_id, terms).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(())
+}
+#[tauri::command(async)]
+pub fn save_installment(state: State<'_, AppState>, id: Option<i64>, draft: service::InstallmentDraft) -> Result<service::Installment, String> {
+    let plan = state.with_store(|s| service::save_installment(s, id, draft).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(plan)
+}
+/// Returns the removed plan, for undo.
+#[tauri::command(async)]
+pub fn delete_installment(state: State<'_, AppState>, id: i64) -> Result<service::Installment, String> {
+    let plan = state.with_store(|s| service::delete_installment(s, id).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(plan)
 }
 #[tauri::command(async)]
 pub fn change_category(state: State<'_, AppState>, id: i64, name: Option<String>, hidden: Option<bool>) -> Result<(), String> {

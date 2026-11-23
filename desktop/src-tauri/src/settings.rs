@@ -27,12 +27,14 @@ pub struct Settings {
     pub profile: String,
     /// Reminder ids already shown, so a restart never repeats one.
     pub sent: HashSet<String>,
+    /// Shows the Deudas page in the sidebar (off until turned on in Ajustes).
+    pub debts_page: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self { enabled: true, days: 2, hour: 9, hidden_profiles: Vec::new(), dark: None, palette: "petroleo".into(),
-            tray: true, autostart: false, auto_update: true, profile_colors: HashMap::new(), profile: "personal".into(), sent: HashSet::new() }
+            tray: true, autostart: false, auto_update: true, profile_colors: HashMap::new(), profile: "personal".into(), sent: HashSet::new(), debts_page: false }
     }
 }
 
@@ -83,7 +85,7 @@ mod tests {
         let s = load(&path).unwrap();
         assert_eq!((s.enabled, s.days, s.hour, s.dark), (false, 5, 7, Some(true)));
         assert_eq!(s.hidden_profiles, vec!["negocio".to_string()]);
-        assert_eq!((s.palette.as_str(), s.tray, s.auto_update), ("petroleo", true, true));
+        assert_eq!((s.palette.as_str(), s.tray, s.auto_update, s.debts_page), ("petroleo", true, true, false));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

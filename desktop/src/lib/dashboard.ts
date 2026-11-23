@@ -14,6 +14,8 @@ export const WIDGETS: WidgetDef[] = [
   { id: "recientes", title: "Últimos movimientos", span: 3 },
   { id: "cuentas", title: "Saldo por cuenta", span: 3 },
   { id: "deseos", title: "Deseos y metas", span: 3 },
+  // Shown only while the Deudas page is on in Ajustes.
+  { id: "deudas", title: "Deudas", span: 3 },
 ];
 
 const MIN = 2, MAX = 6;

@@ -47,9 +47,11 @@
 
     nav('Deudas').click();
     await ok(() => main().includes('QA Visa') && main().includes('$3,000.00'), () => 'Deudas lists the card with its debt');
-    await ok(() => main().includes('Disponible $7,000.00 de $10,000.00'), () => 'available credit from the limit');
+    await ok(() => main().includes('de $10,000.00 de límite') && main().includes('disponible $7,000.00'), () => 'available credit from the limit');
     await ok(() => main().includes('Agrega día de corte, día de pago, tasa y pago mínimo'), () => 'missing terms are named with what they unlock');
-    await ok(() => main().includes('Usas el 30%') === false && main().includes('usas 30%'), () => 'utilization shown');
+    await ok(() => main().includes('30% usado'), () => 'utilization shown');
+    await ok(() => main().includes('Otras deudas') && [...document.querySelectorAll('#main .row')].some(r => r.textContent.includes('Tarjeta') && r.textContent.includes('Parece tarjeta de crédito') && r.textContent.includes('Configurar tarjeta')), () => 'a negative account named like a card is a compact row offering Configurar tarjeta');
+    await ok(() => main().includes('Agrega el día de corte de una tarjeta para verlo'), () => 'the interest KPI explains what it needs instead of $0');
 
     [...document.querySelectorAll('#main button')].find(b => b.textContent.includes('Completar datos')).click();
     await ok(() => $('dialog[open] #card-title'), () => 'Completar datos opens the card dialog');
@@ -57,7 +59,7 @@
     const today = new Date();
     set(field(d, 'Día de corte'), '1'); set(field(d, 'Día límite de pago'), '28'); set(field(d, 'Tasa anual'), '60'); set(field(d, 'Pago mínimo'), '10');
     d.querySelector('button[value="save"]').click();
-    await ok(() => main().includes('Saldo al corte') && main().includes('Para no generar intereses'), () => `full terms show the statement facts (today ${today.toDateString()})`);
+    await ok(() => main().includes('Saldo al corte') && /Este corte ya está cubierto|para no generar intereses/.test(main()), () => `full terms show the statement facts (today ${today.toDateString()})`);
     await ok(() => !main().includes('Completar datos'), () => 'the missing-data notice goes away');
 
     [...document.querySelectorAll('#main .plans button')].find(b => b.textContent.includes('Agregar')).click();

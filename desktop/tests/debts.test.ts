@@ -1,7 +1,7 @@
 // Run: pnpm --dir desktop test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { advice, cardForm, debtCandidates, cardTerms, emptyCardForm, missingText, parsePercent } from "../src/lib/debts.ts";
+import { advice, cardForm, debtCandidates, looksLikeCard, cardTerms, emptyCardForm, missingText, parsePercent } from "../src/lib/debts.ts";
 import type { DebtView } from "../src/lib/api.ts";
 
 const debt = (over: Partial<DebtView>): DebtView => ({ accountId: 1, name: "Visa", isCard: true, terms: null, debt: 0, available: null, utilization: null, lastCut: null, nextCut: null, dueDate: null, overdue: false, statement: null, toAvoidInterest: null, minimum: null, interestIfMinimum: null, installments: [], missing: [], ...over });
@@ -45,4 +45,8 @@ test("accounts in debt or named like a card suggest the Deudas page", () => {
   const acc = (name: string, balance = 0, closed = false) => ({ name, balance, closed });
   assert.deepEqual(debtCandidates([acc("Banco", 500), acc("Tarjeta Oro"), acc("TDC Nu"), acc("Crédito auto"), acc("Préstamo", -100), acc("Visa vieja", -5, true), acc("Ahorro")]).map(a => a.name),
     ["Tarjeta Oro", "TDC Nu", "Crédito auto", "Préstamo"]);
+});
+
+test("card-like names are recognized for the Configurar tarjeta button", () => {
+  assert.deepEqual(["Nu Leo Credito", "Cartera", "Visa", "Ahorro"].map(looksLikeCard), [true, false, true, false]);
 });

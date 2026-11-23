@@ -42,6 +42,7 @@ const CARD_NAME = /tarjeta|\btdc\b|cr[eé]dito|visa|master ?card|amex|american e
 /** Accounts that look like debts: worth offering the Deudas page to someone who has not turned it on. */
 export const debtCandidates = (accounts: { name: string; balance: number; closed: boolean }[]) =>
   accounts.filter(a => !a.closed && (a.balance < 0 || CARD_NAME.test(a.name)));
+export const looksLikeCard = (name: string) => CARD_NAME.test(name);
 
 export interface Advice { tone: "bad" | "warn" | "ok" | "info"; text: string }
 /** What to do, most urgent first. */

@@ -119,6 +119,6 @@
   <CardDialog />
   <AccountStyleDialog />
   <InstallmentDialog />
-  {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV o Excel para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
+  {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV, Excel o PDF para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
   <Toast />
 {/if}

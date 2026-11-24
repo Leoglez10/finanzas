@@ -1,0 +1,55 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 803 >>
+stream
+BT /F1 9 Tf
+1 0 0 1 40 760 Tm (Banco Ejemplo - Estado de cuenta) Tj
+1 0 0 1 40 744 Tm (Periodo: 01/11/2026 al 30/11/2026) Tj
+1 0 0 1 40 728 Tm (FECHA) Tj
+1 0 0 1 110 728 Tm (DESCRIPCION) Tj
+1 0 0 1 330 728 Tm (CARGOS) Tj
+1 0 0 1 420 728 Tm (ABONOS) Tj
+1 0 0 1 510 728 Tm (SALDO) Tj
+1 0 0 1 40 712 Tm (03/NOV) Tj
+1 0 0 1 110 712 Tm (COMPRA OXXO CENTRO 1234) Tj
+1 0 0 1 330 712 Tm (45.50) Tj
+1 0 0 1 510 712 Tm (9,954.50) Tj
+1 0 0 1 40 696 Tm (05/NOV) Tj
+1 0 0 1 110 696 Tm (DEPOSITO NOMINA) Tj
+1 0 0 1 420 696 Tm (15,000.00) Tj
+1 0 0 1 510 696 Tm (24,954.50) Tj
+1 0 0 1 40 680 Tm (07/NOV) Tj
+1 0 0 1 110 680 Tm (PAGO SERVICIO) Tj
+1 0 0 1 330 680 Tm (500.00) Tj
+1 0 0 1 510 680 Tm (24,454.50) Tj
+1 0 0 1 110 664 Tm (TELMEX HOGAR) Tj
+1 0 0 1 110 648 Tm (SALDO FINAL) Tj
+1 0 0 1 510 648 Tm (24,454.50) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001095 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1192
+%%EOF

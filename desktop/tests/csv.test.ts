@@ -171,3 +171,29 @@ test("a description that continues on the next row is joined to the row above", 
   const rows = mapRows(csvRows("Fecha,Concepto,Importe\n09/11/2026,PAGO SERVICIO,-500\n,TELMEX HOGAR,\n10/11/2026,Uber,-80\n,,"), ctx);
   assert.deepEqual(rows.map(r => [r.line, r.payee, r.cents, r.error]), [[2, "Pago Servicio Telmex Hogar", -50000, ""], [4, "Uber", -8000, ""]]);
 });
+
+test("dates without a year take the statement's year, or last year when they would be in the future", () => {
+  const today = new Date(2026, 0, 10);
+  assert.equal(parseDate("03/NOV", "dmy", today), "2025-11-03");
+  assert.equal(parseDate("05 ene", "dmy", today), "2026-01-05");
+  assert.equal(parseDate("05/01", "dmy", today), "2026-01-05");
+  assert.equal(parseDate("12.50", "dmy", today), null);
+});
+
+test("rows read from a PDF statement import like a spreadsheet", () => {
+  const rows = [
+    ["Banco Ejemplo - Estado de cuenta"], ["Periodo: 01/11/2026 al 30/11/2026"],
+    ["FECHA", "DESCRIPCION", "CARGOS", "ABONOS", "SALDO"],
+    ["03/NOV", "COMPRA OXXO CENTRO 1234", "45.50", "", "9,954.50"],
+    ["05/NOV", "DEPOSITO NOMINA", "", "15,000.00", "24,954.50"],
+    ["07/NOV", "PAGO SERVICIO", "500.00", "", "24,454.50"],
+    ["", "TELMEX HOGAR", "", "", ""],
+    ["", "SALDO FINAL", "", "", "24,454.50"],
+  ];
+  assert.deepEqual(detect(rows).roles, ["date", "payee", "out", "in", "ignore"]);
+  assert.deepEqual(mapRows(rows, ctx).map(r => [r.line, r.date, r.payee, r.cents, r.error]), [
+    [4, "2026-11-03", "Oxxo Centro", -4550, ""],
+    [5, "2026-11-05", "Deposito Nomina", 1500000, ""],
+    [6, "2026-11-07", "Pago Servicio Telmex Hogar", -50000, ""],
+  ]);
+});

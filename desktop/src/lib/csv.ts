@@ -37,16 +37,25 @@ const monthOf = (word: string) => MONTHS.findIndex(m => m.split("|").some(p => w
 const NUMERIC_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/;
 
 /** "05/11/2026" (day first unless `order` is "mdy"), "2026-11-05", "05-nov-2026", "5 Dic 2026",
- * a time after the date, or an Excel day number → "2026-11-05"; impossible dates → null. */
-export function parseDate(text: string, order: DateOrder = "dmy"): string | null {
+ * a time after the date, or an Excel day number → "2026-11-05"; impossible dates → null.
+ * Statements often leave out the year ("03/NOV", "05/11"): it is `today`'s, or last year's when that
+ * date would be more than a month ahead. */
+export function parseDate(text: string, order: DateOrder = "dmy", today = new Date()): string | null {
   const t = norm(text.trim()).replace(/(t|\s+)\d{1,2}:\d{2}(:\d{2})?.*$/, "");
   const num = t.match(NUMERIC_DATE), iso = t.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
-  const named = t.match(/^(\d{1,2})[\s/.-]+([a-z]{3,})\.?[\s/.-]+(\d{2}|\d{4})$/);
-  const year = (y: string) => +y < 100 ? 2000 + +y : +y;
+  const named = t.match(/^(\d{1,2})[\s/.-]+([a-z]{3,})\.?(?:[\s/.-]+(\d{2}|\d{4}))?$/);
+  // Only "/" for numbers without a year, so "12.50" stays an amount.
+  const short = t.match(/^(\d{1,2})\/(\d{1,2})$/);
+  const year = (y: string | undefined) => y === undefined ? 0 : +y < 100 ? 2000 + +y : +y;
   let y = 0, m = 0, d = 0;
   if (num) [y, m, d] = order === "dmy" ? [year(num[3]), +num[2], +num[1]] : [year(num[3]), +num[1], +num[2]];
   else if (iso) [y, m, d] = [+iso[1], +iso[2], +iso[3]];
   else if (named) [y, m, d] = [year(named[3]), monthOf(named[2]), +named[1]];
+  else if (short) [y, m, d] = order === "dmy" ? [0, +short[2], +short[1]] : [0, +short[1], +short[2]];
+  if (!y && m && (named || short)) {
+    y = today.getFullYear();
+    if (new Date(y, m - 1, d) > new Date(y, today.getMonth() + 1, today.getDate())) y--;
+  }
   else if (/^\d{5}$/.test(t) && +t > 20000 && +t < 80000) {
     // Excel counts days from 1899-12-30.
     const date = new Date(1899, 11, 30 + +t);
@@ -176,7 +185,7 @@ export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect
   rows.forEach((r, index) => {
     if (index <= m.header || blank(r)) return;
     const dateCell = (r[iDate] ?? "").trim();
-    if (!parseDate(dateCell, m.dateOrder) && r.some(c => TOTAL.test(norm(c.trim())))) return;
+    if (!parseDate(dateCell, m.dateOrder, ctx.today) && r.some(c => TOTAL.test(norm(c.trim())))) return;
     const raw = (r[iPayee] ?? "").trim();
     // No date and no amount: the description of the row above goes on in this one.
     if (!dateCell && parts.length && amountCells.every(i => money(r[i]) === null)) {
@@ -187,7 +196,7 @@ export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect
     parts.push({ line: index + 1, r, raw });
   });
   return parts.map(({ line, r, raw }) => {
-    const date = parseDate(r[iDate] ?? "", m.dateOrder), payee = raw ? cleanPayee(raw, ctx) : "";
+    const date = parseDate(r[iDate] ?? "", m.dateOrder, ctx.today), payee = raw ? cleanPayee(raw, ctx) : "";
     let cents: number | null = null;
     if (iAmount >= 0) {
       cents = money(r[iAmount]);

@@ -171,7 +171,7 @@
     {:else if tab[0] === "datos"}
       <article class="card">
         <div class="card-h"><h2>Importar</h2></div>
-        <p class="muted" style="margin-bottom:10px">Movimientos de tu banco: arrastra un CSV o Excel a cualquier parte de la ventana, o elígelo aquí. Verás una vista previa y los duplicados se detectan solos.</p>
+        <p class="muted" style="margin-bottom:10px">Movimientos de tu banco: arrastra un CSV, Excel o PDF a cualquier parte de la ventana, o elígelo aquí. Verás una vista previa y los duplicados se detectan solos.</p>
         <div style="margin-bottom:18px"><button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Elegir archivo…</button></div>
         <p class="muted" style="margin-bottom:14px">Otra app de finanzas: copia todo a un perfil vacío. El archivo de origen solo se lee, nunca se modifica.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">

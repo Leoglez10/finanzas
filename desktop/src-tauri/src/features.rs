@@ -144,19 +144,20 @@ pub fn import_data(app: AppHandle, state: State<'_, AppState>, source: String) -
     state.changed(); Ok(Some(summary))
 }
 
-const IMPORT_TYPES: [&str; 4] = ["csv", "xlsx", "xls", "ods"];
-/// `text` for CSV (parsed in the webview); `sheets` for spreadsheets, already split into cells.
+const IMPORT_TYPES: [&str; 5] = ["csv", "xlsx", "xls", "ods", "pdf"];
+/// `text` for CSV (parsed in the webview); `sheets` for spreadsheets and PDFs, already split into cells.
 #[derive(serde::Serialize)]
 pub struct CsvFile { name: String, text: String, sheets: Option<Vec<Sheet>> }
 #[derive(serde::Serialize)]
 pub struct Sheet { name: String, rows: Vec<Vec<String>> }
-/// Reads a dropped or picked bank file. Only CSV or spreadsheets up to 5 MB, so a stray drop never loads something huge.
+/// Reads a dropped or picked bank file. Only CSV, spreadsheets or PDF statements up to 5 MB, so a stray drop never loads something huge.
 fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    if !IMPORT_TYPES.contains(&ext.as_str()) { return Err("Solo puedo importar archivos .csv, .xlsx, .xls u .ods".into()); }
+    if !IMPORT_TYPES.contains(&ext.as_str()) { return Err("Solo puedo importar archivos .csv, .xlsx, .xls, .ods o .pdf".into()); }
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > 5 * 1024 * 1024 { return Err("El archivo pesa más de 5 MB".into()); }
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if ext == "pdf" { return Ok(CsvFile { text: String::new(), sheets: Some(vec![Sheet { name: name.clone(), rows: crate::pdf_table::rows(path)? }]), name }); }
     if ext != "csv" { return Ok(CsvFile { name, text: String::new(), sheets: Some(sheets(path)?) }); }
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     // Some banks export Latin-1; fall back so accents do not break the whole file.
@@ -183,7 +184,7 @@ fn sheets(path: &std::path::Path) -> Result<Vec<Sheet>, String> {
 pub fn read_csv(path: String) -> Result<CsvFile, String> { read_csv_file(std::path::Path::new(&path)) }
 #[tauri::command(async)]
 pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
-    let Some(file) = app.dialog().file().set_title("Elige el archivo de tu banco").add_filter("CSV o Excel", &IMPORT_TYPES).blocking_pick_file() else { return Ok(None) };
+    let Some(file) = app.dialog().file().set_title("Elige el archivo de tu banco").add_filter("CSV, Excel o PDF", &IMPORT_TYPES).blocking_pick_file() else { return Ok(None) };
     read_csv_file(&file.into_path().map_err(|e| e.to_string())?).map(Some)
 }
 /// Adds every row or none: a failure halfway leaves the ledger untouched. Returns the new ids for undo.
@@ -217,6 +218,28 @@ mod tests {
 
     #[test]
     fn other_files_are_refused() {
-        assert_eq!(read_csv_file(std::path::Path::new("notas.txt")).err().unwrap(), "Solo puedo importar archivos .csv, .xlsx, .xls u .ods");
+        assert_eq!(read_csv_file(std::path::Path::new("notas.txt")).err().unwrap(), "Solo puedo importar archivos .csv, .xlsx, .xls, .ods o .pdf");
+    }
+}
+
+#[cfg(test)]
+mod pdf_tests {
+    use super::read_csv_file;
+
+    #[test]
+    fn pdf_statements_become_rows_aligned_to_the_header_columns() {
+        let file = read_csv_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/estado.pdf")).unwrap();
+        let sheets = file.sheets.unwrap();
+        assert_eq!(sheets.len(), 1);
+        assert_eq!(sheets[0].rows, vec![
+            vec!["Banco Ejemplo - Estado de cuenta"],
+            vec!["Periodo: 01/11/2026 al 30/11/2026"],
+            vec!["FECHA", "DESCRIPCION", "CARGOS", "ABONOS", "SALDO"],
+            vec!["03/NOV", "COMPRA OXXO CENTRO 1234", "45.50", "", "9,954.50"],
+            vec!["05/NOV", "DEPOSITO NOMINA", "", "15,000.00", "24,954.50"],
+            vec!["07/NOV", "PAGO SERVICIO", "500.00", "", "24,454.50"],
+            vec!["", "TELMEX HOGAR", "", "", ""],
+            vec!["", "SALDO FINAL", "", "", "24,454.50"],
+        ]);
     }
 }

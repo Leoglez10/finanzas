@@ -28,8 +28,8 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 - T6 [S8] inline — account saved with the layout. Status: done (57/57 unit, QA importar.js 28/28).
 - T7 [S9] inline — in-file duplicates. Status: done (57/57 unit, QA importar.js 28/28).
 - T8 [S10] inline — continuation rows. Status: done (57/57 unit, QA importar.js 28/28).
-- T9 [S11] inline — PDF text lines to rows. Risk: item 5 (new dependency).
-- T10 [S12] inline — cargo check for a Windows target.
+- T9 [S11] inline — PDF text lines to rows. Risk: item 5 (new dependency). Status: done (Rust 7/7, 59/59 unit, QA 29/29).
+- T10 [S12] inline — cargo check for a Windows target. Status: done: calamine 0.38 + pdf-extract 0.12 pass `cargo check --target x86_64-pc-windows-msvc` in a scratch crate; the full app check is blocked locally by ring needing MSVC (pre-existing, release CI builds Windows).
 
 ## Log
 
@@ -40,3 +40,4 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 - L5 T3 done. Auto-flip threshold raised to 3 of 4 positive amounts (a bank file with a few deposits must not flip). README updated.
 - L6 (2026-11-24) User asked "que se puede nmejorar de eso? excel con muchas paginas?"; after the list of improvements, user: "todas las mejoras". Specs S6-S12 added.
 - L7 T4-T8 done in one commit (shared csv.ts and dialog). Raw bank text kept in notes as "Importado: <raw>".
+- L8 T9: pdf_table.rs aligns glyph cells under the header columns (pdf-extract OutputDev); encrypted and scanned PDFs refused with a message. Year-less dates take today's year, or last year if more than a month ahead. T10 checked.

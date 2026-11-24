@@ -62,6 +62,13 @@
     $('dialog.import[open]').close();
     await wait(300);
 
+    // PDF statements: cells land under their header columns; year-less dates, wrapped lines and the balance line handled.
+    const pdf = await inv('read_csv', { path: '__QA__/../src-tauri/tests/fixtures/estado.pdf' });
+    openImport(pdf);
+    await ok(() => status().length === 3 && $('dialog.import[open] tbody').textContent.includes('Pago Servicio Telmex Hogar') && $('dialog.import[open] tbody').textContent.includes('+$15,000.00') && $('dialog.import[open] tbody').textContent.includes('-$45.50'), () => `a PDF statement previews 3 movements with cargos and abonos: ${status().join(' | ')}`);
+    $('dialog.import[open]').close();
+    await wait(300);
+
     // Unknown header names and dates that fit both orders: the columns panel opens and asks.
     const odd = `Cuándo,Qué,Referencia,Cuánto\n03/04/${y},Uber,A1,-80.00\n04/05/${y},Oxxo,A2,-45.50`;
     openImport({ name: 'raro.csv', text: odd });

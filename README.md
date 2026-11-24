@@ -67,7 +67,9 @@ Everything stays on your computer: no account, cloud or telemetry.
 - **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
 - **Quick capture (⌥⇧F)** — a small window from any app: type `super 450.50 tarjeta`, press Enter. Payee spelling,
   category and account come from your own history.
-- **CSV and Excel import** — drop a bank CSV, .xlsx, .xls or .ods file on the window (or ⌘I). Columns are found by
+- **CSV, Excel and PDF import** — drop a bank CSV, .xlsx, .xls, .ods or PDF statement on the window (or ⌘I). PDF
+  text is laid out under its header columns, so charges and deposits stay apart; dates without a year ("03/NOV")
+  take the statement's year. Password-protected or scanned PDFs are refused with a message. Columns are found by
   header name and by content, title and total rows are skipped, and date order, decimal comma, cargo/abono columns
   and card statements with positive purchases are read from the data. Workbooks with several sheets (one per month)
   are combined, bank descriptions are cleaned ("COMPRA OXXO CENTRO 1234 GDL MX" → "Oxxo Centro Gdl", original kept

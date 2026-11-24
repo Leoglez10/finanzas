@@ -1,5 +1,6 @@
 mod features;
 mod menu;
+mod pdf_table;
 mod prefs;
 mod reminder_window;
 mod settings;

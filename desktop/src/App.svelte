@@ -4,7 +4,8 @@
   import { onMount } from "svelte";
   import * as api from "./lib/api";
   import { app, refresh, start } from "./lib/app.svelte";
-  import { runCommand } from "./lib/commands.svelte";
+  import { COMMANDS, runCommand } from "./lib/commands.svelte";
+  import { comboOf, isMac } from "./lib/keys";
   import { openEntry, openImport } from "./lib/dialogs.svelte";
   import ImportDialog from "./components/ImportDialog.svelte";
   import AccountDialog from "./components/AccountDialog.svelte";
@@ -37,7 +38,8 @@
     if (quickWindow) return;
     start().catch(e => app.error = String(e));
     const offs = [
-      listen<string>("menu", e => runCommand(e.payload)),
+      // Skips a menu event the keydown below already ran, in case both fire.
+      listen<string>("menu", e => { if (e.payload !== lastKey.id || Date.now() - lastKey.at > 500) runCommand(e.payload); }),
       listen<{ id: number; label: string }>("quick-saved", e => { remember(e.payload.label, () => api.deleteEntry(e.payload.id).then(refresh)); void refresh(); }),
       listen<{ kind: "gasto" | "ingreso"; cents: number | null; payee: string; categoryId: number | null; accountId: number | null; date: string }>("quick-details", e => {
         const d = e.payload; openEntry(d.kind, null, { cents: d.cents, payee: d.payee, categoryId: d.categoryId, accountId: d.accountId, date: new Date(d.date) });
@@ -57,8 +59,13 @@
   });
   let screen = $derived(app.route.split(/[/?]/)[0]);
 
-  // ponytail: ⌘Z only for now; the full shortcut map and native menu arrive with T7.
+  // Menu accelerators do not reach Windows and Linux while the webview has focus, so Ctrl
+  // shortcuts run from here there; on Mac the native menu owns them.
+  let lastKey = { id: "", at: 0 };
   function keydown(e: KeyboardEvent) {
+    const combo = isMac ? null : comboOf(e);
+    const command = combo && combo !== "⌘Z" ? COMMANDS.find(c => c.keys === combo) : undefined;
+    if (command) { e.preventDefault(); lastKey = { id: command.id, at: Date.now() }; runCommand(command.id); return; }
     const typing = e.target instanceof Element && e.target.matches("input, textarea, select");
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !typing && !document.querySelector("dialog[open]")) {
       e.preventDefault(); void undo();

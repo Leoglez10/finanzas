@@ -4,6 +4,7 @@
   import { emitTo, listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import * as api from "../lib/api";
+  import { keyLabel } from "../lib/keys";
   import { categoryColor, daysBetween, money, parseDay } from "../lib/format";
   import { describe, parse, quickContext, saveDraft } from "../lib/quick";
   import type { QuickContext } from "../lib/quick-parse";
@@ -46,7 +47,7 @@
   }
   function keydown(e: KeyboardEvent) {
     if (e.key === "Escape") { e.preventDefault(); void hide(); }
-    if (e.key === "Enter") { e.preventDefault(); if (e.metaKey) void details(); else void save(); }
+    if (e.key === "Enter") { e.preventDefault(); if (e.metaKey || e.ctrlKey) void details(); else void save(); }
   }
 </script>
 
@@ -69,7 +70,7 @@
     {#if error}<span class="err" role="alert">{error}</span>{/if}
   </div>
   <div class="quick-foot"><span>Prueba: <b>super 450.50 tarjeta</b> · <b>+3,200 sueldo</b></span>
-    <button class="btn sm ghost first" onclick={details}>Más detalles <kbd>⌘↩</kbd></button>
+    <button class="btn sm ghost first" onclick={details}>Más detalles <kbd>{keyLabel("⌘↩")}</kbd></button>
     <button class="btn sm primary" onclick={save}>Guardar <kbd style="background:transparent;color:inherit;border-color:currentColor">↩</kbd></button>
   </div>
 </main>

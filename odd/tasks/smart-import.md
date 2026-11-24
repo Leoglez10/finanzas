@@ -12,8 +12,8 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 
 ## Tasks
 
-- T1 [S1] inline — Rust reads .xlsx/.xls/.ods with `calamine` into rows; file pickers and drop accept them. Risk: item 5 (new dependency).
-- T2 [S2,S3] inline — csv.ts detection engine: header search, content scoring, date/decimal/sign detection, totals skipped; tests.
+- T1 [S1] inline — Rust reads .xlsx/.xls/.ods with `calamine` into rows; file pickers and drop accept them. Risk: item 5 (new dependency). Status: done 40eba0c (cargo test 6/6).
+- T2 [S2,S3] inline — csv.ts detection engine: header search, content scoring, date/decimal/sign detection, totals skipped; tests. Status: done (csv.test.ts 16/16, 52/52 total).
 - T3 [S4,S5] inline — ImportDialog mapping row, date-order and sign toggles, saved mappings per header signature.
 
 ## Log
@@ -21,3 +21,4 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 - L1 (2026-11-24) User: "como se pueden resolver ambiguedades o detectare dartos de las columnas o qie detecte la mayoria de excwl o cvs que tenga, si por ejemplo qu eponga un ecvel que ellos tengan ya caserom que detecte la mayoria de columnas y haga un uen implementavcion en la apop de cualquiera que se le meta?"
 - L2 (2026-11-24) Proposal accepted: "sí, impleméntalo". Route inline for all tasks (no writer trigger: units depend on each other).
 - L3 Uncommitted Windows-shortcut fix (keys.ts etc.) rides along in the working tree; not part of this feature's commits.
+- L4 T1 done 40eba0c; Windows-shortcut fix committed separately as 883c05f on this branch. T2 done: detect() + parseMoney, typeSign exact single letters.

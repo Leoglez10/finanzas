@@ -4,8 +4,8 @@
 #   brew install --cask finanzas
 # .github/workflows/release.yml rewrites `version` and `sha256` after each release.
 cask "finanzas" do
-  version "0.7.2"
-  sha256 "aefadc87f45f4ec197b882fcc830ae400e94f7d7bab5e2aa2901d3e65beee970"
+  version "0.7.3"
+  sha256 "765d413cf412db0b89f5c4cafa6493d103cf1728a0bbcc9ea6ca743857ad0552"
 
   url "https://github.com/Leoglez10/finanzas/releases/download/v#{version}/Finanzas-macos-arm64.dmg"
   name "Finanzas"

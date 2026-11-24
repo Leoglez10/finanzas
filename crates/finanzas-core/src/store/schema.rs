@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub(super) const CURRENT_VERSION: i64 = 8;
+pub(super) const CURRENT_VERSION: i64 = 9;
 
 pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -120,6 +120,19 @@ pub(super) fn migrate(conn: &mut Connection) -> Result<()> {
                 start_date TEXT NOT NULL, annual_rate INTEGER NOT NULL DEFAULT 0 CHECK(annual_rate BETWEEN 0 AND 100000)
             );
             CREATE INDEX IF NOT EXISTS installment_account_idx ON installment(account_id);"
+        )?;
+        tx.pragma_update(None, "user_version", 8)?;
+        tx.commit()?;
+    }
+    if version < 9 {
+        // How an account looks: a preset icon and color, or the user's own image (stored here, never shipped).
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS account_style (
+                account_id INTEGER PRIMARY KEY REFERENCES account(id) ON DELETE CASCADE,
+                icon TEXT, color TEXT, image BLOB, image_type TEXT,
+                CHECK((image IS NULL) = (image_type IS NULL))
+            );"
         )?;
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
         tx.commit()?;

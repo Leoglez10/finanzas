@@ -1,6 +1,6 @@
 use super::AppState;
 use chrono::Local;
-use finanzas_core::{service, store::{self, Store}, Account, Category, CategoryGroup, Schedule};
+use finanzas_core::{service, store::{self, Store}, Schedule};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
@@ -17,17 +17,8 @@ pub fn assign_budget(state: State<'_, AppState>, month: i32, category_id: i64, t
 /// New account, with its opening balance as a "Saldo inicial" movement (same as the Rune app). Returns its id.
 #[tauri::command(async)]
 pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool, opening: Option<i64>, date: chrono::NaiveDate, card: Option<service::CardTerms>) -> Result<i64, String> {
-    let name = name.trim(); if name.is_empty() { return Err("Escribe un nombre".into()); }
-    let id = state.with_store(|s| s.transaction(|s| {
-        let order = s.list_accounts()?.iter().map(|a| a.sort_order).fold(0.0, f64::max) + 1.0;
-        let id = s.insert_account(&Account { id: 0, name: name.into(), off_budget, closed: false, sort_order: order })?;
-        if let Some(amount) = opening.filter(|v| *v != 0) {
-            s.insert_entry(&finanzas_core::Entry { id: 0, date, amount, notes: "Saldo inicial".into(), cleared: true, account_id: Some(id), category_id: None, payee_id: None, schedule_id: None })?;
-        }
-        if card.is_some() { service::set_card_terms(s, id, card)?; }
-        Ok::<_, service::ServiceError>(id)
-    }).map_err(|e| e.to_string()))?;
-    state.changed(); Ok(id)
+    let account = state.with_store(|s| service::create_account(s, &name, off_budget, opening, date, card).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(account.id)
 }
 #[tauri::command(async)]
 pub fn debts(state: State<'_, AppState>) -> Result<service::DebtsView, String> { state.with_store(|s| service::debts(s, Local::now().date_naive()).map_err(|e| e.to_string())) }
@@ -50,24 +41,20 @@ pub fn delete_installment(state: State<'_, AppState>, id: i64) -> Result<service
 }
 #[tauri::command(async)]
 pub fn change_category(state: State<'_, AppState>, id: i64, name: Option<String>, hidden: Option<bool>) -> Result<(), String> {
-    state.with_store(|s| { let mut c = s.get_category(id).map_err(|e| e.to_string())?.ok_or("Categoría no encontrada")?;
-        if let Some(n) = name { if n.trim().is_empty() { return Err("Escribe un nombre".into()); } c.name = n.trim().into(); }
-        if let Some(h) = hidden { c.hidden = h; } s.update_category(&c).map_err(|e| e.to_string()) })?;
+    state.with_store(|s| service::update_category(s, id, name.as_deref(), hidden).map_err(|e| not_found(e, "Categoría no encontrada")))?;
     state.changed(); Ok(())
 }
 #[tauri::command(async)]
 pub fn change_group(state: State<'_, AppState>, id: Option<i64>, name: String) -> Result<(), String> {
-    let name = name.trim(); if name.is_empty() { return Err("Escribe un nombre".into()); }
-    state.with_store(|s| { if let Some(id) = id { let mut g = s.get_category_group(id).map_err(|e| e.to_string())?.ok_or("Grupo no encontrado")?; g.name = name.into(); s.update_category_group(&g).map_err(|e| e.to_string())?; }
-        else { let order = s.list_category_groups().map_err(|e| e.to_string())?.iter().filter(|g| !g.is_income).map(|g| g.sort_order).fold(0.0_f64, f64::max) + 1.0; s.insert_category_group(&CategoryGroup { id: 0, name: name.into(), is_income: false, sort_order: order }).map_err(|e| e.to_string())?; } Ok(()) })?;
+    state.with_store(|s| service::save_category_group(s, id, &name).map_err(|e| not_found(e, "Grupo no encontrado")))?;
     state.changed(); Ok(())
 }
 #[tauri::command(async)]
 pub fn create_category(state: State<'_, AppState>, group_id: i64, name: String) -> Result<(), String> {
-    let name = name.trim(); if name.is_empty() { return Err("Escribe un nombre".into()); }
-    state.with_store(|s| { let order = s.list_categories().map_err(|e| e.to_string())?.iter().filter(|c| c.group_id == Some(group_id)).map(|c| c.sort_order).fold(0.0_f64, f64::max) + 1.0; s.insert_category(&Category { id: 0, name: name.into(), hidden: false, sort_order: order, group_id: Some(group_id) }).map_err(|e| e.to_string())?; Ok(()) })?;
+    state.with_store(|s| service::create_category(s, group_id, &name).map_err(|e| not_found(e, "Grupo no encontrado")))?;
     state.changed(); Ok(())
 }
+fn not_found(e: service::ServiceError, message: &str) -> String { if matches!(e, service::ServiceError::NotFound) { message.into() } else { e.to_string() } }
 #[tauri::command(async)]
 pub fn upcoming(state: State<'_, AppState>) -> Result<Vec<service::UpcomingView>, String> { state.with_store(|s| service::upcoming(s, Local::now().date_naive(), 30).map_err(|e| e.to_string())) }
 #[tauri::command(async)]

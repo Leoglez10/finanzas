@@ -175,7 +175,7 @@ fn bounded_integer_reports_its_range() {
 #[test]
 fn every_spec_has_an_object_schema() {
     let specs = specs();
-    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment","create_account","create_category","update_category","save_category_group","save_schedule","post_schedule","delete_schedule","set_wish_item_paid","complete_wish","tag_transaction","get_overview","add_transactions","list_profiles"]);
+    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment","create_account","set_account_style","create_category","update_category","save_category_group","save_schedule","post_schedule","delete_schedule","set_wish_item_paid","complete_wish","tag_transaction","get_overview","add_transactions","list_profiles"]);
     assert!(specs.iter().all(|s| s.input_schema["type"] == "object"));
 }
 #[test]
@@ -487,4 +487,46 @@ fn overview_and_bulk_transactions_from_tools() {
     assert_eq!(call(&mut s.store, "get_overview", &json!({"months":25}), day(10,15)).unwrap_err().to_string(), "months: expected an integer from 1 to 24");
     let tool = specs().into_iter().find(|t| t.name == "list_profiles").unwrap();
     assert!(tool.read_only);
+}
+
+#[test]
+fn accounts_get_an_icon_color_and_image_from_tools() {
+    let mut s = Seed::new();
+    let dir = std::env::temp_dir().join(format!("finanzas-mcp-logo-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = dir.join("nu.svg");
+    std::fs::write(&svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>").unwrap();
+    let gif = dir.join("x.gif");
+    std::fs::write(&gif, "GIF89a").unwrap();
+    let big = dir.join("big.png");
+    std::fs::write(&big, vec![0u8; 600 * 1024]).unwrap();
+
+    let nu = s.call("create_account", json!({"name":"Nu","icon":"card","color":"violet","imagePath":svg.to_str().unwrap()}));
+    assert_eq!((nu["icon"].as_str(), nu["color"].as_str(), nu["hasImage"].as_bool()), (Some("card"), Some("violet"), Some(true)));
+    let listed = s.call("list_accounts", json!({}));
+    let row = listed.as_array().unwrap().iter().find(|a| a["name"] == "Nu").unwrap();
+    assert_eq!((row["icon"].as_str(), row["hasImage"].as_bool()), (Some("card"), Some(true)));
+    assert!(row.get("image").is_none(), "the image bytes are not sent to the agent");
+    let plain = listed.as_array().unwrap().iter().find(|a| a["name"] == "Banco").unwrap();
+    assert_eq!((plain["icon"].clone(), plain["color"].clone(), plain["hasImage"].as_bool()), (Value::Null, Value::Null, Some(false)));
+
+    // Omitted keys stay; null resets; removeImage drops the image.
+    let r = s.call("set_account_style", json!({"accountId":nu["id"],"color":"red"}));
+    assert_eq!((r["icon"].as_str(), r["color"].as_str(), r["hasImage"].as_bool()), (Some("card"), Some("red"), Some(true)));
+    let r = s.call("set_account_style", json!({"accountId":nu["id"],"icon":null,"removeImage":true}));
+    assert_eq!((r["icon"].clone(), r["color"].as_str(), r["hasImage"].as_bool()), (Value::Null, Some("red"), Some(false)));
+
+    let account = nu["id"].as_str().unwrap();
+    for (args, expected) in [
+        (json!({"accountId":account,"icon":"rocket"}), "icon: expected one of bank, card, cash, wallet, piggy, chart, house, car, gift, shield, star, plane"),
+        (json!({"accountId":account,"color":"#fff"}), "color: expected one of violet, blue, teal, green, lime, yellow, orange, red, pink, gray"),
+        (json!({"accountId":account,"imagePath":gif.to_str().unwrap()}), "imagePath: expected a PNG, JPEG, WebP or SVG image"),
+        (json!({"accountId":account,"imagePath":big.to_str().unwrap()}), "imagePath: image is larger than 512 KB"),
+        (json!({"accountId":account,"imagePath":dir.join("missing.png").to_str().unwrap()}), "imagePath: file not found"),
+        (json!({"accountId":account,"imagePath":svg.to_str().unwrap(),"removeImage":true}), "Pass imagePath or removeImage, not both"),
+        (json!({"accountId":"Account/p99","color":"red"}), "accountId: not found"),
+    ] { assert_eq!(call(&mut s.store, "set_account_style", &args, day(10,15)).unwrap_err().to_string(), expected); }
+    assert_eq!(call(&mut s.store, "create_account", &json!({"name":"Mal","icon":"rocket"}), day(10,15)).unwrap_err().to_string(), "icon: expected one of bank, card, cash, wallet, piggy, chart, house, car, gift, shield, star, plane");
+    assert!(!s.call("list_accounts", json!({})).as_array().unwrap().iter().any(|a| a["name"] == "Mal"), "a bad look creates no account");
+    std::fs::remove_dir_all(dir).unwrap();
 }

@@ -14,12 +14,12 @@ fn stdio_initializes_lists_and_calls_tools() {
     fn send(input: &mut impl Write, value: Value) { writeln!(input, "{value}").unwrap(); input.flush().unwrap(); }
     fn recv(output: &mut impl BufRead) -> Value { let mut line = String::new(); assert!(output.read_line(&mut line).unwrap() > 0, "server closed stdout"); serde_json::from_str(&line).unwrap() }
     send(&mut input,json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"claude-code","version":"1"}}}));
-    let init=recv(&mut output); assert_eq!(init["result"]["serverInfo"]["name"],"finanzas"); assert_eq!(init["result"]["serverInfo"]["version"],"1.0.0");
+    let init=recv(&mut output); assert_eq!(init["result"]["serverInfo"]["name"],"finanzas"); assert_eq!(init["result"]["serverInfo"]["version"],"1.0.0"); assert!(init["result"]["instructions"].as_str().unwrap().contains("set_account_style"));
     send(&mut input,json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     send(&mut input,json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}));
     let list=recv(&mut output); let tools=list["result"]["tools"].as_array().unwrap();
     let names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment","create_account","create_category","update_category","save_category_group","save_schedule","post_schedule","delete_schedule","set_wish_item_paid","complete_wish","tag_transaction","get_overview","add_transactions","list_profiles"]);
+    assert_eq!(names,["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment","create_account","set_account_style","create_category","update_category","save_category_group","save_schedule","post_schedule","delete_schedule","set_wish_item_paid","complete_wish","tag_transaction","get_overview","add_transactions","list_profiles"]);
     assert_eq!(tools[0]["annotations"]["readOnlyHint"],true); assert_eq!(tools[7]["annotations"]["destructiveHint"],true);
     send(&mut input,json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_accounts","arguments":{}}}));
     let result=recv(&mut output); assert_eq!(result["result"]["content"][0]["text"],"[]"); assert_ne!(result["result"]["isError"],true);

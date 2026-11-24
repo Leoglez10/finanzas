@@ -15,6 +15,10 @@ impl ServerHandler for Finanzas {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("finanzas", "1.0.0"))
+            .with_instructions("Personal finances of the user (Finanzas app). Amounts are decimal currency units; negative = outflow. \
+To add a bank or card the user names: create_account, then set_account_style with icon bank (card for credit cards), the color closest \
+to the bank's brand and, when you can, its logo downloaded to a local file passed as imagePath; for a credit card also set_card_terms. \
+Purchases in months go to save_installment after recording the full purchase with add_transaction.")
     }
 
     async fn list_tools(&self, _: Option<PaginatedRequestParams>, _: RequestContext<RoleServer>) -> Result<ListToolsResult, ErrorData> {

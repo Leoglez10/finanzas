@@ -11,11 +11,12 @@ Branch: feat/account-style · Delivery: ask-on-risk · Runner: `cargo test --wor
 
 ## Tasks
 
-- T1 [S1,S2] inline — schema v9 `account_style`; core service (icon/color lists, set style, set image with type sniffing and size limit). Risk: item 1 (schema migration, additive).
-- T2 [S1,S2] inline — Tauri commands, AccountBadge in sidebar/Resumen/Deudas/account page, style picker when creating and editing, image picker.
-- T3 [S3] inline — MCP set_account_style; create_account and list_accounts carry icon/color/image; tool descriptions tell agents how to add a bank logo.
+- T1 [S1,S2] inline — schema v9 `account_style`; core service (icon/color lists, set style, set image with type sniffing and size limit). Risk: item 1 (schema migration, additive). Status: done aeb99e0, ff1710b.
+- T2 [S1,S2] inline — Tauri commands, AccountBadge in sidebar/Resumen/Deudas/account page, style picker when creating and editing, image picker. Status: done 737a194 (QA apariencia.js 13/13).
+- T3 [S3] inline — MCP set_account_style; create_account and list_accounts carry icon/color/image; tool descriptions and server instructions tell agents how to add a bank logo. Status: done.
 
 ## Log
 
 - L1 (2026-11-23) User: "Or if it's a bank, you always put a logo of the bank or a SVG predetermined. You know, for the applicattion Estaría increíble. Que se pueda poner una imagen o un icono así predeterminado."
 - L2 Choices: "Iconos + color (Recomendado), Imagen propia, \"Y la opción o una indicación de un agente de los MSP es que: si te digo que agregues un banco o si te digo algo, pues que tú ya sepas cómo ponerla y cómo configurar esa imagen y el banco que te pida y qué ponerla.\""
+- L3 Evidence: workspace 173 tests, clippy clean, front 40, QA apariencia 13/13, cuentas, deudas 29/29; end-to-end: MCP create_account with an SVG logo on a demo DB, the real app shows it in the sidebar.

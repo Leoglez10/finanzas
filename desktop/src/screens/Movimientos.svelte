@@ -12,6 +12,8 @@
   import Kpi from "../components/Kpi.svelte";
   import PeriodPicker from "../components/PeriodPicker.svelte";
   import Topbar from "../components/Topbar.svelte";
+  import AccountBadge from "../components/AccountBadge.svelte";
+  import { openAccountStyle } from "../lib/dialogs.svelte";
 
   let { accountId = 0 }: { accountId?: number } = $props();
   // Filters live in the route: movimientos?desde=2026-11-01&hasta=2026-11-30&categoria=4 (mes=202611 still works).
@@ -87,7 +89,9 @@
 </script>
 
 <Topbar title={account?.name ?? "Movimientos"} sub={account ? "Cuenta" : "Todas las cuentas"}>
+  {#snippet lead()}{#if account}<button class="badge-btn" title="Cambiar apariencia" aria-label="Cambiar apariencia de {account.name}" onclick={() => openAccountStyle(account!.id)}><AccountBadge {account} size={40} /></button>{/if}{/snippet}
   {#snippet actions()}
+    {#if account}<button class="btn ghost" onclick={() => openAccountStyle(account!.id)}><Icon name="edit" />Apariencia</button>{/if}
     <button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Importar CSV</button>
     <button class="btn" onclick={() => openEntry("ingreso", null, { accountId: accountId || null })}><Icon name="plus" />Ingreso</button>
     <button class="btn primary" onclick={() => openEntry("gasto", null, { accountId: accountId || null })}><Icon name="minus" />Gasto</button>
@@ -157,3 +161,8 @@
     {/each}
   </table>
 </div>
+
+<style>
+  .badge-btn { all: unset; cursor: pointer; border-radius: 12px; }
+  .badge-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+</style>

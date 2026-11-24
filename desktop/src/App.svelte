@@ -25,6 +25,7 @@
   import Ajustes from "./screens/Ajustes.svelte";
   import Deudas from "./screens/Deudas.svelte";
   import CardDialog from "./components/CardDialog.svelte";
+  import AccountStyleDialog from "./components/AccountStyleDialog.svelte";
   import InstallmentDialog from "./components/InstallmentDialog.svelte";
 
   // The quick-capture window loads this same page at #quick and shows only that.
@@ -109,6 +110,7 @@
   <ImportDialog />
   <AccountDialog />
   <CardDialog />
+  <AccountStyleDialog />
   <InstallmentDialog />
   {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
   <Toast />

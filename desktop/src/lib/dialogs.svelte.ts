@@ -23,3 +23,5 @@ export const cardDialog = $state({ open: false, debt: null as DebtView | null })
 export function openCard(debt: DebtView | null = null) { Object.assign(cardDialog, { open: true, debt }); }
 export const installmentDialog = $state({ open: false, accountId: 0, plan: null as Installment | null });
 export function openInstallment(accountId: number, plan: Installment | null = null) { Object.assign(installmentDialog, { open: true, accountId, plan }); }
+export const accountStyleDialog = $state({ open: false, accountId: 0 });
+export function openAccountStyle(accountId: number) { Object.assign(accountStyleDialog, { open: true, accountId }); }

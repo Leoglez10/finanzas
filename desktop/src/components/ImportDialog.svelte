@@ -25,7 +25,7 @@
     if (!dialog.open) dialog.showModal();
     accountId = app.accounts.find(a => !a.closed)?.id ?? 0;
     ctx = await quickContext(app.today);
-    rows = mapRows(csvRows(importDialog.file?.text ?? ""), ctx);
+    rows = mapRows(importDialog.file?.rows ?? csvRows(importDialog.file?.text ?? ""), ctx);
   }
   // Duplicates depend on the target account, so they are recomputed when it changes.
   $effect(() => {

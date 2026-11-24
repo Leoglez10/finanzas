@@ -92,7 +92,7 @@
   {#snippet lead()}{#if account}<button class="badge-btn" title="Cambiar apariencia" aria-label="Cambiar apariencia de {account.name}" onclick={() => openAccountStyle(account!.id)}><AccountBadge {account} size={40} /></button>{/if}{/snippet}
   {#snippet actions()}
     {#if account}<button class="btn ghost" onclick={() => openAccountStyle(account!.id)}><Icon name="edit" />Apariencia</button>{/if}
-    <button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Importar CSV</button>
+    <button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Importar</button>
     <button class="btn" onclick={() => openEntry("ingreso", null, { accountId: accountId || null })}><Icon name="plus" />Ingreso</button>
     <button class="btn primary" onclick={() => openEntry("gasto", null, { accountId: accountId || null })}><Icon name="minus" />Gasto</button>
   {/snippet}

@@ -28,7 +28,7 @@ export const COMMANDS: Command[] = [
   { id: "new-wish", label: "Nueva meta o deseo", group: "Acciones", icon: "gift", keys: "", run: () => openWish() },
   { id: "new-account", label: "Nueva cuenta", group: "Acciones", icon: "card", keys: "", run: () => openAccount() },
   { id: "new-schedule", label: "Programar pago", group: "Acciones", icon: "repeat", keys: "", run: () => openSchedule() },
-  { id: "import", label: "Importar CSV…", group: "Acciones", icon: "upload", keys: "⌘I", run: () => pickCsv().then(f => f && openImport(f)).catch(e => toast(String(e))) },
+  { id: "import", label: "Importar CSV o Excel…", group: "Acciones", icon: "upload", keys: "⌘I", run: () => pickCsv().then(f => f && openImport(f)).catch(e => toast(String(e))) },
   { id: "search", label: "Buscar movimientos", group: "Editar", icon: "search", keys: "⌘F", run: () => { go("movimientos"); setTimeout(() => document.querySelector<HTMLInputElement>("#main input[type=search]")?.focus()); } },
   { id: "undo", label: "Deshacer el último cambio", group: "Editar", icon: "undo", keys: "⌘Z", run: () => undo() },
   { id: "theme", label: "Cambiar entre claro y oscuro", group: "Ver", icon: "moon", keys: "⇧⌘L", run: () => updateSettings({ dark: !isDark() }) },

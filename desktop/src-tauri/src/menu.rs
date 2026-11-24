@@ -24,7 +24,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         &item(app, "quick", "Captura rápida", Some(QUICK_SHORTCUT))?,
         &item(app, "new-wish", "Nuevo deseo", None)?,
         &item(app, "new-schedule", "Programar pago", None)?, &sep()?,
-        &item(app, "import", "Importar CSV…", Some("CmdOrCtrl+I"))?,
+        &item(app, "import", "Importar CSV o Excel…", Some("CmdOrCtrl+I"))?,
         &sep()?, &PredefinedMenuItem::close_window(app, Some("Cerrar ventana"))?,
     ])?;
     // Undo/redo/cut/copy/paste stay native so text fields behave; the app's ⌘Z runs in the webview

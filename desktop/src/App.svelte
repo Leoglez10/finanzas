@@ -44,7 +44,7 @@
       listen<{ kind: "gasto" | "ingreso"; cents: number | null; payee: string; categoryId: number | null; accountId: number | null; date: string }>("quick-details", e => {
         const d = e.payload; openEntry(d.kind, null, { cents: d.cents, payee: d.payee, categoryId: d.categoryId, accountId: d.accountId, date: new Date(d.date) });
       }),
-      // Tauri delivers dropped files with their paths; Rust reads them (only .csv, up to 5 MB).
+      // Tauri delivers dropped files with their paths; Rust reads them (CSV or spreadsheets, up to 5 MB).
       getCurrentWebview().onDragDropEvent(e => {
         if (e.payload.type === "enter" || e.payload.type === "over") dropping = true;
         else if (e.payload.type === "leave") dropping = false;
@@ -119,6 +119,6 @@
   <CardDialog />
   <AccountStyleDialog />
   <InstallmentDialog />
-  {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
+  {#if dropping}<div class="drop"><div><Icon name="upload" />Suelta tu CSV o Excel para importarlo<small style="font-weight:400;font-size:13px;opacity:.85">Verás una vista previa antes de guardar</small></div></div>{/if}
   <Toast />
 {/if}

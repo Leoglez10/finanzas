@@ -144,23 +144,42 @@ pub fn import_data(app: AppHandle, state: State<'_, AppState>, source: String) -
     state.changed(); Ok(Some(summary))
 }
 
+const IMPORT_TYPES: [&str; 4] = ["csv", "xlsx", "xls", "ods"];
+/// `text` for CSV (parsed in the webview); `rows` for spreadsheets, already split into cells.
 #[derive(serde::Serialize)]
-pub struct CsvFile { name: String, text: String }
-/// Reads a dropped or picked CSV. Only .csv files up to 5 MB, so a stray drop never loads something huge.
+pub struct CsvFile { name: String, text: String, rows: Option<Vec<Vec<String>>> }
+/// Reads a dropped or picked bank file. Only CSV or spreadsheets up to 5 MB, so a stray drop never loads something huge.
 fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
-    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv")) { return Err("Solo puedo importar archivos .csv".into()); }
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !IMPORT_TYPES.contains(&ext.as_str()) { return Err("Solo puedo importar archivos .csv, .xlsx, .xls u .ods".into()); }
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > 5 * 1024 * 1024 { return Err("El archivo pesa más de 5 MB".into()); }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if ext != "csv" { return Ok(CsvFile { name, text: String::new(), rows: Some(sheet_rows(path)?) }); }
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     // Some banks export Latin-1; fall back so accents do not break the whole file.
     let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| bytes.iter().map(|&b| b as char).collect());
-    Ok(CsvFile { name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), text })
+    Ok(CsvFile { name, text, rows: None })
+}
+/// The first sheet that has any cell, as text: dates become `yyyy-mm-dd`, decimals keep two places.
+fn sheet_rows(path: &std::path::Path) -> Result<Vec<Vec<String>>, String> {
+    use calamine::{Data, Reader};
+    let mut book = calamine::open_workbook_auto(path).map_err(|e| format!("No pude leer la hoja de cálculo: {e}"))?;
+    let range = book.worksheets().into_iter().map(|(_, r)| r).find(|r| !r.is_empty()).ok_or("La hoja de cálculo está vacía")?;
+    let cell = |c: &Data| match c {
+        Data::DateTime(d) => d.as_datetime().map(|d| d.date().to_string()).unwrap_or_default(),
+        Data::DateTimeIso(s) => s.chars().take(10).collect(),
+        // Binary floats (0.1 + 0.2) would otherwise show as 0.30000000000000004.
+        Data::Float(f) if f.fract() != 0.0 => format!("{f:.2}"),
+        other => other.to_string(),
+    };
+    Ok(range.rows().map(|r| r.iter().map(cell).collect()).collect())
 }
 #[tauri::command(async)]
 pub fn read_csv(path: String) -> Result<CsvFile, String> { read_csv_file(std::path::Path::new(&path)) }
 #[tauri::command(async)]
 pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
-    let Some(file) = app.dialog().file().set_title("Elige el CSV de tu banco").add_filter("CSV", &["csv"]).blocking_pick_file() else { return Ok(None) };
+    let Some(file) = app.dialog().file().set_title("Elige el archivo de tu banco").add_filter("CSV o Excel", &IMPORT_TYPES).blocking_pick_file() else { return Ok(None) };
     read_csv_file(&file.into_path().map_err(|e| e.to_string())?).map(Some)
 }
 /// Adds every row or none: a failure halfway leaves the ledger untouched. Returns the new ids for undo.
@@ -168,4 +187,28 @@ pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
 pub fn import_entries(state: State<'_, AppState>, entries: Vec<service::NewEntry>) -> Result<Vec<i64>, String> {
     let ids = state.with_store(|s| s.transaction(|s| entries.into_iter().map(|e| service::add_entry(s, e).map(|row| row.id)).collect::<Result<Vec<_>, _>>()).map_err(|e: service::ServiceError| e.to_string()))?;
     state.changed(); Ok(ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_csv_file;
+
+    #[test]
+    fn excel_files_become_rows_from_the_first_sheet_with_data() {
+        let file = read_csv_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/banco.xlsx")).unwrap();
+        assert_eq!(file.name, "banco.xlsx");
+        assert_eq!(file.rows.unwrap(), vec![
+            vec!["Estado de cuenta", "", ""],
+            vec!["", "", ""],
+            vec!["Fecha", "Concepto", "Importe"],
+            vec!["2026-11-09", "Netflix", "-350.50"],
+            vec!["2026-11-10", "Nómina", "3200"],
+            vec!["11/11/2026", "Redondeo", "0.30"],
+        ]);
+    }
+
+    #[test]
+    fn other_files_are_refused() {
+        assert_eq!(read_csv_file(std::path::Path::new("notas.txt")).err().unwrap(), "Solo puedo importar archivos .csv, .xlsx, .xls u .ods");
+    }
 }

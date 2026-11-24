@@ -21,6 +21,27 @@ pub fn create_account(state: State<'_, AppState>, name: String, off_budget: bool
     state.changed(); Ok(account.id)
 }
 #[tauri::command(async)]
+pub fn set_account_style(state: State<'_, AppState>, account_id: i64, icon: Option<String>, color: Option<String>) -> Result<(), String> {
+    state.with_store(|s| service::set_account_style(s, account_id, icon.as_deref(), color.as_deref()).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(())
+}
+/// Lets the user pick an image for the account. Returns false when they cancel.
+#[tauri::command(async)]
+pub fn pick_account_image(app: AppHandle, state: State<'_, AppState>, account_id: i64) -> Result<bool, String> {
+    let Some(file) = app.dialog().file().set_title("Elige una imagen para la cuenta").add_filter("Imagen", &["png", "jpg", "jpeg", "webp", "svg"]).blocking_pick_file() else { return Ok(false) };
+    let path = file.into_path().map_err(|e| e.to_string())?;
+    // Checked before reading so a huge file is never loaded; the service checks the size and type again.
+    if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 512 * 1024 { return Err("La imagen pesa más de 512 KB".into()); }
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    state.with_store(|s| service::set_account_image(s, account_id, Some(&bytes)).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(true)
+}
+#[tauri::command(async)]
+pub fn clear_account_image(state: State<'_, AppState>, account_id: i64) -> Result<(), String> {
+    state.with_store(|s| service::set_account_image(s, account_id, None).map_err(|e| e.to_string()))?;
+    state.changed(); Ok(())
+}
+#[tauri::command(async)]
 pub fn debts(state: State<'_, AppState>) -> Result<service::DebtsView, String> { state.with_store(|s| service::debts(s, Local::now().date_naive()).map_err(|e| e.to_string())) }
 /// `terms: None` stops treating the account as a credit card.
 #[tauri::command(async)]

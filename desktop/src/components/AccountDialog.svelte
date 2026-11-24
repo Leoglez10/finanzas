@@ -8,12 +8,14 @@
   import { toast } from "../lib/undo.svelte";
   import { cardForm, cardTerms } from "../lib/debts";
   import CardFields from "./CardFields.svelte";
+  import StylePicker from "./StylePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
   let name = $state(""), opening = $state(""), date = $state(""), offBudget = $state(false), error = $state(""), saving = $state(false);
   let isCard = $state(false), card = $state(cardForm(null));
-  $effect(() => { if (accountDialog.open) untrack(() => { name = ""; opening = ""; offBudget = false; isCard = false; card = cardForm(null); error = ""; date = isoDay(app.today); if (!dialog.open) dialog.showModal(); }); });
+  let icon = $state<string | null>(null), color = $state<string | null>(null);
+  $effect(() => { if (accountDialog.open) untrack(() => { name = ""; opening = ""; offBudget = false; isCard = false; card = cardForm(null); icon = null; color = null; error = ""; date = isoDay(app.today); if (!dialog.open) dialog.showModal(); }); });
 
   async function submit(e: SubmitEvent) {
     if ((e.submitter as HTMLButtonElement | null)?.value !== "save") return;
@@ -26,6 +28,7 @@
     saving = true;
     try {
       const id = await api.createAccount(name.trim(), offBudget, cents || null, date, terms);
+      if (icon || color) await api.setAccountStyle(id, icon, color);
       dialog.close(); await refresh(); go(`cuenta-${id}`);
       toast(`Cuenta creada${cents ? ` con ${money(cents)}` : ""}`);
     } catch (err) { error = String(err); } finally { saving = false; }
@@ -43,6 +46,7 @@
         <label class="field"><span>Saldo actual <span class="opt">· opcional</span></span><input class="input num" bind:value={opening} inputmode="decimal" placeholder="0.00" aria-describedby="opening-hint" /><small id="opening-hint">Negativo si es deuda, como una tarjeta.</small></label>
         <label class="field">A la fecha<input class="input" type="date" bind:value={date} /></label>
       </div>
+      <StylePicker bind:icon bind:color />
       <label class="setting"><div class="grow"><b>Tarjeta de crédito</b><p>Lleva el límite, los cortes y las compras a meses.</p></div><input type="checkbox" role="switch" class="switch" bind:checked={isCard} /></label>
       {#if isCard}<CardFields bind:form={card} />{/if}
       <label class="setting" style="padding-bottom:0"><div class="grow"><b>Fuera del presupuesto</b><p>Para inversiones o ahorros que no usas en el día a día.</p></div><input type="checkbox" role="switch" class="switch" bind:checked={offBudget} /></label>

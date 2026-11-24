@@ -19,7 +19,7 @@ pub fn specs() -> Vec<ToolSpec> {
     let month = json!({"type":"string","description":"YYYY-MM"});
     let amount = json!({"type":"number","description":"Decimal currency units, max 2 decimals; negative = outflow"});
     vec![
-        spec("list_accounts", "List all accounts with id, name, off-budget/closed flags and current balance.", json!({}), &[], true, false),
+        spec("list_accounts", "List all accounts with id, name, off-budget/closed flags, current balance and look (icon, color, hasImage).", json!({}), &[], true, false),
         spec("get_transactions", "Get transactions in a date range (newest first), optionally for one account and/or category. Amounts: negative = outflow.", json!({"accountId":{"type":"string","description":"Account id; all accounts if omitted"},"startDate":date,"endDate":date,"categoryId":{"type":"string","description":"Only transactions in this category"},"limit":{"type":"integer","minimum":1,"maximum":1000,"description":"Max rows (default 100, max 1000)"}}), &["startDate","endDate"], true, false),
         spec("list_categories", "List category groups with their categories (ids, hidden and income flags).", json!({}), &[], true, false),
         spec("get_budget_month", "Envelope budget for a month: money left to budget, income, and per category the assigned, spent and available amounts.", json!({"month":month}), &["month"], true, false),
@@ -40,7 +40,8 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("set_card_terms", "Mark an account as a credit card and set its terms, replacing the previous ones: omitted or null terms are cleared (every term is optional). isCard false stops treating it as a card; its installments are kept. Returns the account as get_debts reports it.", json!({"accountId":{"type":"string","description":"Account id (see list_accounts)"},"isCard":{"type":"boolean","description":"Default true; false removes the card terms"},"creditLimit":{"type":["number","null"],"exclusiveMinimum":0,"description":"Credit limit in decimal currency units"},"cutDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Statement cut day of the month"},"dueDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Payment due day of the month"},"annualRatePercent":{"type":["number","null"],"minimum":0,"maximum":1000,"description":"Annual interest rate in percent, e.g. 45.5"},"minPaymentPercent":{"type":["number","null"],"minimum":0,"maximum":100,"description":"Minimum payment as a percent of the statement balance"}}), &["accountId"], false, false),
         spec("save_installment", "Create a purchase paid in monthly installments on a card, or replace one when id is supplied. Record the full purchase as a transaction on the card separately; this only splits it so each cut bills one monthly charge. annualRatePercent 0 (default) means without interest (MSI). Returns the plan with its monthly charge and months left.", json!({"id":{"type":"string","description":"Installment id (see get_debts) to replace"},"accountId":{"type":"string","description":"Card account id"},"name":{"type":"string"},"total":{"type":"number","exclusiveMinimum":0,"description":"Purchase total in decimal currency units"},"months":{"type":"integer","minimum":1,"maximum":120},"startDate":{"type":"string","description":"YYYY-MM-DD purchase date"},"annualRatePercent":{"type":"number","minimum":0,"maximum":1000,"description":"Default 0 (without interest)"}}), &["accountId","name","total","months","startDate"], false, false),
         spec("delete_installment", "Permanently delete an installment plan by id. Does not touch transactions. Returns the deleted plan.", json!({"id":{"type":"string","description":"Installment id (see get_debts)"}}), &["id"], false, true),
-        spec("create_account", "Create an account at the end of the list. A non-zero openingBalance is recorded as a \"Saldo inicial\" transaction on date (default today; negative for a debt such as a card). Use set_card_terms afterwards to make it a credit card. Returns the account with its balance.", json!({"name":{"type":"string"},"offBudget":{"type":"boolean","description":"For savings or investments kept out of the budget (default false)"},"openingBalance":{"type":"number","description":"Current balance in decimal currency units; negative = owed"},"date":date.clone()}), &["name"], false, false),
+        spec("create_account", "Create an account at the end of the list. A non-zero openingBalance is recorded as a \"Saldo inicial\" transaction on date (default today; negative for a debt such as a card). Optionally give it an icon, color and image (see set_account_style). Use set_card_terms afterwards to make it a credit card. Returns the account with its balance and look.", json!({"icon":{"type":["string","null"],"enum":["bank","card","cash","wallet","piggy","chart","house","car","gift","shield","star","plane",null],"description":"Preset icon; null resets it"},"color":{"type":["string","null"],"enum":["violet","blue","teal","green","lime","yellow","orange","red","pink","gray",null],"description":"Preset color; null resets it"},"imagePath":{"type":"string","description":"Absolute path of a local PNG, JPEG, WebP or SVG (max 512 KB), e.g. a bank logo you downloaded for the user; stored in their data"},"name":{"type":"string"},"offBudget":{"type":"boolean","description":"For savings or investments kept out of the budget (default false)"},"openingBalance":{"type":"number","description":"Current balance in decimal currency units; negative = owed"},"date":date.clone()}), &["name"], false, false),
+        spec("set_account_style", "Change how an account looks in the app: a preset icon and color, and/or its own image. Keys you omit stay as they are. For a bank, use icon bank (card for a credit card) and the color closest to the bank's brand; to show its logo, download the logo (PNG or SVG, at most 512 KB) to a local file and pass its absolute path as imagePath. Returns the account.", json!({"accountId":{"type":"string"},"icon":{"type":["string","null"],"enum":["bank","card","cash","wallet","piggy","chart","house","car","gift","shield","star","plane",null],"description":"Preset icon; null resets it"},"color":{"type":["string","null"],"enum":["violet","blue","teal","green","lime","yellow","orange","red","pink","gray",null],"description":"Preset color; null resets it"},"imagePath":{"type":"string","description":"Absolute path of a local PNG, JPEG, WebP or SVG (max 512 KB), e.g. a bank logo you downloaded for the user; stored in their data"},"removeImage":{"type":"boolean","description":"true removes the image (the icon shows again)"}}), &["accountId"], false, false),
         spec("create_category", "Create a category at the end of a group (see list_categories for group ids).", json!({"groupId":{"type":"string"},"name":{"type":"string"}}), &["groupId","name"], false, false),
         spec("update_category", "Rename a category and/or hide or show it; only the fields given change, at least one is required.", json!({"id":{"type":"string","description":"Category id"},"name":{"type":"string"},"hidden":{"type":"boolean"}}), &["id"], false, false),
         spec("save_category_group", "Rename a category group, or create an expense group at the end when id is omitted.", json!({"id":{"type":"string","description":"CategoryGroup id to rename"},"name":{"type":"string"}}), &["name"], false, false),
@@ -118,10 +119,48 @@ fn schedule_json(v: service::ScheduleView) -> Value {
 fn schedule_by_id(store: &Store, n: i64) -> Result<Value, ToolError> {
     service::schedule_views(store).map_err(err)?.into_iter().find(|v| v.schedule.id == n).map(schedule_json).ok_or_else(|| ToolError("id: not found".into()))
 }
+/// Icon and color to set: a key that is present replaces (null clears it); an absent key keeps the current one.
+type Look = (Option<Option<String>>, Option<Option<String>>, Option<Vec<u8>>);
+fn look(a: &Args) -> Result<Look, ToolError> {
+    let pick = |key: &str, allowed: &[&str]| -> Result<Option<Option<String>>, ToolError> {
+        match a.0.get(key) {
+            None => Ok(None),
+            Some(Value::Null) => Ok(Some(None)),
+            Some(Value::String(v)) if allowed.contains(&v.as_str()) => Ok(Some(Some(v.clone()))),
+            Some(_) => Err(ToolError(format!("{key}: expected one of {}", allowed.join(", ")))),
+        }
+    };
+    let image = match a.optional_string("imagePath")? {
+        None => None,
+        Some(path) => {
+            let meta = std::fs::metadata(path).map_err(|_| ToolError("imagePath: file not found".into()))?;
+            if meta.len() > 512 * 1024 { return Err(ToolError("imagePath: image is larger than 512 KB".into())); }
+            Some(std::fs::read(path).map_err(|e| ToolError(format!("imagePath: {e}")))?)
+        }
+    };
+    if image.is_some() && a.bool("removeImage")? == Some(true) { return Err(ToolError("Pass imagePath or removeImage, not both".into())); }
+    Ok((pick("icon", &service::ACCOUNT_ICONS)?, pick("color", &service::ACCOUNT_COLORS)?, image))
+}
+fn apply_look(store: &Store, account: i64, a: &Args, (icon, color, image): Look) -> Result<(), ToolError> {
+    if icon.is_some() || color.is_some() {
+        let current = service::account_styles(store).map_err(err)?.remove(&account).unwrap_or_default();
+        let icon = icon.unwrap_or(current.icon);
+        let color = color.unwrap_or(current.color);
+        service::set_account_style(store, account, icon.as_deref(), color.as_deref()).map_err(err)?;
+    }
+    if let Some(bytes) = image {
+        service::set_account_image(store, account, Some(&bytes)).map_err(|e| match e {
+            service::ServiceError::Invalid(_) => ToolError("imagePath: expected a PNG, JPEG, WebP or SVG image".into()), e => err(e) })?;
+    } else if a.bool("removeImage")? == Some(true) {
+        service::set_account_image(store, account, None).map_err(err)?;
+    }
+    Ok(())
+}
 fn account_json(store: &Store, n: i64) -> Result<Value, ToolError> {
     let a = store.get_account(n).map_err(err)?.ok_or_else(|| ToolError("accountId: not found".into()))?;
     let balance = store.account_balances().map_err(err)?.get(&n).copied().unwrap_or(0);
-    Ok(json!({"id":id("Account",a.id),"name":a.name,"offBudget":a.off_budget,"closed":a.closed,"balance":dec(balance)}))
+    let look = service::account_styles(store).map_err(err)?.remove(&n).unwrap_or_default();
+    Ok(json!({"id":id("Account",a.id),"name":a.name,"offBudget":a.off_budget,"closed":a.closed,"balance":dec(balance),"icon":look.icon,"color":look.color,"hasImage":look.image.is_some()}))
 }
 fn category_json(c: finanzas_core::Category) -> Value { json!({"id":id("Category",c.id),"name":c.name,"hidden":c.hidden,"groupId":oid("CategoryGroup",c.group_id)}) }
 /// Maps the service's NotFound to the argument that names the missing thing.
@@ -202,8 +241,8 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             evaluation_json(service::evaluate_wish(store,n,today).map_err(err)?)
         }
         "list_accounts" => {
-            let balances = store.account_balances().map_err(err)?;
-            json!(store.list_accounts().map_err(err)?.into_iter().map(|v| json!({"id":id("Account",v.id),"name":v.name,"offBudget":v.off_budget,"closed":v.closed,"balance":dec(*balances.get(&v.id).unwrap_or(&0))})).collect::<Vec<_>>())
+            let ids: Vec<i64> = store.list_accounts().map_err(err)?.into_iter().map(|v| v.id).collect();
+            json!(ids.into_iter().map(|n| account_json(store, n)).collect::<Result<Vec<_>, _>>()?)
         }
         "get_transactions" => {
             let (start,end) = a.range()?;
@@ -273,8 +312,16 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             let name = a.required_string("name")?.trim();
             if name.is_empty() { return Err(ToolError("name: required".into())); }
             let opening = if a.0.get("openingBalance").is_none_or(Value::is_null) { None } else { Some(a.cents("openingBalance")?) };
+            let look = look(&a)?;
             let created = service::create_account(store, name, a.bool("offBudget")?.unwrap_or(false), opening, a.optional_date("date")?.unwrap_or(today), None).map_err(err)?;
+            apply_look(store, created.id, &a, look)?;
             account_json(store, created.id)?
+        }
+        "set_account_style" => {
+            let account = account(&a, store)?;
+            let look = look(&a)?;
+            apply_look(store, account, &a, look)?;
+            account_json(store, account)?
         }
         "create_category" => {
             let group = required_id(&a, "groupId", "CategoryGroup")?;

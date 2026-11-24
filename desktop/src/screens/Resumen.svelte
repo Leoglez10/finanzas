@@ -4,6 +4,7 @@
   import { openAccount, openEntry } from "../lib/dialogs.svelte";
   import { money, monthKey, monthTitle, monthShort, shiftMonth, change, categoryColor, parseDay, daysBetween, dayNumber, dayMonth, monthDate, isoDay, monthSpan } from "../lib/format";
   import Icon from "../components/Icon.svelte";
+  import AccountBadge from "../components/AccountBadge.svelte";
   import Kpi from "../components/Kpi.svelte";
   import Money from "../components/Money.svelte";
   import MonthPicker from "../components/MonthPicker.svelte";
@@ -320,7 +321,7 @@
         <div class="list">
           {#each app.accounts.filter(a => !a.closed) as a (a.id)}
             <button class="row" style="width:100%;background:none;border-left:0;border-right:0;border-bottom:0;cursor:pointer;text-align:left;font:inherit;color:inherit" onclick={() => go(`cuenta-${a.id}`)}>
-              <span class="ic sm"><Icon name={a.offBudget ? "chart" : "card"} /></span>
+              <AccountBadge account={a} size={34} />
               <div class="grow"><p class="title">{a.name}</p>{#if a.offBudget}<p class="meta">Fuera del presupuesto</p>{/if}</div>
               <b class="num" class:neg={a.balance < 0}>{money(a.balance)}</b>
             </button>

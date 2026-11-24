@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Kind, Plan } from "./goals";
 
-export interface AccountOverview { id: number; name: string; offBudget: boolean; closed: boolean; sortOrder: number; balance: number }
+export interface AccountOverview { id: number; name: string; offBudget: boolean; closed: boolean; sortOrder: number; balance: number; icon: string | null; color: string | null; image: string | null }
 export interface EntryRow { id: number; date: string; amount: number; notes: string; cleared: boolean; accountId: number | null; categoryId: number | null; payeeId: number | null; accountName: string | null; payeeName: string | null; categoryName: string | null; wishId: number | null; wishItemId: number | null }
 export interface EntryInput { date: string; amount: number; accountId: number; payee: string; categoryId: number | null; notes: string }
 export interface Category { id: number; name: string; hidden: boolean }
@@ -80,6 +80,11 @@ export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
 export const importEntries = (entries: EntryInput[]) => invoke<number[]>("import_entries", { entries });
 /** Returns the new account id; a non-zero `opening` becomes a "Saldo inicial" movement dated `date`. */
 export const createAccount = (name: string, offBudget: boolean, opening: number | null, date: string, card: CardTerms | null = null) => invoke<number>("create_account", { name, offBudget, opening, date, card });
+/** `null` puts the icon or color back to the default; the image is kept. */
+export const setAccountStyle = (accountId: number, icon: string | null, color: string | null) => invoke<void>("set_account_style", { accountId, icon, color });
+/** Opens a file picker; false when the user cancels. */
+export const pickAccountImage = (accountId: number) => invoke<boolean>("pick_account_image", { accountId });
+export const clearAccountImage = (accountId: number) => invoke<void>("clear_account_image", { accountId });
 export const debts = () => invoke<DebtsView>("debts");
 /** `terms: null` stops treating the account as a credit card. */
 export const setCardTerms = (accountId: number, terms: CardTerms | null) => invoke<void>("set_card_terms", { accountId, terms });

@@ -64,3 +64,21 @@ impl Store {
         Ok(self.conn.query_row("SELECT 1 FROM account WHERE id = ?1", [id], |_| Ok(())).optional()?.is_some())
     }
 }
+
+type StyleRow = (Id, Option<String>, Option<String>, Option<(String, Vec<u8>)>);
+impl Store {
+    pub(crate) fn account_style_rows(&self) -> Result<Vec<StyleRow>> {
+        let mut stmt = self.conn.prepare("SELECT account_id, icon, color, image_type, image FROM account_style")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, Option<String>>(3)?.zip(r.get::<_, Option<Vec<u8>>>(4)?))))?;
+        rows.collect()
+    }
+    pub(crate) fn put_account_look(&self, account: Id, icon: Option<&str>, color: Option<&str>) -> Result<()> {
+        self.conn.execute("INSERT INTO account_style(account_id, icon, color) VALUES (?1, ?2, ?3) ON CONFLICT(account_id) DO UPDATE SET icon = excluded.icon, color = excluded.color", params![account, icon, color])?;
+        Ok(())
+    }
+    pub(crate) fn put_account_image(&self, account: Id, image: Option<(&str, &[u8])>) -> Result<()> {
+        let (kind, bytes) = image.unzip();
+        self.conn.execute("INSERT INTO account_style(account_id, image_type, image) VALUES (?1, ?2, ?3) ON CONFLICT(account_id) DO UPDATE SET image_type = excluded.image_type, image = excluded.image", params![account, kind, bytes])?;
+        Ok(())
+    }
+}

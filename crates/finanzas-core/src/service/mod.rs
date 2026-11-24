@@ -9,6 +9,8 @@ mod debts;
 pub use debts::*;
 mod catalog;
 pub use catalog::*;
+mod account_style;
+pub use account_style::*;
 mod schedules;
 mod overview;
 pub use overview::*;

@@ -6,6 +6,7 @@
   import { money, parseDay } from "../lib/format";
   import { remember, toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
+  import AccountBadge from "../components/AccountBadge.svelte";
   import Kpi from "../components/Kpi.svelte";
   import Topbar from "../components/Topbar.svelte";
 
@@ -18,6 +19,7 @@
   let withStatement = $derived(cards.some(d => d.statement !== null));
   let toPay = $derived(cards.reduce((s, d) => s + (d.toAvoidInterest ?? 0), 0));
   let hasPlans = $derived(cards.some(d => d.installments.some(p => p.left > 0)));
+  const look = (id: number) => app.accounts.find(a => a.id === id) ?? { offBudget: false, icon: "card", color: null, image: null };
   const sum = (list: api.DebtView[]) => list.reduce((s, d) => s + d.debt, 0);
   const date = (iso: string) => parseDay(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
 
@@ -65,7 +67,7 @@
       {@const pct = Math.min(100, Math.round((d.utilization ?? 0) * 100))}
       <article class="card debt">
         <header class="debt-h">
-          <button class="name" onclick={() => go(`cuenta-${d.accountId}`)}><Icon name="card" />{d.name}</button>
+          <button class="name" onclick={() => go(`cuenta-${d.accountId}`)}><AccountBadge account={look(d.accountId)} size={26} />{d.name}</button>
           {#if d.overdue}<span class="chip bad">Vencido · {date(d.dueDate!)}</span>
           {:else if d.dueDate && (d.toAvoidInterest ?? 0) > 0}<span class="chip warn">Pagar antes del {date(d.dueDate)}</span>
           {:else if d.dueDate}<span class="chip ok">Próximo pago {date(d.dueDate)}</span>{/if}
@@ -114,7 +116,7 @@
         {#each others as d (d.accountId)}
           {@const card = looksLikeCard(d.name)}
           <div class="row">
-            <span class="ic sm"><Icon name={card ? "card" : "bank"} /></span>
+            <AccountBadge account={look(d.accountId)} size={34} />
             <div class="grow"><button class="name" onclick={() => go(`cuenta-${d.accountId}`)}>{d.name}</button>
               <p class="meta">{card ? "Parece tarjeta de crédito" : "Saldo negativo"}</p></div>
             <b class="num neg">{money(-d.debt)}</b>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import AccountBadge from "./AccountBadge.svelte";
   import { app, go, profileColor } from "../lib/app.svelte";
   import { money } from "../lib/format";
   import { openPalette } from "../lib/commands.svelte";
@@ -28,14 +29,14 @@
   <div class="section">Cuentas</div>
   {#each open as a (a.id)}
     <button class="nav" aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}>
-      <Icon name={a.offBudget ? "bank" : "card"} /><span>{a.name}</span><span class="bal num" class:neg={a.balance < 0}>{money(a.balance)}</span>
+      <AccountBadge account={a} size={22} /><span>{a.name}</span><span class="bal num" class:neg={a.balance < 0}>{money(a.balance)}</span>
     </button>
   {/each}
   <button class="nav add" type="button" onclick={openAccount}><Icon name="plus" /><span>Nueva cuenta</span></button>
   {#if closed.length}
     <div class="section">Cerradas</div>
     {#each closed as a (a.id)}
-      <button class="nav" aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}><Icon name="card" /><span>{a.name}</span><span class="bal num">{money(a.balance)}</span></button>
+      <button class="nav" aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}><AccountBadge account={a} size={22} /><span>{a.name}</span><span class="bal num">{money(a.balance)}</span></button>
     {/each}
   {/if}
   <div class="spacer"></div>

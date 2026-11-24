@@ -36,7 +36,7 @@ impl AppState {
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AccountOverview { id: i64, name: String, off_budget: bool, closed: bool, sort_order: f64, balance: i64 }
+struct AccountOverview { id: i64, name: String, off_budget: bool, closed: bool, sort_order: f64, balance: i64, icon: Option<String>, color: Option<String>, image: Option<String> }
 #[derive(Serialize)]
 struct EntriesResult { rows: Vec<EntryRow>, total: usize, sum: i64 }
 #[derive(Default, Deserialize)]
@@ -53,7 +53,11 @@ fn accounts_overview(state: State<'_, AppState>) -> Result<Vec<AccountOverview>,
     state.with_store(|store| {
         let accounts = store.list_accounts().map_err(|e| e.to_string())?;
         let balances = store.account_balances().map_err(|e| e.to_string())?;
-        Ok(accounts.into_iter().map(|a| AccountOverview { id: a.id, name: a.name, off_budget: a.off_budget, closed: a.closed, sort_order: a.sort_order, balance: balances.get(&a.id).copied().unwrap_or(0) }).collect())
+        let mut styles = service::account_styles(store).map_err(|e| e.to_string())?;
+        Ok(accounts.into_iter().map(|a| {
+            let style = styles.remove(&a.id).unwrap_or_default();
+            AccountOverview { id: a.id, name: a.name, off_budget: a.off_budget, closed: a.closed, sort_order: a.sort_order, balance: balances.get(&a.id).copied().unwrap_or(0), icon: style.icon, color: style.color, image: style.image }
+        }).collect())
     })
 }
 /// Changes when this app or anyone else (the MCP server) writes; the UI polls it to refresh.
@@ -265,7 +269,7 @@ pub fn run() {
             if _payload.event() == tauri::webview::PageLoadEvent::Finished && _webview.label() == "main" && let Ok(js) = std::env::var("FINANZAS_DEV_EVAL") && let Err(e) = _webview.eval(&js) { eprintln!("FINANZAS_DEV_EVAL: {e}"); }
         })
         .invoke_handler(tauri::generate_handler![startup_error, accounts_overview, data_version, overview, entries, add_entry, update_entry, delete_entry, payee_suggestions, suggested_category, categories_grouped, wishes, save_wish, reserve_wish, set_wish_item_paid, complete_wish, tag_entry, archive_wish, restore_wish, today, parse_amount, qa_log, qa_sleep,
-            features::budget, features::assign_budget, features::create_account, features::debts, features::set_card_terms, features::save_installment, features::delete_installment, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, prefs::get_settings, prefs::update_settings, prefs::profiles, prefs::switch_profile, prefs::create_profile, prefs::rename_profile, prefs::delete_profile, prefs::test_notification, prefs::agents, prefs::database_path, features::import_availability, features::import_data, features::read_csv, features::pick_csv, features::import_entries, tray::refresh_tray, menu::show_quick, menu::hide_quick])
+            features::budget, features::assign_budget, features::create_account, features::debts, features::set_account_style, features::pick_account_image, features::clear_account_image, features::set_card_terms, features::save_installment, features::delete_installment, features::change_category, features::change_group, features::create_category, features::upcoming, features::schedules, features::save_schedule, features::post_schedule, features::skip_schedule, features::delete_schedule, features::restore_schedule, prefs::get_settings, prefs::update_settings, prefs::profiles, prefs::switch_profile, prefs::create_profile, prefs::rename_profile, prefs::delete_profile, prefs::test_notification, prefs::agents, prefs::database_path, features::import_availability, features::import_data, features::read_csv, features::pick_csv, features::import_entries, tray::refresh_tray, menu::show_quick, menu::hide_quick])
         .build(tauri::generate_context!()).expect("error al iniciar la aplicación")
         .run(|app, event| {
             // Clicking the Dock icon brings a hidden window back.

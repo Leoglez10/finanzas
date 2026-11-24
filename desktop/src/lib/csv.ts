@@ -160,9 +160,9 @@ export function detect(rows: string[][]): Detection {
   const parts = column(dateAt).map(v => v.match(NUMERIC_DATE)).filter(m => !!m);
   const dateOrder: DateOrder = parts.some(m => +m[1] > 12) || !parts.some(m => +m[2] > 12) ? "dmy" : "mdy";
   const dateAmbiguous = parts.length > 0 && !parts.some(m => +m[1] > 12 || +m[2] > 12);
-  // Card statements list purchases as positive: when most amounts are positive, read them as charges.
+  // Card statements list purchases as positive: when 3 of 4 amounts are positive, read them as charges.
   const amounts = done.includes("type") ? [] : column(done.indexOf("amount")).map(v => parseMoney(v, decimal) ?? 0).filter(Boolean);
-  const flip = amounts.filter(c => c > 0).length > amounts.length / 2;
+  const flip = amounts.length > 0 && amounts.filter(c => c > 0).length >= amounts.length * 0.75;
   return { header, roles: done, dateOrder, decimal, flip, dateAmbiguous };
 }
 
@@ -193,6 +193,15 @@ export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect
   });
   return out;
 }
+
+export type SavedMapping = Omit<Mapping, "header">;
+/** Key for remembering a bank's layout: its header names. Files without a header are not remembered,
+ * since two banks with the same number of columns would share one key. */
+export const signature = (rows: string[][], d: Detection): string | null =>
+  d.header < 0 ? null : rows[d.header].map(h => norm(h.trim())).join("|");
+/** The detection with a layout the user chose before, when it fits the same columns. */
+export const withSaved = (d: Detection, saved: SavedMapping | null | undefined): Detection =>
+  saved && saved.roles.length === d.roles.length ? { ...d, ...saved, dateAmbiguous: false } : d;
 
 /** Same account, day, amount and payee as an existing movement. */
 export const isDuplicate = (row: ImportRow, existing: { date: string; amount: number; payeeName: string | null }[]) =>

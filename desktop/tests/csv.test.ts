@@ -1,7 +1,7 @@
 // Run: pnpm --dir desktop test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvRows, detect, isDuplicate, mapRows, parseDate } from "../src/lib/csv.ts";
+import { csvRows, detect, isDuplicate, mapRows, parseDate, signature, withSaved, type Role } from "../src/lib/csv.ts";
 import type { QuickContext } from "../src/lib/quick-parse.ts";
 
 const ctx: QuickContext = {
@@ -100,11 +100,12 @@ test("a cargo/abono type column sets the sign", () => {
 });
 
 test("statements with purchases in positive are flipped, and the choice can be undone", () => {
-  const rows = csvRows("Fecha,Comercio,Importe\n01/11/2026,Amazon,500\n02/11/2026,Oxxo,45\n03/11/2026,Pago recibido,-545");
+  const rows = csvRows("Fecha,Comercio,Importe\n01/11/2026,Amazon,500\n02/11/2026,Oxxo,45\n02/11/2026,Uber,55\n03/11/2026,Pago recibido,-600");
   const d = detect(rows);
   assert.equal(d.flip, true);
-  assert.deepEqual(mapRows(rows, ctx, d).map(r => r.cents), [-50000, -4500, 54500]);
-  assert.deepEqual(mapRows(rows, ctx, { ...d, flip: false }).map(r => r.cents), [50000, 4500, -54500]);
+  assert.deepEqual(mapRows(rows, ctx, d).map(r => r.cents), [-50000, -4500, -5500, 60000]);
+  assert.deepEqual(mapRows(rows, ctx, { ...d, flip: false }).map(r => r.cents), [50000, 4500, 5500, -60000]);
+  assert.equal(detect(csvRows("Fecha,Concepto,Importe\n01/11/2026,Netflix,-350\n02/11/2026,Nómina,3200\n03/11/2026,Reembolso,50")).flip, false);
   assert.equal(detect(csvRows("fecha,comercio,monto\n01/11/2026,Netflix,-350\n02/11/2026,Nómina,3200")).flip, false);
 });
 
@@ -116,4 +117,16 @@ test("a role picked by hand replaces the detected one", () => {
   const rows = csvRows("Fecha,Concepto,Referencia,Importe\n01/11/2026,Uber,Viaje al centro,-80");
   const d = detect(rows);
   assert.deepEqual(mapRows(rows, ctx, { ...d, roles: ["date", "ignore", "payee", "amount"] }).map(r => r.payee), ["Viaje al centro"]);
+});
+
+test("a file's layout is remembered by its header names", () => {
+  const rows = csvRows("Fecha,Concepto,Referencia,Importe\n01/11/2026,Uber,Viaje,80");
+  const sig = signature(rows, detect(rows));
+  assert.equal(sig, signature(csvRows(" FECHA ,concepto,Referéncia,importe\n02/11/2026,Oxxo,x,1"), detect(csvRows(" FECHA ,concepto,Referéncia,importe\n02/11/2026,Oxxo,x,1"))));
+  assert.equal(signature(csvRows("01/11/2026,Uber,-80"), detect(csvRows("01/11/2026,Uber,-80"))), null);
+  const saved = { roles: ["date", "ignore", "payee", "amount"] as Role[], dateOrder: "mdy" as const, decimal: "." as const, flip: false };
+  const d = withSaved(detect(rows), saved);
+  assert.deepEqual([d.roles, d.dateOrder, d.flip, d.dateAmbiguous], [saved.roles, "mdy", false, false]);
+  // A saved layout for a different number of columns is not applied.
+  assert.deepEqual(withSaved(detect(rows), { ...saved, roles: ["date", "payee", "amount"] }).roles, detect(rows).roles);
 });

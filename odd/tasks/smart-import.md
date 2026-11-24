@@ -14,7 +14,7 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 
 - T1 [S1] inline — Rust reads .xlsx/.xls/.ods with `calamine` into rows; file pickers and drop accept them. Risk: item 5 (new dependency). Status: done 40eba0c (cargo test 6/6).
 - T2 [S2,S3] inline — csv.ts detection engine: header search, content scoring, date/decimal/sign detection, totals skipped; tests. Status: done (csv.test.ts 16/16, 52/52 total).
-- T3 [S4,S5] inline — ImportDialog mapping row, date-order and sign toggles, saved mappings per header signature.
+- T3 [S4,S5] inline — ImportDialog mapping row, date-order and sign toggles, saved mappings per header signature. Status: done (53/53 unit, QA importar.js 21/21 in the real app).
 
 ## Log
 
@@ -22,3 +22,4 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 - L2 (2026-11-24) Proposal accepted: "sí, impleméntalo". Route inline for all tasks (no writer trigger: units depend on each other).
 - L3 Uncommitted Windows-shortcut fix (keys.ts etc.) rides along in the working tree; not part of this feature's commits.
 - L4 T1 done 40eba0c; Windows-shortcut fix committed separately as 883c05f on this branch. T2 done: detect() + parseMoney, typeSign exact single letters.
+- L5 T3 done. Auto-flip threshold raised to 3 of 4 positive amounts (a bank file with a few deposits must not flip). README updated.

@@ -1,9 +1,10 @@
 <script lang="ts">
-  // CSV preview: pick the account, see new / duplicate / broken rows, import the checked ones in one go.
+  // Import preview: check what each column holds, pick the account, see new / duplicate / broken rows,
+  // import the checked ones in one go. The column choices are remembered per bank (by header names).
   import { untrack } from "svelte";
   import * as api from "../lib/api";
   import { app, refresh } from "../lib/app.svelte";
-  import { csvRows, isDuplicate, mapRows, type ImportRow } from "../lib/csv";
+  import { csvRows, detect, isDuplicate, mapRows, signature, withSaved, type Detection, type ImportRow, type Role, type SavedMapping } from "../lib/csv";
   import { importDialog } from "../lib/dialogs.svelte";
   import { categoryColor, money, parseDay } from "../lib/format";
   import { quickContext } from "../lib/quick";
@@ -13,7 +14,9 @@
 
   let dialog: HTMLDialogElement;
   let ctx = $state<QuickContext | null>(null);
-  let rows = $state<ImportRow[]>([]);
+  let source = $state<string[][]>([]);
+  let mapping = $state<Detection | null>(null);
+  let rows = $derived(ctx && mapping ? mapRows(source, ctx, mapping) : []);
   let picked = $state<boolean[]>([]);
   let accountId = $state(0);
   let existing = $state<api.EntryRow[]>([]);
@@ -21,12 +24,37 @@
 
   $effect(() => { if (importDialog.open) untrack(fill); });
   async function fill() {
-    error = ""; saving = false; rows = []; picked = [];
+    error = ""; saving = false; mapping = null; picked = [];
     if (!dialog.open) dialog.showModal();
     accountId = app.accounts.find(a => !a.closed)?.id ?? 0;
     ctx = await quickContext(app.today);
-    rows = mapRows(importDialog.file?.rows ?? csvRows(importDialog.file?.text ?? ""), ctx);
+    source = importDialog.file?.rows ?? csvRows(importDialog.file?.text ?? "");
+    const found = detect(source), key = signature(source, found);
+    mapping = withSaved(found, key ? saved()[key] : null);
   }
+
+  const SAVED = "import-mappings";
+  const saved = (): Record<string, SavedMapping> => { try { return JSON.parse(localStorage.getItem(SAVED) ?? "{}"); } catch { return {}; } };
+  function rememberLayout() {
+    const key = mapping && signature(source, mapping);
+    if (!mapping || !key) return;
+    const { roles, dateOrder, decimal, flip } = mapping;
+    localStorage.setItem(SAVED, JSON.stringify({ ...saved(), [key]: { roles, dateOrder, decimal, flip } }));
+  }
+  const ROLES: [Role, string][] = [["date", "Fecha"], ["payee", "Descripción"], ["amount", "Monto"], ["out", "Cargo"], ["in", "Abono"], ["type", "Tipo (cargo/abono)"], ["category", "Categoría"], ["ignore", "Ignorar"]];
+  const columnName = (i: number) => (mapping && mapping.header >= 0 ? source[mapping.header][i]?.trim() : "") || `Columna ${i + 1}`;
+  const sample = (i: number) => source.slice((mapping?.header ?? -1) + 1).map(r => r[i]?.trim()).find(Boolean) ?? "";
+  // Only one column per role: picking a role elsewhere frees it here.
+  function setRole(i: number, role: Role) {
+    if (!mapping) return;
+    mapping.roles = mapping.roles.map((r, j) => j === i ? role : r === role && role !== "ignore" ? "ignore" : r);
+  }
+  let missing = $derived(!mapping ? [] : [
+    !mapping.roles.includes("date") && "la fecha",
+    !mapping.roles.some(r => r === "amount" || r === "out" || r === "in") && "el monto",
+    !mapping.roles.includes("payee") && "la descripción",
+  ].filter(Boolean) as string[]);
+  let showColumns = $derived(!!mapping && (mapping.dateAmbiguous || missing.length > 0));
   // Duplicates depend on the target account, so they are recomputed when it changes.
   $effect(() => {
     const id = accountId, list = rows;
@@ -46,6 +74,7 @@
     e.preventDefault();
     saving = true; error = "";
     try {
+      rememberLayout();
       const ids = await api.importEntries(chosen.map(r => ({ date: r.date!, amount: r.cents!, accountId, payee: r.payee, categoryId: r.categoryId, notes: "Importado" })));
       remember(`Importaste ${ids.length} movimiento${ids.length === 1 ? "" : "s"}`, async () => { for (const id of ids) await api.deleteEntry(id); await refresh(); });
       dialog.close();
@@ -59,8 +88,32 @@
     <div class="dlg-h"><div><h2 id="import-title">Importar movimientos</h2><p>{importDialog.file?.name}</p></div>
       <button class="btn icon ghost" type="button" onclick={() => dialog.close()} aria-label="Cerrar"><Icon name="x" /></button></div>
     <div class="dlg-b">
+      {#if mapping && source.length}
+        <details class="columns" open={showColumns}>
+          <summary>Columnas del archivo{#if missing.length}<span class="chip bad">Falta {missing.join(", ")}</span>{:else if mapping.dateAmbiguous}<span class="chip warn">Revisa el orden de las fechas</span>{/if}</summary>
+          <div class="column-grid">
+            {#each mapping.roles as role, i (i)}
+              <label><span class="col-name">{columnName(i)}</span>
+                <select class="input" value={role} onchange={e => setRole(i, e.currentTarget.value as Role)}>{#each ROLES as [value, label] (value)}<option {value}>{label}</option>{/each}</select>
+                <small class="muted">{sample(i) || "vacía"}</small></label>
+            {/each}
+          </div>
+          <div class="column-opts">
+            {#if mapping.roles.includes("date")}
+              <label>Fechas como
+                <select class="input" bind:value={mapping.dateOrder}><option value="dmy">día/mes/año</option><option value="mdy">mes/día/año</option></select></label>
+            {/if}
+            <label>Decimales con
+              <select class="input" bind:value={mapping.decimal}><option value=".">punto (1,234.56)</option><option value=",">coma (1.234,56)</option></select></label>
+            {#if mapping.roles.includes("amount") && !mapping.roles.includes("type")}
+              <label class="check"><input type="checkbox" bind:checked={mapping.flip} />Los gastos vienen en positivo</label>
+            {/if}
+          </div>
+          {#if mapping.dateAmbiguous}<p class="muted" style="font-size:12.5px;margin-top:8px">Todas las fechas sirven en los dos órdenes (por ejemplo 03/11). Confirma cuál usa tu banco.</p>{/if}
+        </details>
+      {/if}
       {#if !rows.length}
-        <p class="muted">{ctx ? "No encontré filas en este archivo." : "Leyendo…"}</p>
+        <p class="muted">{!ctx ? "Leyendo…" : source.length ? "No encontré movimientos con estas columnas." : "No encontré filas en este archivo."}</p>
       {:else}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <span class="chip ok">{counts.fresh} nuevos</span>
@@ -85,7 +138,7 @@
             </tbody>
           </table>
         </div>
-        <p class="muted" style="font-size:12.5px">Los duplicados (mismo día, comercio y monto en esa cuenta) quedan sin marcar. Las categorías se sugieren con tu historial.</p>
+        <p class="muted" style="font-size:12.5px">Los duplicados (mismo día, comercio y monto en esa cuenta) quedan sin marcar. Las categorías se sugieren con tu historial. Las columnas que elijas se recuerdan para este banco.</p>
       {/if}
       {#if error}<p class="err" role="alert">{error}</p>{/if}
     </div>

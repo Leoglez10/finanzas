@@ -67,8 +67,10 @@ Everything stays on your computer: no account, cloud or telemetry.
 - **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
 - **Quick capture (⌥⇧F)** — a small window from any app: type `super 450.50 tarjeta`, press Enter. Payee spelling,
   category and account come from your own history.
-- **CSV import** — drop a bank CSV on the window (or ⌘I): comma or semicolon files, Spanish or English headers and
-  separate cargo/abono columns, with a preview that marks duplicates and broken rows. All rows or none are imported.
+- **CSV and Excel import** — drop a bank CSV, .xlsx, .xls or .ods file on the window (or ⌘I). Columns are found by
+  header name and by content, title and total rows are skipped, and date order, decimal comma, cargo/abono columns
+  and card statements with positive purchases are read from the data. Anything unsure is asked once in the preview
+  and remembered for that bank. The preview marks duplicates and broken rows; all rows or none are imported.
 - **Menu-bar icon and reminders** — balance and next payment in the menu bar; system notifications before each payment
   arrive while Finanzas runs (closing the window keeps it in the menu bar).
 - **Ajustes** — profiles (separate data, for example personal and business), six color themes with light/dark mode,
@@ -96,7 +98,7 @@ Keyboard shortcuts (⌘ on macOS, Ctrl on Windows and Linux); they are also list
 | ⌘1 … ⌘5 | Resumen, Movimientos, Presupuesto, Próximos pagos, Deseos |
 | ⌘, | Ajustes |
 | ⌘F | Search movements |
-| ⌘I | Import a CSV |
+| ⌘I | Import a CSV or Excel file |
 | ⌘Z | Undo the last change |
 | ⇧⌘L | Switch light / dark |
 | Esc | Close a dialog or cancel an edit |
@@ -240,8 +242,9 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 
 ## Import
 
-**Bank CSV:** drop the file on the window, press ⌘I, or use *Movimientos › Importar CSV* or *Ajustes › Datos*.
-Pick the account; the preview marks duplicates (same day, payee and amount in that account) and rows that
+**Bank CSV or Excel:** drop the file on the window, press ⌘I, or use *Movimientos › Importar* or *Ajustes › Datos*.
+*Columnas del archivo* shows what each column was read as; change any of them, the date order, the decimal mark or
+"Los gastos vienen en positivo", and the choice is remembered for files with the same headers. Pick the account; the preview marks duplicates (same day, payee and amount in that account) and rows that
 cannot be read. Nothing is written until you confirm, and **Deshacer** removes the whole import.
 
 **Another finance app:** *Ajustes › Datos* copies data into an empty profile. **Desde Actual Budget** accepts

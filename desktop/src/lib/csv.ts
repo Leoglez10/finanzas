@@ -3,7 +3,8 @@
 // preview can override any of it. Amounts are integer cents.
 import { norm, parseQuick, type QuickContext } from "./quick-parse.ts";
 
-export interface ImportRow { line: number; date: string | null; payee: string; cents: number | null; categoryId: number | null; error: string }
+/** `raw` is the description as the bank wrote it; `payee` is the cleaned name. */
+export interface ImportRow { sheet: string; line: number; date: string | null; payee: string; raw: string; cents: number | null; categoryId: number | null; error: string }
 
 export type Role = "date" | "payee" | "amount" | "out" | "in" | "type" | "category" | "ignore";
 /** How to read a file: `header` is the header row index (-1 when there is none). */
@@ -170,12 +171,23 @@ export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect
   const at = (role: Role) => m.roles.indexOf(role);
   const [iDate, iPayee, iAmount, iOut, iIn, iType, iCategory] = (["date", "payee", "amount", "out", "in", "type", "category"] as Role[]).map(at);
   const money = (v: string | undefined) => parseMoney(v, m.decimal);
-  const out: ImportRow[] = [];
+  const amountCells = [iAmount, iOut, iIn].filter(i => i >= 0);
+  const parts: { line: number; r: string[]; raw: string }[] = [];
   rows.forEach((r, index) => {
     if (index <= m.header || blank(r)) return;
-    const date = parseDate(r[iDate] ?? "", m.dateOrder);
-    if (!date && r.some(c => TOTAL.test(norm(c.trim())))) return;
-    const payee = (r[iPayee] ?? "").trim();
+    const dateCell = (r[iDate] ?? "").trim();
+    if (!parseDate(dateCell, m.dateOrder) && r.some(c => TOTAL.test(norm(c.trim())))) return;
+    const raw = (r[iPayee] ?? "").trim();
+    // No date and no amount: the description of the row above goes on in this one.
+    if (!dateCell && parts.length && amountCells.every(i => money(r[i]) === null)) {
+      const text = raw || r.map(c => c.trim()).filter(Boolean).join(" ");
+      parts[parts.length - 1].raw += " " + text;
+      return;
+    }
+    parts.push({ line: index + 1, r, raw });
+  });
+  return parts.map(({ line, r, raw }) => {
+    const date = parseDate(r[iDate] ?? "", m.dateOrder), payee = raw ? cleanPayee(raw, ctx) : "";
     let cents: number | null = null;
     if (iAmount >= 0) {
       cents = money(r[iAmount]);
@@ -189,19 +201,82 @@ export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect
     const named = iCategory >= 0 ? ctx.categories.find(c => norm(c.name) === norm((r[iCategory] ?? "").trim())) : undefined;
     const categoryId = named?.id ?? (payee ? parseQuick(payee, ctx).categoryId : null);
     const error = !date ? "Fecha no válida" : !cents ? "Monto no válido" : !payee ? "Sin comercio" : "";
-    out.push({ line: index + 1, date, payee, cents, categoryId, error });
+    return { sheet: "", line, date, payee, raw, cents, categoryId, error };
   });
-  return out;
 }
 
-export type SavedMapping = Omit<Mapping, "header">;
+// Bank noise: references, authorization codes, card digits, dates, times, long numbers, web suffixes.
+const NOISE = [
+  /\b(ref|referencia|aut|autorizacion|folio|rfc|rastreo|tarjeta|tdc|tdd)\b[\s:.#]*[\w-]*\d[\w-]*/gi,
+  /[*x#]{2,}\s?\d{2,4}\b/gi,
+  /\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b/g,
+  /\b\d{1,2}:\d{2}(:\d{2})?\b/g,
+  /\b\d{4,}\b/g,
+  /\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,}\b/g,
+  /\.(com|net|org)(\.mx)?\b/gi,
+  /\*/g,
+];
+/** "COMPRA OXXO CENTRO 1234 GDL MX" → "Oxxo Centro Gdl"; a payee you already have wins when the cleaned
+ * text starts with its name ("NETFLIX.COM ****4321" → "Netflix"). Text with no letters is left alone. */
+export function cleanPayee(raw: string, ctx: QuickContext): string {
+  let t = NOISE.reduce((text, re) => text.replace(re, " "), raw);
+  t = t.replace(/^\s*(compra|consumo|pos|cargo)\b\s*(en\s+)?/i, "").replace(/(\s+(mx|mex|mexico|us|usa))+\s*$/i, "");
+  t = t.replace(/\s+/g, " ").replace(/^[\s\-:,.#]+|[\s\-:,.#]+$/g, "");
+  if (!/\p{L}/u.test(t)) return raw.trim();
+  if (t === t.toUpperCase()) t = t.toLowerCase().replace(/(^|\s)\p{L}/gu, c => c.toUpperCase());
+  const key = norm(t);
+  const known = [...new Set(ctx.history.map(h => h.payee))].filter(p => p.length >= 3 && (key === norm(p) || key.startsWith(norm(p) + " ")));
+  return known.sort((a, b) => b.length - a.length)[0] ?? t;
+}
+
+/** True for a row that matches an earlier row of the same file (day, amount and payee). */
+export function repeatedInFile(rows: ImportRow[]): boolean[] {
+  const seen = new Set<string>();
+  return rows.map(r => {
+    if (r.error) return false;
+    const key = `${r.date}|${r.cents}|${norm(r.payee)}`;
+    return seen.has(key) || !seen.add(key);
+  });
+}
+
+export interface Sheet { name: string; rows: string[][] }
+/** `key` groups sheets with the same layout (header names, or column count without a header). */
+export interface SheetPlan { name: string; detection: Detection; usable: boolean; key: string; count: number }
+
+export function planSheets(sheets: Sheet[]): SheetPlan[] {
+  return sheets.map(({ name, rows }) => {
+    const detection = detect(rows);
+    const count = rows.slice(detection.header + 1).filter(r => !blank(r)).length;
+    const usable = count > 0 && detection.roles.includes("date") && detection.roles.some(r => r === "amount" || r === "out" || r === "in");
+    return { name, detection, usable, count, key: signature(rows, detection) ?? `${detection.roles.length} columnas` };
+  });
+}
+/** The usable sheets with the same layout as the biggest one: one sheet per month imports whole. */
+export function defaultSheets(plans: SheetPlan[]): string[] {
+  const main = plans.filter(p => p.usable).sort((a, b) => b.count - a.count)[0];
+  return main ? plans.filter(p => p.usable && p.key === main.key).map(p => p.name) : [];
+}
+/** Rows of the chosen sheets. Sheets laid out like `main` use its (possibly edited) mapping with their own
+ * header row; other sheets keep what was detected in them. */
+export function sheetRows(sheets: Sheet[], plans: SheetPlan[], chosen: string[], main: SheetPlan, ctx: QuickContext): ImportRow[] {
+  return sheets.flatMap((sheet, i) => {
+    const plan = plans[i];
+    if (!chosen.includes(sheet.name)) return [];
+    const m = plan.key === main.key ? { ...main.detection, header: plan.detection.header } : plan.detection;
+    return mapRows(sheet.rows, ctx, m).map(r => ({ ...r, sheet: sheets.length > 1 ? sheet.name : "" }));
+  });
+}
+
+/** What is remembered per bank layout. */
+export type SavedMapping = Omit<Mapping, "header"> & { accountId?: number; skipSheets?: string[] };
 /** Key for remembering a bank's layout: its header names. Files without a header are not remembered,
  * since two banks with the same number of columns would share one key. */
 export const signature = (rows: string[][], d: Detection): string | null =>
   d.header < 0 ? null : rows[d.header].map(h => norm(h.trim())).join("|");
 /** The detection with a layout the user chose before, when it fits the same columns. */
 export const withSaved = (d: Detection, saved: SavedMapping | null | undefined): Detection =>
-  saved && saved.roles.length === d.roles.length ? { ...d, ...saved, dateAmbiguous: false } : d;
+  saved && saved.roles.length === d.roles.length
+    ? { ...d, roles: saved.roles, dateOrder: saved.dateOrder, decimal: saved.decimal, flip: saved.flip, dateAmbiguous: false } : d;
 
 /** Same account, day, amount and payee as an existing movement. */
 export const isDuplicate = (row: ImportRow, existing: { date: string; amount: number; payeeName: string | null }[]) =>

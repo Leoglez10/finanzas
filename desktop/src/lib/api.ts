@@ -73,8 +73,8 @@ export const postSchedule = (id: number) => invoke<{ entry: EntryRow; before: Sc
 export const skipSchedule = (id: number) => invoke<Schedule>("skip_schedule", { id });
 export const deleteSchedule = (id: number) => invoke<Schedule>("delete_schedule", { id });
 export const restoreSchedule = (schedule: Schedule) => invoke<number>("restore_schedule", { schedule });
-/** CSV arrives as `text`; spreadsheets arrive already split into `rows`. */
-export interface CsvFile { name: string; text: string; rows: string[][] | null }
+/** CSV arrives as `text`; spreadsheets arrive as `sheets`, each already split into rows. */
+export interface CsvFile { name: string; text: string; sheets: { name: string; rows: string[][] }[] | null }
 export const readCsv = (path: string) => invoke<CsvFile>("read_csv", { path });
 export const pickCsv = () => invoke<CsvFile | null>("pick_csv");
 /** All rows or none; returns the new ids so the import can be undone. */

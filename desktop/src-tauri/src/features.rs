@@ -145,9 +145,11 @@ pub fn import_data(app: AppHandle, state: State<'_, AppState>, source: String) -
 }
 
 const IMPORT_TYPES: [&str; 4] = ["csv", "xlsx", "xls", "ods"];
-/// `text` for CSV (parsed in the webview); `rows` for spreadsheets, already split into cells.
+/// `text` for CSV (parsed in the webview); `sheets` for spreadsheets, already split into cells.
 #[derive(serde::Serialize)]
-pub struct CsvFile { name: String, text: String, rows: Option<Vec<Vec<String>>> }
+pub struct CsvFile { name: String, text: String, sheets: Option<Vec<Sheet>> }
+#[derive(serde::Serialize)]
+pub struct Sheet { name: String, rows: Vec<Vec<String>> }
 /// Reads a dropped or picked bank file. Only CSV or spreadsheets up to 5 MB, so a stray drop never loads something huge.
 fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
@@ -155,17 +157,16 @@ fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > 5 * 1024 * 1024 { return Err("El archivo pesa más de 5 MB".into()); }
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if ext != "csv" { return Ok(CsvFile { name, text: String::new(), rows: Some(sheet_rows(path)?) }); }
+    if ext != "csv" { return Ok(CsvFile { name, text: String::new(), sheets: Some(sheets(path)?) }); }
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     // Some banks export Latin-1; fall back so accents do not break the whole file.
     let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| bytes.iter().map(|&b| b as char).collect());
-    Ok(CsvFile { name, text, rows: None })
+    Ok(CsvFile { name, text, sheets: None })
 }
-/// The first sheet that has any cell, as text: dates become `yyyy-mm-dd`, decimals keep two places.
-fn sheet_rows(path: &std::path::Path) -> Result<Vec<Vec<String>>, String> {
+/// Every sheet that has any cell, as text: dates become `yyyy-mm-dd`, decimals keep two places.
+fn sheets(path: &std::path::Path) -> Result<Vec<Sheet>, String> {
     use calamine::{Data, Reader};
     let mut book = calamine::open_workbook_auto(path).map_err(|e| format!("No pude leer la hoja de cálculo: {e}"))?;
-    let range = book.worksheets().into_iter().map(|(_, r)| r).find(|r| !r.is_empty()).ok_or("La hoja de cálculo está vacía")?;
     let cell = |c: &Data| match c {
         Data::DateTime(d) => d.as_datetime().map(|d| d.date().to_string()).unwrap_or_default(),
         Data::DateTimeIso(s) => s.chars().take(10).collect(),
@@ -173,7 +174,10 @@ fn sheet_rows(path: &std::path::Path) -> Result<Vec<Vec<String>>, String> {
         Data::Float(f) if f.fract() != 0.0 => format!("{f:.2}"),
         other => other.to_string(),
     };
-    Ok(range.rows().map(|r| r.iter().map(cell).collect()).collect())
+    let sheets: Vec<Sheet> = book.worksheets().into_iter().filter(|(_, r)| !r.is_empty())
+        .map(|(name, r)| Sheet { name, rows: r.rows().map(|row| row.iter().map(cell).collect()).collect() }).collect();
+    if sheets.is_empty() { return Err("La hoja de cálculo está vacía".into()); }
+    Ok(sheets)
 }
 #[tauri::command(async)]
 pub fn read_csv(path: String) -> Result<CsvFile, String> { read_csv_file(std::path::Path::new(&path)) }
@@ -194,10 +198,14 @@ mod tests {
     use super::read_csv_file;
 
     #[test]
-    fn excel_files_become_rows_from_the_first_sheet_with_data() {
+    fn excel_files_become_one_row_list_per_sheet_with_data() {
         let file = read_csv_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/banco.xlsx")).unwrap();
         assert_eq!(file.name, "banco.xlsx");
-        assert_eq!(file.rows.unwrap(), vec![
+        let sheets = file.sheets.unwrap();
+        // Empty sheets are left out; the others keep their order and names.
+        assert_eq!(sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Movimientos", "Febrero"]);
+        assert_eq!(sheets[1].rows, vec![vec!["Fecha", "Concepto", "Importe"], vec!["2026-02-03", "Uber", "-80"]]);
+        assert_eq!(sheets[0].rows, vec![
             vec!["Estado de cuenta", "", ""],
             vec!["", "", ""],
             vec!["Fecha", "Concepto", "Importe"],

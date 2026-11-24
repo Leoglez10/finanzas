@@ -54,7 +54,11 @@
     // Spreadsheets: title rows skipped, Excel dates read, columns detected.
     const sheet = await inv('read_csv', { path: '__QA__/../src-tauri/tests/fixtures/banco.xlsx' });
     openImport(sheet);
-    await ok(() => status().length === 3 && $('dialog.import[open]').textContent.includes('Netflix') && $('dialog.import[open]').textContent.includes('-$350.50'), () => `an .xlsx file previews its 3 movements: ${status().join(' | ')}`);
+    const sheetBoxes = () => [...document.querySelectorAll('dialog.import[open] .sheets input')];
+    await ok(() => sheetBoxes().length === 2 && sheetBoxes().every(b => b.checked) && status().length === 4, () => `both sheets with the same columns are combined: ${status().join(' | ')}`);
+    await ok(() => $('dialog.import[open]').textContent.includes('Netflix') && $('dialog.import[open]').textContent.includes('-$350.50'), () => 'Excel dates and decimals read');
+    sheetBoxes()[1].click();
+    await ok(() => status().length === 3, () => 'unchecking a sheet leaves its rows out');
     $('dialog.import[open]').close();
     await wait(300);
 
@@ -75,6 +79,24 @@
     await wait(300);
     openImport({ name: 'raro-2.csv', text: `Cuándo,Qué,Referencia,Cuánto\n03/04/${y},Didi,B1,-60.00` });
     await ok(() => roles() === 'date,ignore,payee,amount' && $('dialog.import[open] .column-opts select').value === 'mdy' && !$('dialog.import[open] details.columns[open]'), () => 'the next file with the same headers reuses the choices without asking');
+    $('dialog.import[open]').close();
+    await wait(300);
+
+    // Account remembered per layout, bank names cleaned, repeats unchecked, wrapped descriptions joined.
+    const bank = `Fecha,Concepto,Importe\n09/${m}/${y},COMPRA OXXO CENTRO 1234 GDL MX,-45.50\n09/${m}/${y},COMPRA OXXO CENTRO 1234 GDL MX,-45.50\n10/${m}/${y},PAGO SERVICIO,-500\n,TELMEX HOGAR,`;
+    openImport({ name: 'banco-b.csv', text: bank });
+    await ok(() => status().join('|') === 'Nuevo|Repetido en el archivo|Nuevo', () => `a row repeated in the file is marked: ${status().join(' | ')}`);
+    const body = () => $('dialog.import[open] tbody').textContent;
+    await ok(() => body().includes('Oxxo Centro Gdl') && body().includes('Pago Servicio Telmex Hogar'), () => 'bank names are cleaned and the wrapped description is joined');
+    await ok(() => go($)?.textContent.includes('Importar 2'), () => 'the repeated row is left unchecked');
+    const account = $('dialog.import[open] .dlg-f select');
+    account.value = tarjeta.value; account.dispatchEvent(new Event('change', { bubbles: true }));
+    await wait(300);
+    go($).click();
+    await ok(async () => (await inv('entries', { filter: { search: 'Oxxo Centro Gdl' } })).rows.some(r => r.accountId === +tarjeta.value && r.notes === 'Importado: COMPRA OXXO CENTRO 1234 GDL MX'), () => 'imported into Tarjeta with the bank text in the note');
+    await wait(300);
+    openImport({ name: 'banco-b2.csv', text: `Fecha,Concepto,Importe\n11/${m}/${y},Uber,-80` });
+    await ok(() => $('dialog.import[open] .dlg-f select')?.value === tarjeta.value, () => 'the next file with these headers goes to Tarjeta again');
     $('dialog.import[open]').close();
   } catch (e) { say(false, 'exception: ' + e); }
   inv('qa_log', { line: 'DONE' });

@@ -69,8 +69,11 @@ Everything stays on your computer: no account, cloud or telemetry.
   category and account come from your own history.
 - **CSV and Excel import** — drop a bank CSV, .xlsx, .xls or .ods file on the window (or ⌘I). Columns are found by
   header name and by content, title and total rows are skipped, and date order, decimal comma, cargo/abono columns
-  and card statements with positive purchases are read from the data. Anything unsure is asked once in the preview
-  and remembered for that bank. The preview marks duplicates and broken rows; all rows or none are imported.
+  and card statements with positive purchases are read from the data. Workbooks with several sheets (one per month)
+  are combined, bank descriptions are cleaned ("COMPRA OXXO CENTRO 1234 GDL MX" → "Oxxo Centro Gdl", original kept
+  in the note) and descriptions that wrap onto a second row are joined. Anything unsure is asked once in the preview
+  and remembered for that bank, together with its account. The preview marks duplicates, rows repeated inside the
+  file and broken rows; all rows or none are imported.
 - **Menu-bar icon and reminders** — balance and next payment in the menu bar; system notifications before each payment
   arrive while Finanzas runs (closing the window keeps it in the menu bar).
 - **Ajustes** — profiles (separate data, for example personal and business), six color themes with light/dark mode,
@@ -244,7 +247,8 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 
 **Bank CSV or Excel:** drop the file on the window, press ⌘I, or use *Movimientos › Importar* or *Ajustes › Datos*.
 *Columnas del archivo* shows what each column was read as; change any of them, the date order, the decimal mark or
-"Los gastos vienen en positivo", and the choice is remembered for files with the same headers. Pick the account; the preview marks duplicates (same day, payee and amount in that account) and rows that
+"Los gastos vienen en positivo", and the choice (with the account and the sheets left out) is remembered for files
+with the same headers. *Hojas del archivo* lists a workbook's sheets; sheets without movements are greyed out. Pick the account; the preview marks duplicates (same day, payee and amount in that account) and rows that
 cannot be read. Nothing is written until you confirm, and **Deshacer** removes the whole import.
 
 **Another finance app:** *Ajustes › Datos* copies data into an empty profile. **Desde Actual Budget** accepts

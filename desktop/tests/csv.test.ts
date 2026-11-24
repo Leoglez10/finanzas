@@ -1,7 +1,7 @@
 // Run: pnpm --dir desktop test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvRows, detect, isDuplicate, mapRows, parseDate, signature, withSaved, type Role } from "../src/lib/csv.ts";
+import { csvRows, detect, isDuplicate, mapRows, parseDate, signature, withSaved, planSheets, defaultSheets, sheetRows, cleanPayee, repeatedInFile, type Role, type Sheet } from "../src/lib/csv.ts";
 import type { QuickContext } from "../src/lib/quick-parse.ts";
 
 const ctx: QuickContext = {
@@ -129,4 +129,45 @@ test("a file's layout is remembered by its header names", () => {
   assert.deepEqual([d.roles, d.dateOrder, d.flip, d.dateAmbiguous], [saved.roles, "mdy", false, false]);
   // A saved layout for a different number of columns is not applied.
   assert.deepEqual(withSaved(detect(rows), { ...saved, roles: ["date", "payee", "amount"] }).roles, detect(rows).roles);
+});
+
+test("sheets with movements are offered; the ones sharing the main layout are combined", () => {
+  const sheets: Sheet[] = [
+    { name: "Resumen", rows: [["Saldo inicial", "1000"], ["Saldo final", "800"]] },
+    { name: "Ene", rows: [["Fecha", "Concepto", "Importe"], ["05/01/2026", "Uber", "-80"]] },
+    { name: "Feb", rows: [["Fecha", "Concepto", "Importe"], ["05/02/2026", "Oxxo", "-45"], ["06/02/2026", "Renta", "-8000"]] },
+    { name: "Tarjeta", rows: [["Date", "Description", "Amount"], ["02/15/2026", "Amazon", "-500"]] },
+  ];
+  const plans = planSheets(sheets);
+  assert.deepEqual(plans.map(p => [p.name, p.usable]), [["Resumen", false], ["Ene", true], ["Feb", true], ["Tarjeta", true]]);
+  assert.deepEqual(defaultSheets(plans), ["Ene", "Feb"]);
+  const main = plans[2];
+  assert.deepEqual(sheetRows(sheets, plans, ["Ene", "Feb", "Tarjeta"], main, ctx).map(r => [r.sheet, r.line, r.date, r.payee]), [
+    ["Ene", 2, "2026-01-05", "Uber"], ["Feb", 2, "2026-02-05", "Oxxo"], ["Feb", 3, "2026-02-06", "Renta"], ["Tarjeta", 2, "2026-02-15", "Amazon"],
+  ]);
+  // Changes made in the panel apply to every sheet with the main layout, each with its own header row.
+  const edited = { ...main.detection, roles: ["date", "ignore", "amount"] as Role[] };
+  assert.deepEqual(sheetRows([{ name: "Ene", rows: [["Mes enero"], ...sheets[1].rows] }, sheets[2]], planSheets([{ name: "Ene", rows: [["Mes enero"], ...sheets[1].rows] }, sheets[2]]), ["Ene", "Feb"], { ...main, detection: edited }, ctx).map(r => [r.line, r.error]),
+    [[3, "Sin comercio"], [2, "Sin comercio"], [3, "Sin comercio"]]);
+});
+
+test("bank descriptions lose codes, card digits and prefixes, and match a known payee", () => {
+  assert.equal(cleanPayee("COMPRA OXXO CENTRO 1234 GDL MX", ctx), "Oxxo Centro Gdl");
+  assert.equal(cleanPayee("POS UBER *TRIP 05/11 REF: 88231234", ctx), "Uber Trip");
+  assert.equal(cleanPayee("NETFLIX.COM ****4321 AUT 554433", ctx), "Netflix");
+  assert.equal(cleanPayee("SPEI ENVIADO JUAN PEREZ 0012345678", ctx), "Spei Enviado Juan Perez");
+  assert.equal(cleanPayee("Café Punta del Cielo", ctx), "Café Punta del Cielo");
+  assert.equal(cleanPayee("1234567", ctx), "1234567");
+  const [row] = mapRows(csvRows("fecha,comercio,monto\n09/11/2026,NETFLIX.COM ****4321,-350"), ctx);
+  assert.deepEqual([row.payee, row.raw, row.categoryId], ["Netflix", "NETFLIX.COM ****4321", 4]);
+});
+
+test("rows repeated inside the file are found", () => {
+  const rows = mapRows(csvRows("fecha,comercio,monto\n09/11/2026,Uber,-80\n09/11/2026,UBER,-80\n09/11/2026,Uber,-90\n31/13/2026,Uber,-80"), ctx);
+  assert.deepEqual(repeatedInFile(rows), [false, true, false, false]);
+});
+
+test("a description that continues on the next row is joined to the row above", () => {
+  const rows = mapRows(csvRows("Fecha,Concepto,Importe\n09/11/2026,PAGO SERVICIO,-500\n,TELMEX HOGAR,\n10/11/2026,Uber,-80\n,,"), ctx);
+  assert.deepEqual(rows.map(r => [r.line, r.payee, r.cents, r.error]), [[2, "Pago Servicio Telmex Hogar", -50000, ""], [4, "Uber", -8000, ""]]);
 });

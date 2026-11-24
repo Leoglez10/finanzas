@@ -41,3 +41,4 @@ Branch: feat/smart-import · Delivery: ask-on-risk · Runner: `pnpm --dir deskto
 - L6 (2026-11-24) User asked "que se puede nmejorar de eso? excel con muchas paginas?"; after the list of improvements, user: "todas las mejoras". Specs S6-S12 added.
 - L7 T4-T8 done in one commit (shared csv.ts and dialog). Raw bank text kept in notes as "Importado: <raw>".
 - L8 T9: pdf_table.rs aligns glyph cells under the header columns (pdf-extract OutputDev); encrypted and scanned PDFs refused with a message. Year-less dates take today's year, or last year if more than a month ahead. T10 checked.
+- L9 (2026-11-24) User: "si" → pushed feat/smart-import, PR #23 https://github.com/Leoglez10/finanzas/pull/23 (single PR at the user's request; 6 commits as review slices).

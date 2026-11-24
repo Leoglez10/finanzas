@@ -229,6 +229,13 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 | `set_card_terms` | Mark an account as a credit card and set its limit, cut and due days, rate and minimum |
 | `save_installment` | Add or change a purchase paid in monthly installments (MSI or with interest) |
 | `delete_installment` | Delete an installment plan |
+| `create_account` | Create an account with an optional opening balance |
+| `create_category` / `update_category` / `save_category_group` | Create, rename or hide categories and groups |
+| `save_schedule` / `post_schedule` / `delete_schedule` | Create or edit scheduled payments, record the next one, delete |
+| `set_wish_item_paid` / `complete_wish` / `tag_transaction` | Mark goal items paid, complete a goal, tag movements with a goal |
+| `get_overview` | The Resumen numbers for a month or a range |
+| `add_transactions` | Add many transactions at once, all or none |
+| `list_profiles` | List profiles to use with `perfil` |
 
 ## Import
 

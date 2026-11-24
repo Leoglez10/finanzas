@@ -175,7 +175,7 @@ fn bounded_integer_reports_its_range() {
 #[test]
 fn every_spec_has_an_object_schema() {
     let specs = specs();
-    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment"]);
+    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment","create_account","create_category","update_category","save_category_group","save_schedule","post_schedule","delete_schedule","set_wish_item_paid","complete_wish","tag_transaction","get_overview","add_transactions","list_profiles"]);
     assert!(specs.iter().all(|s| s.input_schema["type"] == "object"));
 }
 #[test]
@@ -379,4 +379,112 @@ fn card_terms_and_installments_can_be_managed_through_tools() {
     let tools = specs();
     let flags = |n: &str| { let t = tools.iter().find(|t| t.name == n).unwrap(); (t.read_only, t.destructive) };
     assert_eq!((flags("set_card_terms"), flags("save_installment"), flags("delete_installment")), ((false,false),(false,false),(false,true)));
+}
+
+#[test]
+fn accounts_categories_and_groups_can_be_created_from_tools() {
+    let mut s = Seed::new();
+    let acc = s.call("create_account", json!({"name":" Nu ","openingBalance":-250.5,"date":"2026-10-01"}));
+    assert_eq!((acc["name"].as_str(), acc["balance"].as_f64(), acc["offBudget"].as_bool()), (Some("Nu"), Some(-250.5), Some(false)));
+    let tx = s.call("get_transactions", json!({"accountId":acc["id"],"startDate":"2026-10-01","endDate":"2026-10-01"}));
+    assert_eq!(tx["transactions"][0]["notes"], "Saldo inicial");
+    let saving = s.call("create_account", json!({"name":"Ahorro","offBudget":true}));
+    assert_eq!((saving["balance"].as_f64(), saving["offBudget"].as_bool()), (Some(0.0), Some(true)));
+
+    let group = s.call("save_category_group", json!({"name":"Hogar"}));
+    assert_eq!((group["name"].as_str(), group["isIncome"].as_bool()), (Some("Hogar"), Some(false)));
+    let renamed = s.call("save_category_group", json!({"id":group["id"],"name":"Casa"}));
+    assert_eq!((renamed["id"].clone(), renamed["name"].as_str()), (group["id"].clone(), Some("Casa")));
+    let rent = s.call("create_category", json!({"groupId":group["id"],"name":"Renta"}));
+    assert_eq!((rent["name"].as_str(), rent["groupId"].clone(), rent["hidden"].as_bool()), (Some("Renta"), group["id"].clone(), Some(false)));
+    let hidden = s.call("update_category", json!({"id":rent["id"],"hidden":true}));
+    assert_eq!((hidden["name"].as_str(), hidden["hidden"].as_bool()), (Some("Renta"), Some(true)));
+    let listed = s.call("list_categories", json!({}));
+    assert!(listed.as_array().unwrap().iter().any(|g| g["name"] == "Casa" && g["categories"][0]["name"] == "Renta"));
+
+    for (name, args, expected) in [
+        ("create_account", json!({"name":"  "}), "name: required"),
+        ("create_category", json!({"groupId":"CategoryGroup/p99","name":"X"}), "groupId: not found"),
+        ("update_category", json!({"id":rent["id"]}), "Provide name or hidden"),
+        ("update_category", json!({"id":rent["id"],"name":" "}), "name: must not be empty"),
+        ("update_category", json!({"id":"Category/p99","hidden":true}), "id: not found"),
+        ("save_category_group", json!({"id":"CategoryGroup/p99","name":"X"}), "id: not found"),
+    ] { assert_eq!(call(&mut s.store, name, &args, day(10,15)).unwrap_err().to_string(), expected, "{name}"); }
+}
+
+#[test]
+fn schedules_can_be_created_registered_and_deleted_from_tools() {
+    let mut s = Seed::new();
+    let bank = format!("Account/p{}", s.bank);
+    let food = format!("Category/p{}", s.food);
+    let rent = s.call("save_schedule", json!({"name":"Renta","amount":-8000,"accountId":bank,"categoryId":food,"payee":"Casero","frequency":"monthly","start":"2026-11-01"}));
+    assert_eq!((rent["name"].as_str(), rent["amount"].as_f64(), rent["payee"].as_str(), rent["nextDate"].as_str(), rent["autoPost"].as_bool()), (Some("Renta"), Some(-8000.0), Some("Casero"), Some("2026-11-01"), Some(false)));
+    let edited = s.call("save_schedule", json!({"id":rent["id"],"name":"Renta","amount":-8500,"accountId":bank,"frequency":"monthly","interval":2,"start":"2026-11-01"}));
+    assert_eq!((edited["id"].clone(), edited["amount"].as_f64(), edited["interval"].as_i64()), (rent["id"].clone(), Some(-8500.0), Some(2)));
+    // Automatic and already due: recorded right away, like the app.
+    let auto = s.call("save_schedule", json!({"name":"Netflix","amount":-200,"accountId":bank,"start":"2026-10-10","autoPost":true}));
+    assert_eq!(auto["nextDate"], "2026-11-10");
+    let posted = s.call("post_schedule", json!({"id":rent["id"]}));
+    assert_eq!((posted["amount"].as_f64(), posted["date"].as_str(), posted["scheduleId"].clone()), (Some(-8500.0), Some("2026-11-01"), rent["id"].clone()));
+    let deleted = s.call("delete_schedule", json!({"id":rent["id"]}));
+    assert_eq!(deleted["deleted"]["name"], "Renta");
+    for (name, args, expected) in [
+        ("save_schedule", json!({"name":"X","amount":0,"accountId":bank,"start":"2026-11-01"}), "amount: must not be 0"),
+        ("save_schedule", json!({"name":"X","amount":-1,"accountId":bank,"start":"2026-11-01","frequency":"hourly"}), "frequency: expected daily, weekly, monthly or yearly"),
+        ("save_schedule", json!({"name":"X","amount":-1,"accountId":bank,"start":"2026-11-01","interval":53}), "interval: expected an integer from 1 to 52"),
+        ("save_schedule", json!({"id":"Schedule/p99","name":"X","amount":-1,"accountId":bank,"start":"2026-11-01"}), "id: not found"),
+        ("post_schedule", json!({"id":rent["id"]}), "id: not found"),
+        ("delete_schedule", json!({"id":rent["id"]}), "id: not found"),
+    ] { assert_eq!(call(&mut s.store, name, &args, day(10,15)).unwrap_err().to_string(), expected, "{name}"); }
+}
+
+#[test]
+fn goals_items_completion_and_tags_from_tools() {
+    let mut s = Seed::new();
+    let bank = format!("Account/p{}", s.bank);
+    let wish = s.call("save_wish", json!({"name":"Cancún","price":1,"kind":"viaje","items":[{"name":"Vuelo","amount":3000},{"name":"Hotel","amount":5000}]}));
+    let goals = s.call("list_wishes", json!({}));
+    let items = goals[0]["items"].as_array().unwrap().clone();
+    let flight = items.iter().find(|i| i["name"] == "Vuelo").unwrap()["id"].clone();
+    let paid = s.call("set_wish_item_paid", json!({"id":flight,"paid":true}));
+    assert_eq!(paid["paid"].as_f64(), Some(3000.0));
+    let tx = s.call("add_transaction", json!({"accountId":bank,"date":"2026-10-14","amount":-450,"payee":"Taxi"}));
+    let tagged = s.call("tag_transaction", json!({"id":tx["id"],"wishId":wish["id"],"itemId":flight}));
+    assert_eq!((tagged["wishId"].clone(), tagged["wishItemId"].clone()), (wish["id"].clone(), flight.clone()));
+    let untagged = s.call("tag_transaction", json!({"id":tx["id"],"wishId":null}));
+    assert!(untagged["wishId"].is_null());
+    let done = s.call("complete_wish", json!({"id":wish["id"],"accountId":bank}));
+    assert_eq!(done["wish"]["archived"], true);
+    let amounts: Vec<f64> = done["transactions"].as_array().unwrap().iter().map(|t| t["amount"].as_f64().unwrap()).collect();
+    assert_eq!(amounts, vec![-5000.0], "only the unpaid item is recorded");
+    for (name, args, expected) in [
+        ("set_wish_item_paid", json!({"id":flight}), "paid: required"),
+        ("set_wish_item_paid", json!({"id":"WishItem/p99","paid":true}), "id: not found"),
+        ("tag_transaction", json!({"id":"LedgerEntry/p99","wishId":null}), "id: not found"),
+        ("tag_transaction", json!({"id":tx["id"],"itemId":flight}), "itemId: requires wishId"),
+        ("complete_wish", json!({"id":"Wish/p99","accountId":bank}), "id: not found"),
+        ("complete_wish", json!({"id":wish["id"],"accountId":"Account/p99"}), "accountId: not found"),
+    ] { assert_eq!(call(&mut s.store, name, &args, day(10,15)).unwrap_err().to_string(), expected, "{name}"); }
+}
+
+#[test]
+fn overview_and_bulk_transactions_from_tools() {
+    let mut s = Seed::new();
+    let bank = format!("Account/p{}", s.bank);
+    let o = s.call("get_overview", json!({"month":"2026-09"}));
+    assert_eq!((o["month"].as_str(), o["months"].as_i64(), o["current"]["income"].as_f64(), o["current"]["expenses"].as_f64()), (Some("2026-09"), Some(1), Some(10000.0), Some(125.5)));
+    assert_eq!(o["budgetProgress"][0]["category"], "Comida");
+    assert_eq!(s.call("get_overview", json!({}))["month"], "2026-10", "defaults to the current month");
+    assert_eq!(s.call("get_overview", json!({"month":"2026-10","months":2}))["months"], 2);
+
+    let added = s.call("add_transactions", json!({"transactions":[{"accountId":bank,"date":"2026-10-01","amount":-10,"payee":"A"},{"accountId":bank,"date":"2026-10-02","amount":-20}]}));
+    assert_eq!((added["added"].as_i64(), added["transactions"][1]["amount"].as_f64()), (Some(2), Some(-20.0)));
+    let before = s.call("get_transactions", json!({"startDate":"2026-01-01","endDate":"2026-12-31"}))["total"].clone();
+    let bad = call(&mut s.store, "add_transactions", &json!({"transactions":[{"accountId":bank,"date":"2026-10-03","amount":-1},{"accountId":bank,"date":"2026-13-01","amount":-1}]}), day(10,15));
+    assert_eq!(bad.unwrap_err().to_string(), "transactions[1].date: expected YYYY-MM-DD");
+    assert_eq!(s.call("get_transactions", json!({"startDate":"2026-01-01","endDate":"2026-12-31"}))["total"], before, "nothing is added when one item fails");
+    assert_eq!(call(&mut s.store, "add_transactions", &json!({"transactions":[]}), day(10,15)).unwrap_err().to_string(), "transactions: expected 1 to 500 items");
+    assert_eq!(call(&mut s.store, "get_overview", &json!({"months":25}), day(10,15)).unwrap_err().to_string(), "months: expected an integer from 1 to 24");
+    let tool = specs().into_iter().find(|t| t.name == "list_profiles").unwrap();
+    assert!(tool.read_only);
 }

@@ -40,6 +40,19 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("set_card_terms", "Mark an account as a credit card and set its terms, replacing the previous ones: omitted or null terms are cleared (every term is optional). isCard false stops treating it as a card; its installments are kept. Returns the account as get_debts reports it.", json!({"accountId":{"type":"string","description":"Account id (see list_accounts)"},"isCard":{"type":"boolean","description":"Default true; false removes the card terms"},"creditLimit":{"type":["number","null"],"exclusiveMinimum":0,"description":"Credit limit in decimal currency units"},"cutDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Statement cut day of the month"},"dueDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Payment due day of the month"},"annualRatePercent":{"type":["number","null"],"minimum":0,"maximum":1000,"description":"Annual interest rate in percent, e.g. 45.5"},"minPaymentPercent":{"type":["number","null"],"minimum":0,"maximum":100,"description":"Minimum payment as a percent of the statement balance"}}), &["accountId"], false, false),
         spec("save_installment", "Create a purchase paid in monthly installments on a card, or replace one when id is supplied. Record the full purchase as a transaction on the card separately; this only splits it so each cut bills one monthly charge. annualRatePercent 0 (default) means without interest (MSI). Returns the plan with its monthly charge and months left.", json!({"id":{"type":"string","description":"Installment id (see get_debts) to replace"},"accountId":{"type":"string","description":"Card account id"},"name":{"type":"string"},"total":{"type":"number","exclusiveMinimum":0,"description":"Purchase total in decimal currency units"},"months":{"type":"integer","minimum":1,"maximum":120},"startDate":{"type":"string","description":"YYYY-MM-DD purchase date"},"annualRatePercent":{"type":"number","minimum":0,"maximum":1000,"description":"Default 0 (without interest)"}}), &["accountId","name","total","months","startDate"], false, false),
         spec("delete_installment", "Permanently delete an installment plan by id. Does not touch transactions. Returns the deleted plan.", json!({"id":{"type":"string","description":"Installment id (see get_debts)"}}), &["id"], false, true),
+        spec("create_account", "Create an account at the end of the list. A non-zero openingBalance is recorded as a \"Saldo inicial\" transaction on date (default today; negative for a debt such as a card). Use set_card_terms afterwards to make it a credit card. Returns the account with its balance.", json!({"name":{"type":"string"},"offBudget":{"type":"boolean","description":"For savings or investments kept out of the budget (default false)"},"openingBalance":{"type":"number","description":"Current balance in decimal currency units; negative = owed"},"date":date.clone()}), &["name"], false, false),
+        spec("create_category", "Create a category at the end of a group (see list_categories for group ids).", json!({"groupId":{"type":"string"},"name":{"type":"string"}}), &["groupId","name"], false, false),
+        spec("update_category", "Rename a category and/or hide or show it; only the fields given change, at least one is required.", json!({"id":{"type":"string","description":"Category id"},"name":{"type":"string"},"hidden":{"type":"boolean"}}), &["id"], false, false),
+        spec("save_category_group", "Rename a category group, or create an expense group at the end when id is omitted.", json!({"id":{"type":"string","description":"CategoryGroup id to rename"},"name":{"type":"string"}}), &["name"], false, false),
+        spec("save_schedule", "Create a scheduled payment or income, or replace one when id is supplied. The payee is given by name (reused or created). An autoPost schedule already due is recorded right away. Returns the schedule as list_schedules shows it.", json!({"id":{"type":"string","description":"Schedule id to replace"},"name":{"type":"string"},"amount":amount.clone(),"accountId":{"type":"string"},"categoryId":{"type":"string"},"payee":{"type":"string"},"frequency":{"type":"string","enum":["daily","weekly","monthly","yearly"],"description":"Default monthly"},"interval":{"type":"integer","minimum":1,"maximum":52,"description":"Every N periods (default 1)"},"start":{"type":"string","description":"YYYY-MM-DD first occurrence"},"skipWeekend":{"type":"boolean","description":"Move weekend dates to Monday (default false)"},"autoPost":{"type":"boolean","description":"Record it automatically when due (default false)"}}), &["name","amount","accountId","start"], false, false),
+        spec("post_schedule", "Record the next occurrence of a scheduled payment as a transaction now and move the schedule forward. Returns the transaction.", json!({"id":{"type":"string","description":"Schedule id"}}), &["id"], false, false),
+        spec("delete_schedule", "Permanently delete a scheduled payment. Transactions it already recorded stay. Returns the deleted schedule.", json!({"id":{"type":"string","description":"Schedule id"}}), &["id"], false, true),
+        spec("set_wish_item_paid", "Mark a goal's line item as paid or unpaid. Money set aside beyond what is still unpaid is released. Returns the goal.", json!({"id":{"type":"string","description":"WishItem id (see list_wishes)"},"paid":{"type":"boolean"}}), &["id","paid"], false, false),
+        spec("complete_wish", "Complete a goal: records its expense on the account (one per unpaid line item, or one for the price) and archives it as an achievement. All or nothing. Returns the goal and the new transactions.", json!({"id":{"type":"string","description":"Wish id"},"accountId":{"type":"string","description":"Account that pays"}}), &["id","accountId"], false, false),
+        spec("tag_transaction", "Tag a transaction with a goal and optionally one of its line items, to compare spent with planned; wishId null removes the tag. Returns the transaction.", json!({"id":{"type":"string","description":"Transaction id"},"wishId":{"type":["string","null"]},"itemId":{"type":["string","null"],"description":"WishItem id of that goal"}}), &["id"], false, false),
+        spec("get_overview", "Summary like the app's Resumen for the `months` months ending at `month` (default the current month): balances, income, expenses, savings rate compared with the same number of months before, spending per category and budget progress.", json!({"month":month.clone(),"months":{"type":"integer","minimum":1,"maximum":24,"description":"Months in the period (default 1)"}}), &[], true, false),
+        spec("add_transactions", "Add up to 500 transactions at once, all or none (like the app's CSV import). Each item takes the add_transaction fields. Returns how many were added and the transactions.", json!({"transactions":{"type":"array","minItems":1,"maxItems":500,"items":{"type":"object","properties":{"accountId":{"type":"string"},"date":date.clone(),"amount":amount.clone(),"payee":{"type":"string"},"categoryId":{"type":"string"},"notes":{"type":"string"},"cleared":{"type":"boolean"}},"required":["accountId","date","amount"]}}}), &["transactions"], false, false),
+        spec("list_profiles", "List the profiles created in the app; pass one as `perfil` to any tool to use its data.", json!({}), &[], true, false),
     ]
 }
 /// The `perfil` argument, `personal` when omitted.
@@ -58,7 +71,7 @@ fn required_id(a: &Args<'_>, key: &str, entity: &str) -> Result<i64, ToolError> 
     a.id(key, entity)?.ok_or_else(|| ToolError(format!("{key}: required")))
 }
 fn entry_json(r: finanzas_core::store::EntryRow) -> Value {
-    json!({"id":id("LedgerEntry",r.id),"date":r.date.to_string(),"amount":dec(r.amount),"accountId":oid("Account",r.account_id),"account":r.account_name,"payee":r.payee_name,"categoryId":oid("Category",r.category_id),"category":r.category_name,"notes":r.notes,"cleared":r.cleared,"scheduleId":oid("Schedule",r.schedule_id)})
+    json!({"id":id("LedgerEntry",r.id),"date":r.date.to_string(),"amount":dec(r.amount),"accountId":oid("Account",r.account_id),"account":r.account_name,"payee":r.payee_name,"categoryId":oid("Category",r.category_id),"category":r.category_name,"notes":r.notes,"cleared":r.cleared,"scheduleId":oid("Schedule",r.schedule_id),"wishId":oid("Wish",r.wish_id),"wishItemId":oid("WishItem",r.wish_item_id)})
 }
 fn category(a: &Args<'_>, store: &Store) -> Result<Option<i64>, ToolError> {
     let category = a.id("categoryId", "Category")?;
@@ -88,6 +101,32 @@ fn kind(a: &Args) -> Result<service::WishKind, ToolError> {
             .ok_or_else(|| ToolError("kind: expected compra, viaje, experiencia or fondo".into())),
     }
 }
+fn new_entry(a: &Args, store: &Store) -> Result<service::NewEntry, ToolError> {
+    let account = required_id(a,"accountId","Account")?;
+    if store.get_account(account).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
+    let category_id = category(a,store)?;
+    let payee = a.optional_string("payee")?.map(str::to_owned);
+    let date = a.date("date")?;
+    let amount = a.cents("amount")?;
+    let notes = a.optional_string("notes")?.unwrap_or("").to_owned();
+    let cleared = a.bool("cleared")?.unwrap_or(true);
+    Ok(service::NewEntry { date,amount,account_id:account,payee,category_id,notes,cleared })
+}
+fn schedule_json(v: service::ScheduleView) -> Value {
+    json!({"id":id("Schedule",v.schedule.id),"name":v.schedule.name,"amount":dec(v.schedule.amount),"payee":v.payee,"accountId":oid("Account",v.schedule.account_id),"account":v.account,"categoryId":oid("Category",v.schedule.category_id),"frequency":v.schedule.recurrence.as_ref().map(|r| r.frequency),"interval":v.schedule.recurrence.as_ref().map(|r| r.interval).unwrap_or(1),"nextDate":v.next_date.map(|d| d.to_string()),"completed":v.schedule.completed,"autoPost":v.schedule.auto_post})
+}
+fn schedule_by_id(store: &Store, n: i64) -> Result<Value, ToolError> {
+    service::schedule_views(store).map_err(err)?.into_iter().find(|v| v.schedule.id == n).map(schedule_json).ok_or_else(|| ToolError("id: not found".into()))
+}
+fn account_json(store: &Store, n: i64) -> Result<Value, ToolError> {
+    let a = store.get_account(n).map_err(err)?.ok_or_else(|| ToolError("accountId: not found".into()))?;
+    let balance = store.account_balances().map_err(err)?.get(&n).copied().unwrap_or(0);
+    Ok(json!({"id":id("Account",a.id),"name":a.name,"offBudget":a.off_budget,"closed":a.closed,"balance":dec(balance)}))
+}
+fn category_json(c: finanzas_core::Category) -> Value { json!({"id":id("Category",c.id),"name":c.name,"hidden":c.hidden,"groupId":oid("CategoryGroup",c.group_id)}) }
+/// Maps the service's NotFound to the argument that names the missing thing.
+fn missing(key: &'static str) -> impl Fn(service::ServiceError) -> ToolError { move |e| match e { service::ServiceError::NotFound => ToolError(format!("{key}: not found")), e => err(e) } }
+fn summary_json(m: &service::MonthSummaryView) -> Value { json!({"income":dec(m.income),"expenses":dec(m.expenses),"budgeted":dec(m.budgeted),"savingsRate":m.savings_rate}) }
 fn account(a: &Args, store: &Store) -> Result<i64, ToolError> {
     let n = required_id(a, "accountId", "Account")?;
     if store.get_account(n).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
@@ -174,7 +213,7 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             if let Some(n) = category { if store.get_category(n).map_err(err)?.is_none() { return Err(ToolError("categoryId: not found".into())); } }
             let limit = a.int("limit",100,1,1000)? as usize;
             let (rows,total) = store.entries(&EntryFilter { account_id:account,category_id:category,start:Some(start),end:Some(end),limit:Some(limit),..Default::default() }).map_err(err)?;
-            json!({"total":total,"truncated":total>limit,"transactions":rows.into_iter().map(|r| json!({"id":id("LedgerEntry",r.id),"date":r.date.to_string(),"amount":dec(r.amount),"accountId":oid("Account",r.account_id),"account":r.account_name,"payee":r.payee_name,"categoryId":oid("Category",r.category_id),"category":r.category_name,"notes":r.notes,"cleared":r.cleared,"scheduleId":oid("Schedule",r.schedule_id)})).collect::<Vec<_>>()})
+            json!({"total":total,"truncated":total>limit,"transactions":rows.into_iter().map(|r| json!({"id":id("LedgerEntry",r.id),"date":r.date.to_string(),"amount":dec(r.amount),"accountId":oid("Account",r.account_id),"account":r.account_name,"payee":r.payee_name,"categoryId":oid("Category",r.category_id),"category":r.category_name,"notes":r.notes,"cleared":r.cleared,"scheduleId":oid("Schedule",r.schedule_id),"wishId":oid("Wish",r.wish_id),"wishItemId":oid("WishItem",r.wish_item_id)})).collect::<Vec<_>>()})
         }
         "list_categories" => {
             let categories = store.list_categories().map_err(err)?;
@@ -195,7 +234,7 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
         "list_schedules" => {
             let mut rows = service::schedule_views(store).map_err(err)?;
             rows.sort_by(|a,b| a.schedule.name.cmp(&b.schedule.name));
-            json!(rows.into_iter().map(|v| json!({"id":id("Schedule",v.schedule.id),"name":v.schedule.name,"amount":dec(v.schedule.amount),"payee":v.payee,"accountId":oid("Account",v.schedule.account_id),"account":v.account,"frequency":v.schedule.recurrence.as_ref().map(|r| r.frequency),"interval":v.schedule.recurrence.as_ref().map(|r| r.interval).unwrap_or(1),"nextDate":v.next_date.map(|d| d.to_string()),"completed":v.schedule.completed,"autoPost":v.schedule.auto_post})).collect::<Vec<_>>())
+            json!(rows.into_iter().map(schedule_json).collect::<Vec<_>>())
         }
         "get_debts" => {
             let v = service::debts(store, today).map_err(err)?;
@@ -230,21 +269,107 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
             let plan = service::delete_installment(store, n).map_err(|_| ToolError("id: not found".into()))?;
             json!({"deleted": installment_json(&plan, None)})
         }
+        "create_account" => {
+            let name = a.required_string("name")?.trim();
+            if name.is_empty() { return Err(ToolError("name: required".into())); }
+            let opening = if a.0.get("openingBalance").is_none_or(Value::is_null) { None } else { Some(a.cents("openingBalance")?) };
+            let created = service::create_account(store, name, a.bool("offBudget")?.unwrap_or(false), opening, a.optional_date("date")?.unwrap_or(today), None).map_err(err)?;
+            account_json(store, created.id)?
+        }
+        "create_category" => {
+            let group = required_id(&a, "groupId", "CategoryGroup")?;
+            let name = a.required_string("name")?;
+            if name.trim().is_empty() { return Err(ToolError("name: required".into())); }
+            category_json(service::create_category(store, group, name).map_err(missing("groupId"))?)
+        }
+        "update_category" => {
+            let n = required_id(&a, "id", "Category")?;
+            let (name, hidden) = (a.optional_string("name")?, a.bool("hidden")?);
+            if name.is_none() && hidden.is_none() { return Err(ToolError("Provide name or hidden".into())); }
+            if name.is_some_and(|n| n.trim().is_empty()) { return Err(ToolError("name: must not be empty".into())); }
+            category_json(service::update_category(store, n, name, hidden).map_err(missing("id"))?)
+        }
+        "save_category_group" => {
+            let name = a.required_string("name")?;
+            if name.trim().is_empty() { return Err(ToolError("name: required".into())); }
+            let g = service::save_category_group(store, a.id("id", "CategoryGroup")?, name).map_err(missing("id"))?;
+            json!({"id":id("CategoryGroup",g.id),"name":g.name,"isIncome":g.is_income})
+        }
+        "save_schedule" => {
+            let n = a.id("id", "Schedule")?;
+            let name = a.required_string("name")?.trim().to_owned();
+            if name.is_empty() { return Err(ToolError("name: required".into())); }
+            let amount = a.cents("amount")?;
+            if amount == 0 { return Err(ToolError("amount: must not be 0".into())); }
+            let account = required_id(&a, "accountId", "Account")?;
+            if store.get_account(account).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
+            let frequency = match a.optional_string("frequency")?.unwrap_or("monthly") {
+                "daily" => finanzas_core::Frequency::Daily, "weekly" => finanzas_core::Frequency::Weekly,
+                "monthly" => finanzas_core::Frequency::Monthly, "yearly" => finanzas_core::Frequency::Yearly,
+                _ => return Err(ToolError("frequency: expected daily, weekly, monthly or yearly".into())),
+            };
+            let draft = service::ScheduleDraft { name, amount, account_id: account, category_id: category(&a, store)?, payee: a.optional_string("payee")?.unwrap_or("").into(),
+                frequency, interval: a.int("interval", 1, 1, 52)? as u32, start: a.date("start")?, skip_weekend: a.bool("skipWeekend")?.unwrap_or(false), auto_post: a.bool("autoPost")?.unwrap_or(false) };
+            let saved = service::save_schedule(store, n, &draft).map_err(missing("id"))?;
+            // Same as the app: an automatic payment already due is recorded right away.
+            service::auto_post_due(store, today).map_err(err)?;
+            schedule_by_id(store, saved)?
+        }
+        "post_schedule" => {
+            let n = required_id(&a, "id", "Schedule")?;
+            entry_json(service::post_schedule(store, n, today).map_err(missing("id"))?)
+        }
+        "delete_schedule" => {
+            let n = required_id(&a, "id", "Schedule")?;
+            let before = schedule_by_id(store, n)?;
+            service::delete_schedule(store, n).map_err(missing("id"))?;
+            json!({"deleted": before})
+        }
+        "set_wish_item_paid" => {
+            let n = required_id(&a, "id", "WishItem")?;
+            let paid = a.bool("paid")?.ok_or_else(|| ToolError("paid: required".into()))?;
+            wish_json(service::set_wish_item_paid(store, n, paid, today).map_err(missing("id"))?)
+        }
+        "complete_wish" => {
+            let n = required_id(&a, "id", "Wish")?;
+            let account = required_id(&a, "accountId", "Account")?;
+            if store.get_account(account).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
+            let done = service::complete_wish(store, n, account, today).map_err(missing("id"))?;
+            json!({"wish": wish_json(done.wish), "transactions": done.entries.into_iter().map(entry_json).collect::<Vec<_>>()})
+        }
+        "tag_transaction" => {
+            let n = required_id(&a, "id", "LedgerEntry")?;
+            let wish = a.id("wishId", "Wish")?;
+            let item = a.id("itemId", "WishItem")?;
+            if wish.is_none() && item.is_some() { return Err(ToolError("itemId: requires wishId".into())); }
+            entry_json(service::tag_entry(store, n, wish, item).map_err(missing("id"))?)
+        }
+        "get_overview" => {
+            let month = match a.0.get("month").filter(|v| !v.is_null()) { Some(_) => a.month("month")?, None => { use chrono::Datelike; today.year() * 100 + today.month() as i32 } };
+            let span = a.int("months", 1, 1, 24)? as u32;
+            let o = service::overview_span(store, month, span, 0).map_err(err)?;
+            let progress = |list: Vec<service::CategoryProgress>| list.into_iter().map(|p| json!({"categoryId":id("Category",p.category_id),"category":p.name,"spent":dec(p.spent),"budgeted":dec(p.budgeted)})).collect::<Vec<_>>();
+            json!({"month":format!("{}-{:02}", month / 100, month % 100),"months":span,"totalBalance":dec(o.total_balance),"openAccounts":o.open_account_count,
+                "current":summary_json(&o.current),"previous":summary_json(&o.previous),"incomeChange":o.income_change,"expensesChange":o.expenses_change,"savingsRateChange":o.savings_rate_change,
+                "spendingTotal":dec(o.spending_total),"spending":progress(o.spending),"budgetSpent":dec(o.budget_spent),"budgetAssigned":dec(o.budget_assigned),"budgetProgress":progress(o.budget_progress)})
+        }
+        "add_transactions" => {
+            let list = a.0.get("transactions").and_then(Value::as_array).ok_or_else(|| ToolError("transactions: expected an array".into()))?;
+            if list.is_empty() || list.len() > 500 { return Err(ToolError("transactions: expected 1 to 500 items".into())); }
+            let drafts = list.iter().enumerate().map(|(i, v)| new_entry(&Args(v), store).map_err(|e| ToolError(format!("transactions[{i}].{}", e.0)))).collect::<Result<Vec<_>, _>>()?;
+            // All or none, like the app's CSV import.
+            let rows = store.transaction(|s| drafts.into_iter().map(|d| service::add_entry(s, d)).collect::<Result<Vec<_>, service::ServiceError>>()).map_err(err)?;
+            json!({"added": rows.len(), "transactions": rows.into_iter().map(entry_json).collect::<Vec<_>>()})
+        }
+        "list_profiles" => {
+            let home = Store::default_path().ok_or_else(|| ToolError("Unable to determine database path".into()))?;
+            json!(Store::profiles_beside(&home).into_iter().map(|slug| json!({"perfil":slug,"name":Store::profile_label(&slug)})).collect::<Vec<_>>())
+        }
         "get_upcoming" => {
             let days = a.int("days",30,0,365)?;
             json!(service::upcoming(store,today,days).map_err(err)?.into_iter().map(|v| json!({"scheduleId":id("Schedule",v.schedule_id),"name":v.name,"date":v.date.to_string(),"amount":dec(v.amount),"accountId":oid("Account",v.account_id),"account":v.account,"overdue":v.overdue,"projectedBalance":v.projected_balance.map(dec)})).collect::<Vec<_>>())
         }
-        "add_transaction" => {
-            let account = required_id(&a,"accountId","Account")?;
-            if store.get_account(account).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
-            let category_id = category(&a,store)?;
-            let payee = a.optional_string("payee")?.map(str::to_owned);
-            let date = a.date("date")?;
-            let amount = a.cents("amount")?;
-            let notes = a.optional_string("notes")?.unwrap_or("").to_owned();
-            let cleared = a.bool("cleared")?.unwrap_or(true);
-            entry_json(service::add_entry(store,service::NewEntry { date,amount,account_id:account,payee,category_id,notes,cleared }).map_err(err)?)
-        }
+        "add_transaction" => entry_json(service::add_entry(store, new_entry(&a, store)?).map_err(err)?),
         "update_transaction" => {
             let n = required_id(&a,"id","LedgerEntry")?;
             if store.get_entry(n).map_err(err)?.is_none() { return Err(ToolError("id: not found".into())); }

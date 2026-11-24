@@ -11,7 +11,7 @@ fn accounts_have_a_default_look_until_a_preset_icon_and_color_are_chosen() {
     let bank = create_account(&mut store, "Nu", false, None, day(), None).unwrap();
     let saving = create_account(&mut store, "Ahorro", true, None, day(), None).unwrap();
     let styles = account_styles(&store).unwrap();
-    assert!(styles.get(&bank.id).is_none(), "no row until something is chosen");
+    assert!(!styles.contains_key(&bank.id), "no row until something is chosen");
     set_account_style(&store, bank.id, Some("bank"), Some("violet")).unwrap();
     set_account_style(&store, saving.id, Some("piggy"), None).unwrap();
     let styles = account_styles(&store).unwrap();

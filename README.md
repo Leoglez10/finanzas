@@ -226,6 +226,9 @@ Every tool accepts an optional `perfil` (default `personal`, or the name of a pr
 | `skip_schedule` | Skip a scheduled payment |
 | `get_upcoming` | Get upcoming payments and projected balances |
 | `get_debts` | Credit cards and loans: what you owe, what to pay to avoid interest, minimum and installments |
+| `set_card_terms` | Mark an account as a credit card and set its limit, cut and due days, rate and minimum |
+| `save_installment` | Add or change a purchase paid in monthly installments (MSI or with interest) |
+| `delete_installment` | Delete an installment plan |
 
 ## Import
 

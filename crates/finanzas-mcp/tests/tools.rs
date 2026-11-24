@@ -175,7 +175,7 @@ fn bounded_integer_reports_its_range() {
 #[test]
 fn every_spec_has_an_object_schema() {
     let specs = specs();
-    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts"]);
+    assert_eq!(specs.iter().map(|s| s.name).collect::<Vec<_>>(), ["list_accounts","get_transactions","list_categories","get_budget_month","spending_by_category","add_transaction","update_transaction","delete_transaction","set_budget_amount","list_schedules","skip_schedule","list_wishes","save_wish","reserve_wish","archive_wish","evaluate_wish","get_upcoming","get_debts","set_card_terms","save_installment","delete_installment"]);
     assert!(specs.iter().all(|s| s.input_schema["type"] == "object"));
 }
 #[test]
@@ -327,4 +327,56 @@ fn get_debts_reports_cards_with_their_payments_and_loans() {
     assert_eq!(d["missing"], json!([]));
     let tool = specs().into_iter().find(|t| t.name == "get_debts").unwrap();
     assert!(tool.read_only && !tool.destructive);
+}
+
+#[test]
+fn card_terms_and_installments_can_be_managed_through_tools() {
+    let mut store = Store::open_in_memory().unwrap();
+    let card = store.insert_account(&Account { id:0, name:"Nu".into(), off_budget:false, closed:false, sort_order:1.0 }).unwrap();
+    store.insert_entry(&Entry { id:0, date:day(10,1), amount:-120000, notes:String::new(), cleared:true, account_id:Some(card), category_id:None, payee_id:None, schedule_id:None }).unwrap();
+    let account = format!("Account/p{card}");
+    let today = day(11,10);
+    let mut call = |name: &str, args: Value| call(&mut store, name, &args, today);
+
+    // Only some terms: the rest stay empty and are reported as missing.
+    let d = call("set_card_terms", json!({"accountId":account,"creditLimit":10000,"cutDay":5})).unwrap();
+    assert_eq!((d["isCard"].as_bool(), d["creditLimit"].as_f64(), d["cutDay"].as_i64(), d["available"].as_f64()), (Some(true), Some(10000.0), Some(5), Some(8800.0)));
+    assert_eq!(d["missing"], json!(["dueDay","annualRate","minPayment"]));
+    // Replace semantics: omitted terms are cleared.
+    let d = call("set_card_terms", json!({"accountId":account,"annualRatePercent":45.5,"minPaymentPercent":10})).unwrap();
+    assert_eq!((d["annualRatePercent"].as_f64(), d["minPaymentPercent"].as_f64(), d["creditLimit"].is_null()), (Some(45.5), Some(10.0), true));
+
+    for (args, expected) in [
+        (json!({"accountId":account,"cutDay":32}), "cutDay: expected an integer from 1 to 31"),
+        (json!({"accountId":account,"creditLimit":0}), "creditLimit: must be greater than 0"),
+        (json!({"accountId":account,"annualRatePercent":1001}), "annualRatePercent: expected 0 to 1000"),
+        (json!({"accountId":account,"minPaymentPercent":101}), "minPaymentPercent: expected 0 to 100"),
+        (json!({"accountId":"Account/p999"}), "accountId: not found"),
+    ] { assert_eq!(call("set_card_terms", args).unwrap_err().to_string(), expected); }
+
+    let plan = call("save_installment", json!({"accountId":account,"name":"Laptop","total":1200,"months":12,"startDate":"2026-10-01"})).unwrap();
+    assert_eq!((plan["name"].as_str(), plan["monthly"].as_f64(), plan["monthsLeft"].as_i64(), plan["annualRatePercent"].as_f64()), (Some("Laptop"), Some(100.0), Some(10), Some(0.0)), "charged Oct 1 and Nov 1 (no cut day: the purchase day)");
+    let plan_id = plan["id"].as_str().unwrap().to_string();
+    assert!(plan_id.starts_with("Installment/p"));
+    let debts = call("get_debts", json!({})).unwrap();
+    assert_eq!(debts["debts"][0]["installments"][0]["id"], plan_id.as_str());
+    let edited = call("save_installment", json!({"id":plan_id,"accountId":account,"name":"Laptop Pro","total":2400,"months":12,"startDate":"2026-10-01","annualRatePercent":0})).unwrap();
+    assert_eq!((edited["id"].as_str(), edited["name"].as_str(), edited["monthly"].as_f64()), (Some(plan_id.as_str()), Some("Laptop Pro"), Some(200.0)));
+    for (args, expected) in [
+        (json!({"accountId":account,"name":"X","total":100,"months":0,"startDate":"2026-10-01"}), "months: expected an integer from 1 to 120"),
+        (json!({"accountId":account,"name":"","total":100,"months":3,"startDate":"2026-10-01"}), "name: required"),
+        (json!({"accountId":account,"name":"X","total":-5,"months":3,"startDate":"2026-10-01"}), "total: must be greater than 0"),
+        (json!({"id":"Installment/p999","accountId":account,"name":"X","total":100,"months":3,"startDate":"2026-10-01"}), "id: not found"),
+    ] { assert_eq!(call("save_installment", args).unwrap_err().to_string(), expected); }
+
+    let deleted = call("delete_installment", json!({"id":plan_id})).unwrap();
+    assert_eq!(deleted["deleted"]["name"], "Laptop Pro");
+    assert_eq!(call("delete_installment", json!({"id":plan_id})).unwrap_err().to_string(), "id: not found");
+
+    let d = call("set_card_terms", json!({"accountId":account,"isCard":false})).unwrap();
+    assert_eq!((d["isCard"].as_bool(), d["debt"].as_f64()), (Some(false), Some(1200.0)), "still a debt (negative balance), no longer a card");
+
+    let tools = specs();
+    let flags = |n: &str| { let t = tools.iter().find(|t| t.name == n).unwrap(); (t.read_only, t.destructive) };
+    assert_eq!((flags("set_card_terms"), flags("save_installment"), flags("delete_installment")), ((false,false),(false,false),(false,true)));
 }

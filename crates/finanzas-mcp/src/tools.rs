@@ -37,6 +37,9 @@ pub fn specs() -> Vec<ToolSpec> {
         spec("evaluate_wish", "Evaluate current-month budget and outgoing payments for 30 days including overdue ones. Reports budget/cash shortfalls and unknown data. No future income or off-budget/closed accounts; not a guarantee.", json!({"id":{"type":"string"}}), &["id"], true, false),
         spec("get_upcoming", "Upcoming scheduled payments from overdue ones through the next `days` days (default 30), oldest first, with each account's projected balance after the payment.", json!({"days":{"type":"integer","minimum":0,"maximum":365,"description":"Days ahead (default 30)"}}), &[], true, false),
         spec("get_debts", "Debts: credit cards (with optional terms) and other accounts with a negative balance, highest rate first. Per debt: amount owed, credit limit and available, last/next cut, due date and overdue flag, statement balance, amount left to pay to avoid interest, minimum payment, estimated interest if only the minimum is paid (16% VAT included), installment purchases, and `missing` card terms. Null fields need terms that were not entered.", json!({}), &[], true, false),
+        spec("set_card_terms", "Mark an account as a credit card and set its terms, replacing the previous ones: omitted or null terms are cleared (every term is optional). isCard false stops treating it as a card; its installments are kept. Returns the account as get_debts reports it.", json!({"accountId":{"type":"string","description":"Account id (see list_accounts)"},"isCard":{"type":"boolean","description":"Default true; false removes the card terms"},"creditLimit":{"type":["number","null"],"exclusiveMinimum":0,"description":"Credit limit in decimal currency units"},"cutDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Statement cut day of the month"},"dueDay":{"type":["integer","null"],"minimum":1,"maximum":31,"description":"Payment due day of the month"},"annualRatePercent":{"type":["number","null"],"minimum":0,"maximum":1000,"description":"Annual interest rate in percent, e.g. 45.5"},"minPaymentPercent":{"type":["number","null"],"minimum":0,"maximum":100,"description":"Minimum payment as a percent of the statement balance"}}), &["accountId"], false, false),
+        spec("save_installment", "Create a purchase paid in monthly installments on a card, or replace one when id is supplied. Record the full purchase as a transaction on the card separately; this only splits it so each cut bills one monthly charge. annualRatePercent 0 (default) means without interest (MSI). Returns the plan with its monthly charge and months left.", json!({"id":{"type":"string","description":"Installment id (see get_debts) to replace"},"accountId":{"type":"string","description":"Card account id"},"name":{"type":"string"},"total":{"type":"number","exclusiveMinimum":0,"description":"Purchase total in decimal currency units"},"months":{"type":"integer","minimum":1,"maximum":120},"startDate":{"type":"string","description":"YYYY-MM-DD purchase date"},"annualRatePercent":{"type":"number","minimum":0,"maximum":1000,"description":"Default 0 (without interest)"}}), &["accountId","name","total","months","startDate"], false, false),
+        spec("delete_installment", "Permanently delete an installment plan by id. Does not touch transactions. Returns the deleted plan.", json!({"id":{"type":"string","description":"Installment id (see get_debts)"}}), &["id"], false, true),
     ]
 }
 /// The `perfil` argument, `personal` when omitted.
@@ -84,6 +87,47 @@ fn kind(a: &Args) -> Result<service::WishKind, ToolError> {
         Some(text) => ["compra","viaje","experiencia","fondo"].contains(&text).then(|| service::WishKind::parse(text))
             .ok_or_else(|| ToolError("kind: expected compra, viaje, experiencia or fondo".into())),
     }
+}
+fn account(a: &Args, store: &Store) -> Result<i64, ToolError> {
+    let n = required_id(a, "accountId", "Account")?;
+    if store.get_account(n).map_err(err)?.is_none() { return Err(ToolError("accountId: not found".into())); }
+    Ok(n)
+}
+/// Money greater than zero, or None when omitted/null.
+fn positive(a: &Args, key: &str) -> Result<Option<i64>, ToolError> {
+    if a.0.get(key).is_none_or(Value::is_null) { return Ok(None); }
+    let n = a.cents(key)?;
+    if n <= 0 { return Err(ToolError(format!("{key}: must be greater than 0"))); }
+    Ok(Some(n))
+}
+fn day_of_month(a: &Args, key: &str) -> Result<Option<u32>, ToolError> {
+    if a.0.get(key).is_none_or(Value::is_null) { return Ok(None); }
+    a.int(key, 0, 1, 31).map(|d| Some(d as u32))
+}
+/// A percentage with up to 2 decimals, as basis points (45.5 → 4550).
+fn percent(a: &Args, key: &str, max: i64) -> Result<Option<i64>, ToolError> {
+    if a.0.get(key).is_none_or(Value::is_null) { return Ok(None); }
+    let bp = a.cents(key).map_err(|_| ToolError(format!("{key}: expected 0 to {max}")))?;
+    if !(0..=max * 100).contains(&bp) { return Err(ToolError(format!("{key}: expected 0 to {max}"))); }
+    Ok(Some(bp))
+}
+fn installment_json(p: &service::Installment, view: Option<&service::InstallmentView>) -> Value {
+    json!({"id":id("Installment",p.id),"accountId":id("Account",p.account_id),"name":p.name,"total":dec(p.total),"months":p.months,
+        "startDate":p.start_date.to_string(),"annualRatePercent":p.annual_rate as f64 / 100.0,
+        "monthly":view.map(|v| dec(v.monthly)),"monthsLeft":view.map(|v| v.left),"remaining":view.map(|v| dec(v.remaining))})
+}
+fn installment_view(store: &Store, today: NaiveDate, n: i64) -> Result<Option<Value>, ToolError> {
+    Ok(service::debts(store, today).map_err(err)?.debts.iter().flat_map(|d| &d.installments).find(|p| p.installment.id == n).map(|p| installment_json(&p.installment, Some(p))))
+}
+fn debt_json(d: service::DebtView) -> Value {
+    let t = d.terms.clone().unwrap_or_default();
+    let pct = |bp: Option<i64>| bp.map(|b| b as f64 / 100.0);
+    json!({"accountId":id("Account",d.account_id),"name":d.name,"isCard":d.is_card,"debt":dec(d.debt),
+        "creditLimit":t.credit_limit.map(dec),"available":d.available.map(dec),"annualRatePercent":pct(t.annual_rate),"minPaymentPercent":pct(t.min_payment),
+        "cutDay":t.cut_day,"dueDay":t.due_day,"lastCut":d.last_cut.map(|x| x.to_string()),"nextCut":d.next_cut.map(|x| x.to_string()),
+        "dueDate":d.due_date.map(|x| x.to_string()),"overdue":d.overdue,"statement":d.statement.map(dec),"toAvoidInterest":d.to_avoid_interest.map(dec),
+        "minimum":d.minimum.map(dec),"interestIfMinimum":d.interest_if_minimum.map(dec),"missing":d.missing,
+        "installments":d.installments.iter().map(|p| installment_json(&p.installment, Some(p))).collect::<Vec<_>>()})
 }
 fn evaluation_json(e: service::WishEvaluation) -> Value {
     json!({"status":e.status,"asOf":e.as_of.to_string(),"horizonDays":e.horizon_days,
@@ -155,17 +199,36 @@ pub fn call(store: &mut Store, name: &str, args: &Value, today: NaiveDate) -> Re
         }
         "get_debts" => {
             let v = service::debts(store, today).map_err(err)?;
-            let pct = |bp: Option<i64>| bp.map(|b| b as f64 / 100.0);
-            json!({"total":dec(v.total),"monthlyInstallments":dec(v.monthly_installments),"debts":v.debts.into_iter().map(|d| {
-                let t = d.terms.clone().unwrap_or_default();
-                json!({"accountId":id("Account",d.account_id),"name":d.name,"isCard":d.is_card,"debt":dec(d.debt),
-                    "creditLimit":t.credit_limit.map(dec),"available":d.available.map(dec),"annualRatePercent":pct(t.annual_rate),"minPaymentPercent":pct(t.min_payment),
-                    "cutDay":t.cut_day,"dueDay":t.due_day,"lastCut":d.last_cut.map(|x| x.to_string()),"nextCut":d.next_cut.map(|x| x.to_string()),
-                    "dueDate":d.due_date.map(|x| x.to_string()),"overdue":d.overdue,"statement":d.statement.map(dec),"toAvoidInterest":d.to_avoid_interest.map(dec),
-                    "minimum":d.minimum.map(dec),"interestIfMinimum":d.interest_if_minimum.map(dec),"missing":d.missing,
-                    "installments":d.installments.into_iter().map(|p| json!({"name":p.installment.name,"total":dec(p.installment.total),"months":p.installment.months,
-                        "startDate":p.installment.start_date.to_string(),"annualRatePercent":p.installment.annual_rate as f64 / 100.0,"monthly":dec(p.monthly),"monthsLeft":p.left,"remaining":dec(p.remaining)})).collect::<Vec<_>>()})
-            }).collect::<Vec<_>>()})
+            json!({"total":dec(v.total),"monthlyInstallments":dec(v.monthly_installments),"debts":v.debts.into_iter().map(debt_json).collect::<Vec<_>>()})
+        }
+        "set_card_terms" => {
+            let account = account(&a, store)?;
+            let terms = if a.bool("isCard")?.unwrap_or(true) { Some(service::CardTerms {
+                credit_limit: positive(&a, "creditLimit")?, cut_day: day_of_month(&a, "cutDay")?, due_day: day_of_month(&a, "dueDay")?,
+                annual_rate: percent(&a, "annualRatePercent", 1000)?, min_payment: percent(&a, "minPaymentPercent", 100)?,
+            }) } else { None };
+            service::set_card_terms(store, account, terms).map_err(err)?;
+            // A card that stopped being one and owes nothing is no longer listed.
+            service::debts(store, today).map_err(err)?.debts.into_iter().find(|d| d.account_id == account).map(debt_json)
+                .unwrap_or_else(|| json!({"accountId":id("Account",account),"isCard":false,"debt":0.0}))
+        }
+        "save_installment" => {
+            let plan_id = a.id("id", "Installment")?;
+            let account_id = account(&a, store)?;
+            let name = a.required_string("name")?.trim();
+            if name.is_empty() { return Err(ToolError("name: required".into())); }
+            let total = positive(&a, "total")?.ok_or_else(|| ToolError("total: required".into()))?;
+            if a.0.get("months").is_none_or(Value::is_null) { return Err(ToolError("months: expected an integer from 1 to 120".into())); }
+            let draft = service::InstallmentDraft { account_id, name: name.into(), total, months: a.int("months", 0, 1, 120)? as u32,
+                start_date: a.date("startDate")?, annual_rate: percent(&a, "annualRatePercent", 1000)?.unwrap_or(0) };
+            // The account was checked above, so NotFound here means the plan id.
+            let plan = service::save_installment(store, plan_id, draft).map_err(|e| match e { service::ServiceError::NotFound => ToolError("id: not found".into()), e => err(e) })?;
+            installment_view(store, today, plan.id)?.unwrap_or_else(|| installment_json(&plan, None))
+        }
+        "delete_installment" => {
+            let n = required_id(&a, "id", "Installment")?;
+            let plan = service::delete_installment(store, n).map_err(|_| ToolError("id: not found".into()))?;
+            json!({"deleted": installment_json(&plan, None)})
         }
         "get_upcoming" => {
             let days = a.int("days",30,0,365)?;

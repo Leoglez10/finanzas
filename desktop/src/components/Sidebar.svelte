@@ -63,11 +63,11 @@
     <div class="update" role="status">
       {#if updates.status === "available"}
         <b><Icon name="down" />Finanzas {updates.version}</b><span class="muted">Hay una versión nueva.</span>
-        <button class="btn sm primary" onclick={installUpdate}>Instalar actualización</button>
+        <button class="btn sm" onclick={installUpdate}>Instalar actualización</button>
       {:else if updates.status === "downloading"}
         <b>Descargando {updates.version}…</b><div class="bar"><span style="width:{Math.round(updates.progress * 100)}%;animation:none"></span></div>
       {:else}
-        <b><Icon name="check" />Lista para usarse</b><button class="btn sm primary" onclick={restart}>Reiniciar Finanzas</button>
+        <b><Icon name="check" />Lista para usarse</b><button class="btn sm" onclick={restart}>Reiniciar Finanzas</button>
       {/if}
     </div>
   {/if}

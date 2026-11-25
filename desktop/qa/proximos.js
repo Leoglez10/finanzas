@@ -18,7 +18,7 @@
     await wait(1200); location.hash = 'proximos'; await wait(1200);
     await ok(() => badge() === '1' && !!rowOf('Renta')?.querySelector('.chip.bad'), () => `overdue Renta listed, sidebar badge ${badge()}`);
     const rentDate = rowOf('Renta').querySelector('.date').textContent;
-    rowOf('Renta').querySelector('button.primary').click(); await wait(1500);
+    [...rowOf('Renta').querySelectorAll('button')].find(b => b.textContent.includes('Registrar')).click(); await wait(1500);
     await ok(() => badge() === '0', () => `Registrar clears the overdue badge (${badge()})`);
     await ok(() => $('.toast.show')?.textContent.includes('Registrado: Renta'), () => `toast: "${$('.toast.show')?.textContent.trim()}"`);
     location.hash = 'movimientos'; await wait(900);

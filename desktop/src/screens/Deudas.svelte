@@ -121,7 +121,7 @@
             <div class="grow"><button class="name" onclick={() => go(`cuenta-${d.accountId}`)}>{d.name}</button>
               <p class="meta">{card ? "Parece tarjeta de crédito" : "Saldo negativo"}</p></div>
             <b class="num neg">{money(-d.debt)}</b>
-            {#if card}<button class="btn sm primary" onclick={() => openCard(d)}>Configurar tarjeta</button>
+            {#if card}<button class="btn sm" onclick={() => openCard(d)}>Configurar tarjeta</button>
             {:else}<button class="btn sm ghost" onclick={() => openCard(d)}>¿Es tarjeta?</button>{/if}
           </div>
         {/each}

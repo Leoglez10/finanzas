@@ -139,8 +139,8 @@
           </form>
         {:else}
           <div class="foot">
-            {#if w.reserved + w.paid >= w.price}<button class="btn sm primary" onclick={() => complete(w)}><Icon name="check" />{k.done}</button>
-            {:else}<button class="btn sm primary" onclick={() => reserving = w.id}>Apartar más</button>{/if}
+            {#if w.reserved + w.paid >= w.price}<button class="btn sm" onclick={() => complete(w)}><Icon name="check" />{k.done}</button>
+            {:else}<button class="btn sm" onclick={() => reserving = w.id}>Apartar más</button>{/if}
             {#if w.reserved + w.paid < w.price}<button class="btn sm ghost" title="Registra el gasto y la guarda como logro" onclick={() => complete(w)}><Icon name="check" />Cumplida</button>{/if}
             {#if w.reserved}<button class="btn sm" onclick={() => setReserved(w, 0, `Liberaste ${money(w.reserved)} de ${w.name}`)}>Liberar</button>{/if}
             {#if w.url}<button class="btn sm ghost" onclick={() => openUrl(w.url).catch(e => toast(String(e)))}>{w.kind === "compra" ? "Ver producto" : "Ver enlace"}</button>{/if}

@@ -11,8 +11,9 @@ are migrated screen by screen (see `odd/tasks/redesign-no-slop.md`).
   `--border`, `--ink`, `--muted`, `--brand`, `--brand-ink`, `--brand-soft`,
   `--income`, `--expense`, `--warn` (and their `-soft` variants), `--c-<category>`.
 - No hex/rgb literals in components. No gradients.
-- `--brand` fill is for at most one main action per screen. Everything else is a
-  secondary (bordered or plain) control.
+- `--brand` fill (`.btn.primary`) is for at most one main action per screen, plus
+  the submit of an open dialog or inline form. Actions repeated per row and the
+  sidebar's update card use `.btn` (bordered) or `.btn.ghost`.
 
 ## Shape
 

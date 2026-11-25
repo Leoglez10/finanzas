@@ -171,7 +171,7 @@
           <div class="row">
             <span class="ic sm {done ? 'ok' : ''}"><Icon name={done ? "check" : "right"} /></span>
             <div class="grow"><p class="title" style:text-decoration={done ? "line-through" : "none"}>{title}</p><p class="meta">{text}</p></div>
-            {#if !done}<button class="btn sm primary" onclick={run as () => void}>{label}</button>{/if}
+            {#if !done}<button class="btn sm" onclick={run as () => void}>{label}</button>{/if}
           </div>
         {/each}
       </div>
@@ -182,7 +182,7 @@
       <span class="ic sm"><Icon name="card" /></span>
       <div class="grow"><p class="title">Nuevo: página Deudas</p>
         <p class="meta">Vemos {debtOffer.length === 1 ? `“${debtOffer[0].name}”` : `${debtOffer.length} cuentas`} que parece{debtOffer.length === 1 ? "" : "n"} deuda o tarjeta. Junta tus tarjetas y préstamos y te dice cuánto pagar para no generar intereses.</p></div>
-      <button class="btn sm primary" onclick={enableDebts}>Activar</button>
+      <button class="btn sm" onclick={enableDebts}>Activar</button>
       <button class="btn sm ghost" onclick={dismissOffer}>Ahora no</button>
     </article>
   {/if}

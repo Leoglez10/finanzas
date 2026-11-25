@@ -21,8 +21,8 @@
     await ok(() => $('.page .card-h h2')?.textContent && ![...document.querySelectorAll('.card-h h2')].some(h => h.textContent === 'Primeros pasos'), () => 'a database with data shows no "Primeros pasos"');
     await inv('create_profile', { name: 'QA Vacio' }); await inv('qa_sleep', { ms: 200 });
     location.hash = 'resumen';
-    await ok(() => [...document.querySelectorAll('.card-h h2')].some(h => h.textContent === 'Primeros pasos') && document.querySelectorAll('.card .row .btn.primary').length >= 3, () => 'an empty profile shows "Primeros pasos" with 3 actions');
-    [...document.querySelectorAll('.card .row .btn.primary')].find(b => b.textContent.includes('Nueva cuenta')).click();
+    await ok(() => [...document.querySelectorAll('.card-h h2')].some(h => h.textContent === 'Primeros pasos') && document.querySelectorAll('.card .row .btn.sm').length >= 3, () => 'an empty profile shows "Primeros pasos" with 3 actions');
+    [...document.querySelectorAll('.card .row .btn.sm')].find(b => b.textContent.includes('Nueva cuenta')).click();
     await ok(() => $('dialog[open] input[placeholder="Cuenta principal"]'), () => '"Nueva cuenta" from Primeros pasos opens the dialog');
     $('dialog[open]').close();
     await inv('switch_profile', { slug: 'personal' });

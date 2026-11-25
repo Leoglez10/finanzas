@@ -69,7 +69,7 @@
       {#if u.projectedBalance !== null}<small class="muted num" class:neg={u.projectedBalance < 0}>Saldo: {money(u.projectedBalance)}</small>{/if}
     </div>
     {#if canAct}
-      <button class="btn sm primary" disabled={busy} onclick={() => register(u)}><Icon name="check" />Registrar</button>
+      <button class="btn sm" disabled={busy} onclick={() => register(u)}><Icon name="check" />Registrar</button>
       <button class="btn sm ghost" disabled={busy} onclick={() => skip(u)}>Saltar</button>
     {:else}<span class="muted" style="font-size:12px;width:150px;text-align:right">Después del anterior</span>{/if}
   </div>

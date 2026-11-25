@@ -5,7 +5,7 @@ members = ["crates/finanzas-core", "crates/finanzas-mcp", "desktop/src-tauri"]
 [workspace.package]
 edition = "2021"
 license = "MIT"
-version = "0.8.1"
+version = "0.8.2"
 
 [workspace.dependencies]
 chrono = { version = "0.4", features = ["serde"] }

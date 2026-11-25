@@ -87,10 +87,10 @@
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 {#if !showArchived}
   <section class="kpis">
-    <Kpi icon="gift" tone="violet" label="Total de metas" cents={active.reduce((s, v) => s + v.wish.price, 0)} note="{active.length} meta{active.length === 1 ? '' : 's'}" />
-    <Kpi icon="wallet" label="Ya apartado" cents={active.reduce((s, v) => s + v.wish.reserved, 0)} />
-    <Kpi icon="cal" label="Aparta este mes" cents={active.reduce((s, v) => s + (v.plan && !v.plan.overdue ? v.plan.monthly : 0), 0)} note="Según las fechas de tus metas" />
-    <Kpi icon="check" tone="ok" label="Listas" value={String(active.filter(v => v.wish.reserved + v.wish.paid >= v.wish.price).length)} />
+    <Kpi tone="violet" label="Total de metas" cents={active.reduce((s, v) => s + v.wish.price, 0)} note="{active.length} meta{active.length === 1 ? '' : 's'}" />
+    <Kpi label="Ya apartado" cents={active.reduce((s, v) => s + v.wish.reserved, 0)} />
+    <Kpi label="Aparta este mes" cents={active.reduce((s, v) => s + (v.plan && !v.plan.overdue ? v.plan.monthly : 0), 0)} note="Según las fechas de tus metas" />
+    <Kpi tone="ok" label="Listas" value={String(active.filter(v => v.wish.reserved + v.wish.paid >= v.wish.price).length)} />
   </section>
 {/if}
 

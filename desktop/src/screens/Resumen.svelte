@@ -249,10 +249,10 @@
     </article>
     {:else if id === "kpis"}
   <section class="kpis">
-    <Kpi icon="wallet" label="Saldo en cuentas" cents={o.totalBalance} onclick={() => go("movimientos")} hint="Ver movimientos" />
-    <Kpi icon="up" tone="ok" label="Ingresos" cents={income} note={change(o.incomeChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=ingresos`)} hint="Ver los ingresos de este periodo" />
-    <Kpi icon="down" tone="bad" label="Gastos" cents={spent} note={change(o.expensesChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=gastos`)} hint="Ver los gastos de este periodo" />
-    <Kpi icon="gift" tone="violet" label="Apartado en deseos" cents={data.reserved} onclick={() => go("deseos")} hint="Ver deseos y metas" />
+    <Kpi label="Saldo en cuentas" cents={o.totalBalance} onclick={() => go("movimientos")} hint="Ver movimientos" />
+    <Kpi tone="ok" label="Ingresos" cents={income} note={change(o.incomeChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=ingresos`)} hint="Ver los ingresos de este periodo" />
+    <Kpi tone="bad" label="Gastos" cents={spent} note={change(o.expensesChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=gastos`)} hint="Ver los gastos de este periodo" />
+    <Kpi tone="violet" label="Apartado en deseos" cents={data.reserved} onclick={() => go("deseos")} hint="Ver deseos y metas" />
   </section>
     {:else if id === "gasto"}
     <article class="card">

@@ -191,19 +191,22 @@ button.chip { cursor: pointer; }
 .grid { display: grid; gap: 20px; }
 .g-3 { grid-template-columns: 2fr 1fr; }
 .g-2 { grid-template-columns: 1fr 1fr; align-items: start; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-.kpi { display: flex; gap: 14px; align-items: center; }
-.kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
-.kpi.link:hover { border-color: var(--brand); }
-.kpi.link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Metrics strip: one panel, cells split by 1px lines (the grid gap shows the border color). */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; }
+.kpi { display: grid; align-content: start; gap: 2px; padding: var(--space-3) var(--space-4); background: var(--surface); min-width: 0; }
+.kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; width: 100%; }
+.kpi.link:hover { background: var(--surface-2); }
+.kpi.link:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .ic { width: 42px; height: 42px; border-radius: var(--r-panel); display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
 .ic.ok { background: var(--income-soft); color: var(--income); }
 .ic.bad { background: var(--expense-soft); color: var(--expense); }
 .ic.warn { background: var(--warn-soft); color: var(--warn); }
 .ic.violet { background: var(--violet-soft); color: var(--violet); }
 .ic.sm { width: 32px; height: 32px; border-radius: var(--r-panel); }
-.kpi p { font-size: 13px; color: var(--muted); }
-.kpi .money { font-size: 22px; color: var(--ink); }
+.kpi p { font-size: var(--text-md); color: var(--muted); }
+.kpi .note { font-size: var(--text-sm); }
+.kpi .money { font-size: var(--text-xl); color: var(--ink); }
+.kpi.ok .money { color: var(--income); } .kpi.bad .money { color: var(--expense); }
 
 /* Hero */
 .hero { background: var(--hero); color: #fff; border: 0; position: relative; overflow: hidden; }

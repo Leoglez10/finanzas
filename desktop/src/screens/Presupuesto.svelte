@@ -72,8 +72,8 @@
       </div>
     </article>
     <div class="grid" style="gap:16px">
-      <Kpi icon="pie" label="Asignado" cents={view.assigned} />
-      <Kpi icon="down" tone="bad" label="Gastado" cents={spent} note={view.assigned ? `${(spent / view.assigned * 100).toFixed(0)}% de lo asignado` : ""} />
+      <Kpi label="Asignado" cents={view.assigned} />
+      <Kpi tone="bad" label="Gastado" cents={spent} note={view.assigned ? `${(spent / view.assigned * 100).toFixed(0)}% de lo asignado` : ""} />
     </div>
   </section>
 

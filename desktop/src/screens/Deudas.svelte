@@ -44,11 +44,11 @@
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 {#if view}
   <section class="kpis">
-    <Kpi icon="card" tone="bad" label="Debes en total" cents={view.total} note="{view.debts.length} deuda{view.debts.length === 1 ? '' : 's'}" />
-    {#if withStatement}<Kpi icon="clock" tone="warn" label="Para no pagar intereses" cents={toPay} note="Suma de este corte" />
-    {:else}<Kpi icon="clock" tone="warn" label="Para no pagar intereses" value="—" note="Agrega el día de corte de una tarjeta para verlo" />{/if}
-    {#if hasPlans}<Kpi icon="repeat" tone="ok" label="Mensualidades a meses" cents={view.monthlyInstallments} />
-    {:else}<Kpi icon="repeat" tone="ok" label="Mensualidades a meses" value="—" note="Sin compras a meses" />{/if}
+    <Kpi tone="bad" label="Debes en total" cents={view.total} note="{view.debts.length} deuda{view.debts.length === 1 ? '' : 's'}" />
+    {#if withStatement}<Kpi tone="warn" label="Para no pagar intereses" cents={toPay} note="Suma de este corte" />
+    {:else}<Kpi tone="warn" label="Para no pagar intereses" value="—" note="Agrega el día de corte de una tarjeta para verlo" />{/if}
+    {#if hasPlans}<Kpi label="Mensualidades a meses" cents={view.monthlyInstallments} />
+    {:else}<Kpi label="Mensualidades a meses" value="—" note="Sin compras a meses" />{/if}
   </section>
 
   {#if tips.length}

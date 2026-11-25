@@ -88,10 +88,10 @@
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 <section class="kpis">
-  <Kpi icon="alert" tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}"
+  <Kpi tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}"
     onclick={overdue.length ? () => scrollTo("vencidos") : undefined} hint="Ver los pagos vencidos" />
-  <Kpi icon="clock" tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} onclick={() => scrollTo("esta-semana")} hint="Ver lo que viene" />
-  <Kpi icon="wallet" tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
+  <Kpi tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} onclick={() => scrollTo("esta-semana")} hint="Ver lo que viene" />
+  <Kpi tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
 </section>
 {#if overdue.length}{@render section("Vencidos", overdue, "")}{/if}
 {@render section("Esta semana", week, "Nada esta semana.")}

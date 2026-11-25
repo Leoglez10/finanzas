@@ -110,9 +110,9 @@
 </Topbar>
 
 <section class="kpis">
-  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
-  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
-  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
+  <Kpi label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
+  <Kpi tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
+  <Kpi tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
 </section>
 
 <div class="toolbar">

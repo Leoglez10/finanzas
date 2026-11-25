@@ -296,7 +296,7 @@
           {#each o.budgetProgress as b (b.categoryId)}
             {@const share = b.budgeted > 0 ? Math.max(0, Math.min(100, b.spent / b.budgeted * 100)) : 0}
             <div class="row" style="display:grid;gap:6px">
-              <div style="display:flex;justify-content:space-between;gap:8px"><b>{b.name}</b><span class="muted num">{money(Math.max(0, b.spent))} de {money(b.budgeted)}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px"><b>{b.name}</b><span class="muted num" style="white-space:nowrap">{money(Math.max(0, b.spent))} de {money(b.budgeted)}</span></div>
               <div class="bar" role="img" aria-label="{b.name}: {share.toFixed(0)}% usado"><span style="width:{share}%;--c:{b.spent > b.budgeted ? 'var(--expense)' : categoryColor(b.categoryId)}"></span></div>
             </div>
           {:else}<p class="muted">Aún no asignas presupuesto este mes.</p>{/each}

@@ -26,6 +26,9 @@ are migrated screen by screen (see `odd/tasks/redesign-no-slop.md`).
 
 ## Type
 
+- Bundled faces, same as the website: Funnel Sans (UI, variable 300–800) and
+  DM Mono (amounts; 400 and 500, the 500 file also serves heavier weights so
+  bold amounts are never synthesized). Files and licenses in `src/styles/fonts/`.
 - Four sizes: `--text-sm` 12 (captions), `--text-md` 13 (body, tables),
   `--text-lg` 16 (section titles), `--text-xl` 24 (page title, key numbers).
 - Amounts and small numeric captions use `--font-mono` with tabular numbers.

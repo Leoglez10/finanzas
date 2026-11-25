@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "finanzas-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "finanzas-desktop"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "calamine",
  "chrono",
@@ -1279,7 +1279,7 @@ dependencies = [
 
 [[package]]
 name = "finanzas-mcp"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "finanzas-core",

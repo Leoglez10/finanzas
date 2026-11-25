@@ -1,12 +1,22 @@
-// Bank CSV → import preview. Handles quoted fields, "," or ";" delimiters, Spanish or English headers,
-// and banks that split money into "cargo"/"abono" columns. Amounts are integer cents.
-import { norm, parseCents, parseQuick, type QuickContext } from "./quick-parse.ts";
+// Bank CSV or spreadsheet rows → import preview. `detect` reads the file's layout (header row, what each
+// column holds, date order, decimal mark, sign) from header names and from the values themselves; the
+// preview can override any of it. Amounts are integer cents.
+import { norm, parseQuick, type QuickContext } from "./quick-parse.ts";
 
-export interface ImportRow { line: number; date: string | null; payee: string; cents: number | null; categoryId: number | null; error: string }
+/** `raw` is the description as the bank wrote it; `payee` is the cleaned name. */
+export interface ImportRow { sheet: string; line: number; date: string | null; payee: string; raw: string; cents: number | null; categoryId: number | null; error: string }
+
+export type Role = "date" | "payee" | "amount" | "out" | "in" | "type" | "category" | "ignore";
+/** How to read a file: `header` is the header row index (-1 when there is none). */
+export interface Mapping { header: number; roles: Role[]; dateOrder: DateOrder; decimal: "." | ","; flip: boolean }
+/** `dateAmbiguous`: every date fits both orders, so `dateOrder` is a guess worth confirming. */
+export interface Detection extends Mapping { dateAmbiguous: boolean }
+export type DateOrder = "dmy" | "mdy";
 
 export function csvRows(text: string): string[][] {
-  const firstLine = text.slice(0, text.indexOf("\n") >>> 0);
-  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  // The separator that shows up most in the first lines (title lines before the header have few).
+  const head = text.split("\n", 10).join("\n");
+  const delimiter = [",", ";", "\t", "|"].reduce((best, d) => head.split(d).length > head.split(best).length ? d : best);
   const rows: string[][] = [];
   let row: string[] = [], cell = "", quoted = false;
   for (let i = 0; i < text.length; i++) {
@@ -18,43 +28,264 @@ export function csvRows(text: string): string[][] {
     else if (c !== "\r" && c !== "﻿") cell += c;
   }
   if (cell || row.length) { row.push(cell); rows.push(row); }
-  return rows.filter(r => r.some(c => c.trim()));
+  // Blank lines stay, so a row's index + 1 is its line in the file.
+  return rows;
 }
 
-/** "05/11/2026", "5/11/26", "05-11-2026" (day first) or "2026-11-05" → "2026-11-05"; impossible dates → null. */
-export function parseDate(text: string): string | null {
-  const t = text.trim();
-  const dmy = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/), iso = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  const [y, m, d] = dmy ? [+dmy[3] < 100 ? 2000 + +dmy[3] : +dmy[3], +dmy[2], +dmy[1]] : iso ? [+iso[1], +iso[2], +iso[3]] : [0, 0, 0];
-  if (!y) return null;
+const MONTHS = ["ene|jan", "feb", "mar", "abr|apr", "may", "jun", "jul", "ago|aug", "sep|set", "oct", "nov", "dic|dec"];
+const monthOf = (word: string) => MONTHS.findIndex(m => m.split("|").some(p => word.startsWith(p))) + 1;
+const NUMERIC_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/;
+
+/** "05/11/2026" (day first unless `order` is "mdy"), "2026-11-05", "05-nov-2026", "5 Dic 2026",
+ * a time after the date, or an Excel day number → "2026-11-05"; impossible dates → null.
+ * Statements often leave out the year ("03/NOV", "05/11"): it is `today`'s, or last year's when that
+ * date would be more than a month ahead. */
+export function parseDate(text: string, order: DateOrder = "dmy", today = new Date()): string | null {
+  const t = norm(text.trim()).replace(/(t|\s+)\d{1,2}:\d{2}(:\d{2})?.*$/, "");
+  const num = t.match(NUMERIC_DATE), iso = t.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
+  const named = t.match(/^(\d{1,2})[\s/.-]+([a-z]{3,})\.?(?:[\s/.-]+(\d{2}|\d{4}))?$/);
+  // Only "/" for numbers without a year, so "12.50" stays an amount.
+  const short = t.match(/^(\d{1,2})\/(\d{1,2})$/);
+  const year = (y: string | undefined) => y === undefined ? 0 : +y < 100 ? 2000 + +y : +y;
+  let y = 0, m = 0, d = 0;
+  if (num) [y, m, d] = order === "dmy" ? [year(num[3]), +num[2], +num[1]] : [year(num[3]), +num[1], +num[2]];
+  else if (iso) [y, m, d] = [+iso[1], +iso[2], +iso[3]];
+  else if (named) [y, m, d] = [year(named[3]), monthOf(named[2]), +named[1]];
+  else if (short) [y, m, d] = order === "dmy" ? [0, +short[2], +short[1]] : [0, +short[1], +short[2]];
+  if (!y && m && (named || short)) {
+    y = today.getFullYear();
+    if (new Date(y, m - 1, d) > new Date(y, today.getMonth() + 1, today.getDate())) y--;
+  }
+  else if (/^\d{5}$/.test(t) && +t > 20000 && +t < 80000) {
+    // Excel counts days from 1899-12-30.
+    const date = new Date(1899, 11, 30 + +t);
+    [y, m, d] = [date.getFullYear(), date.getMonth() + 1, date.getDate()];
+  }
+  if (!y || !m) return null;
   const date = new Date(y, m - 1, d);
   if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-const money = (text: string | undefined) => text === undefined || !text.trim() ? null : parseCents(text.replace(/\s/g, "").replace(/^\$-|^-\$/, "-"));
+const CURRENCY = /^(mxn|usd|eur|\$|€)+|(mxn|usd|eur|\$|€)+$/gi;
+/** "-1,200.50", "1.234,56" (with `decimal` ","), "(120.00)", "120.00-", "$ 80", "MXN 80" → cents. */
+export function parseMoney(text: string | undefined, decimal: "." | "," = "."): number | null {
+  let t = (text ?? "").replace(/\s/g, "").replace(CURRENCY, "");
+  if (!t) return null;
+  let negative = false;
+  if (/^\(.*\)$/.test(t)) { negative = true; t = t.slice(1, -1); }
+  if (t.endsWith("-")) { negative = true; t = t.slice(0, -1); }
+  if (/^[+-]/.test(t)) { negative ||= t[0] === "-"; t = t.slice(1); }
+  t = t.replace(CURRENCY, "");
+  t = decimal === "," ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const cents = Math.round(parseFloat(t) * 100);
+  return negative && cents ? -cents : cents;
+}
 
-export function mapRows(rows: string[][], ctx: QuickContext): ImportRow[] {
-  if (!rows.length) return [];
-  const head = rows[0].map(h => norm(h.trim()));
-  const hasHead = head.some(h => /fecha|date|monto|importe|amount|comercio|descripcion|concepto|description/.test(h));
-  const col = (re: RegExp, fallback: number) => { const i = hasHead ? head.findIndex(h => re.test(h)) : -1; return i >= 0 ? i : fallback; };
-  const iDate = col(/fecha|date/, 0), iPayee = col(/comercio|descripcion|concepto|description|payee|beneficiario/, 1);
-  const iOut = col(/cargo|retiro|debito|debit|withdrawal/, -1), iIn = col(/abono|deposito|credito|credit/, -1);
-  const iAmount = col(/monto|importe|cantidad|amount/, iOut >= 0 || iIn >= 0 ? -1 : 2), iCategory = col(/categoria|category/, -1);
-  return rows.slice(hasHead ? 1 : 0).map((r, n) => {
-    const date = parseDate(r[iDate] ?? ""), payee = (r[iPayee] ?? "").trim();
-    let cents = iAmount >= 0 ? money(r[iAmount]) : null;
-    if (iAmount < 0) {
-      const out = money(r[iOut]), into = money(r[iIn]);
-      cents = out || into ? (into ? Math.abs(into) : 0) - (out ? Math.abs(out) : 0) : null;
+/** -1 for a charge ("Cargo", "D", "Débito"), 1 for a deposit ("Abono", "C", "Crédito"), 0 when unknown. */
+function typeSign(text: string): -1 | 0 | 1 {
+  const t = norm(text.trim());
+  if (/^(cargo|debito|debit|retiro|egreso|compra)/.test(t) || /^(d|dr|-)$/.test(t)) return -1;
+  if (/^(abono|credito|credit|deposito|ingreso|devolucion)/.test(t) || /^(c|cr|h|\+)$/.test(t)) return 1;
+  return 0;
+}
+
+// First match wins, so "Tipo de movimiento" is a type and "Fecha valor" is a date.
+const NAMES: [Role, RegExp][] = [
+  ["ignore", /saldo|balance|folio|^id$|^#$|^no\.?$/],
+  ["type", /^tipo|^type$|naturaleza|^d\/?c$|^dr\/?cr$/],
+  ["category", /categoria|category|rubro/],
+  ["date", /fecha|date|^dia$|posted/],
+  ["out", /cargo|retiro|debito|debit|withdrawal|egreso|salida/],
+  ["in", /abono|deposito|credito|credit|ingreso|entrada/],
+  ["amount", /monto|importe|cantidad|amount|valor|^total$|^\$$/],
+  ["payee", /comercio|descripcion|concepto|description|payee|beneficiario|detalle|establecimiento|narrative|memo|details|movimiento/],
+];
+const TOTAL = /^(saldo|total|subtotal|balance)\b/;
+const blank = (row: string[]) => row.every(c => !c.trim());
+const anyDate = (v: string) => !!(parseDate(v, "dmy") ?? parseDate(v, "mdy"));
+// Plain numbers are dates only in a column named so (Excel day numbers); otherwise they are amounts.
+const looksDate = (v: string) => !/^\d+$/.test(v.trim()) && anyDate(v);
+
+function decimalOf(cells: string[]): "." | "," {
+  let comma = 0, dot = 0;
+  for (const c of cells) {
+    const t = c.replace(/[\s()$€+-]|mxn|usd|eur/gi, "");
+    const m = /^[\d.,]+$/.test(t) && t.match(/([.,])(\d+)$/);
+    if (!m || m[2].length > 2) continue;
+    if (m[1] === ",") comma++; else dot++;
+  }
+  return comma > dot ? "," : ".";
+}
+
+function headerRow(rows: string[][]): number {
+  const top = rows.slice(0, 20);
+  const scores = top.map(r => r.filter(c => c.trim() && NAMES.some(([, re]) => re.test(norm(c.trim())))).length);
+  const best = scores.indexOf(Math.max(...scores));
+  if (scores[best] >= 2) return best;
+  // No known names: the row right above the first dated row is the header when it holds only text.
+  const first = top.findIndex(r => r.some(looksDate));
+  const above = first > 0 ? rows.slice(0, first).filter(r => !blank(r)).at(-1) : undefined;
+  return above && !above.some(c => looksDate(c) || parseMoney(c) !== null) ? rows.indexOf(above) : -1;
+}
+
+export function detect(rows: string[][]): Detection {
+  const header = headerRow(rows);
+  const names = header >= 0 ? rows[header].map(h => norm(h.trim())) : [];
+  const data = rows.slice(header + 1, header + 301).filter(r => !blank(r) && !r.some(c => TOTAL.test(norm(c.trim()))));
+  const width = Math.max(names.length, ...data.map(r => r.length));
+  const column = (i: number) => data.map(r => (r[i] ?? "").trim()).filter(Boolean);
+  const share = (i: number, test: (v: string) => boolean) => { const v = column(i); return v.length ? v.filter(test).length / v.length : 0; };
+  const decimal = decimalOf(data.flat());
+  const isMoney = (v: string) => parseMoney(v, decimal) !== null;
+
+  const roles: (Role | null)[] = Array.from({ length: width }, (_, i) => {
+    const role = NAMES.find(([, re]) => names[i] && re.test(names[i]))?.[0] ?? null;
+    // A name the values contradict (a "Fecha" column without dates) is dropped.
+    if (role === "date" && share(i, anyDate) < 0.5) return null;
+    if ((role === "amount" || role === "out" || role === "in") && share(i, isMoney) < 0.5) return null;
+    if (role === "type" && share(i, v => typeSign(v) !== 0) < 0.5) return null;
+    return role;
+  });
+  // Only the first column of each role counts ("Fecha valor" after "Fecha" is ignored).
+  roles.forEach((r, i) => { if (r && r !== "ignore" && roles.indexOf(r) < i) roles[i] = "ignore"; });
+  const free = () => roles.map((r, i) => r ? -1 : i).filter(i => i >= 0);
+  const best = (score: (i: number) => number, min: number) => free().reduce<[number, number]>((b, i) => score(i) > b[1] ? [i, score(i)] : b, [-1, min - 1e-9])[0];
+
+  if (!roles.includes("date")) { const i = best(i => share(i, looksDate), 0.6); if (i >= 0) roles[i] = "date"; }
+  if (!roles.some(r => r === "amount" || r === "out" || r === "in")) {
+    // Decimals or a sign make a column look more like money than an id or a reference number.
+    const i = best(i => share(i, isMoney) + share(i, v => /[.,]\d{1,2}\)?-?$|^[-(]/.test(v)) / 2, 0.6);
+    if (i >= 0) roles[i] = "amount";
+  }
+  if (roles.includes("amount") && !roles.includes("type")) { const i = best(i => share(i, v => typeSign(v) !== 0), 0.8); if (i >= 0) roles[i] = "type"; }
+  if (!roles.includes("payee")) {
+    const i = best(i => { const v = column(i); return v.length ? share(i, x => /[a-z]/i.test(x) && !looksDate(x)) * new Set(v).size / v.length : 0; }, 0.3);
+    if (i >= 0) roles[i] = "payee";
+  }
+  const done = roles.map(r => r ?? "ignore");
+
+  const dateAt = done.indexOf("date");
+  const parts = column(dateAt).map(v => v.match(NUMERIC_DATE)).filter(m => !!m);
+  const dateOrder: DateOrder = parts.some(m => +m[1] > 12) || !parts.some(m => +m[2] > 12) ? "dmy" : "mdy";
+  const dateAmbiguous = parts.length > 0 && !parts.some(m => +m[1] > 12 || +m[2] > 12);
+  // Card statements list purchases as positive: when 3 of 4 amounts are positive, read them as charges.
+  const amounts = done.includes("type") ? [] : column(done.indexOf("amount")).map(v => parseMoney(v, decimal) ?? 0).filter(Boolean);
+  const flip = amounts.length > 0 && amounts.filter(c => c > 0).length >= amounts.length * 0.75;
+  return { header, roles: done, dateOrder, decimal, flip, dateAmbiguous };
+}
+
+export function mapRows(rows: string[][], ctx: QuickContext, m: Mapping = detect(rows)): ImportRow[] {
+  const at = (role: Role) => m.roles.indexOf(role);
+  const [iDate, iPayee, iAmount, iOut, iIn, iType, iCategory] = (["date", "payee", "amount", "out", "in", "type", "category"] as Role[]).map(at);
+  const money = (v: string | undefined) => parseMoney(v, m.decimal);
+  const amountCells = [iAmount, iOut, iIn].filter(i => i >= 0);
+  const parts: { line: number; r: string[]; raw: string }[] = [];
+  rows.forEach((r, index) => {
+    if (index <= m.header || blank(r)) return;
+    const dateCell = (r[iDate] ?? "").trim();
+    if (!parseDate(dateCell, m.dateOrder, ctx.today) && r.some(c => TOTAL.test(norm(c.trim())))) return;
+    const raw = (r[iPayee] ?? "").trim();
+    // No date and no amount: the description of the row above goes on in this one.
+    if (!dateCell && parts.length && amountCells.every(i => money(r[i]) === null)) {
+      const text = raw || r.map(c => c.trim()).filter(Boolean).join(" ");
+      parts[parts.length - 1].raw += " " + text;
+      return;
+    }
+    parts.push({ line: index + 1, r, raw });
+  });
+  return parts.map(({ line, r, raw }) => {
+    const date = parseDate(r[iDate] ?? "", m.dateOrder, ctx.today), payee = raw ? cleanPayee(raw, ctx) : "";
+    let cents: number | null = null;
+    if (iAmount >= 0) {
+      cents = money(r[iAmount]);
+      const sign = iType >= 0 ? typeSign(r[iType] ?? "") : 0;
+      if (cents !== null && sign) cents = sign * Math.abs(cents);
+      else if (cents !== null && m.flip && iType < 0) cents = -cents;
+    } else {
+      const debit = money(r[iOut]), credit = money(r[iIn]);
+      cents = debit || credit ? (credit ? Math.abs(credit) : 0) - (debit ? Math.abs(debit) : 0) : null;
     }
     const named = iCategory >= 0 ? ctx.categories.find(c => norm(c.name) === norm((r[iCategory] ?? "").trim())) : undefined;
     const categoryId = named?.id ?? (payee ? parseQuick(payee, ctx).categoryId : null);
     const error = !date ? "Fecha no válida" : !cents ? "Monto no válido" : !payee ? "Sin comercio" : "";
-    return { line: n + (hasHead ? 2 : 1), date, payee, cents, categoryId, error };
+    return { sheet: "", line, date, payee, raw, cents, categoryId, error };
   });
 }
+
+// Bank noise: references, authorization codes, card digits, dates, times, long numbers, web suffixes.
+const NOISE = [
+  /\b(ref|referencia|aut|autorizacion|folio|rfc|rastreo|tarjeta|tdc|tdd)\b[\s:.#]*[\w-]*\d[\w-]*/gi,
+  /[*x#]{2,}\s?\d{2,4}\b/gi,
+  /\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b/g,
+  /\b\d{1,2}:\d{2}(:\d{2})?\b/g,
+  /\b\d{4,}\b/g,
+  /\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,}\b/g,
+  /\.(com|net|org)(\.mx)?\b/gi,
+  /\*/g,
+];
+/** "COMPRA OXXO CENTRO 1234 GDL MX" → "Oxxo Centro Gdl"; a payee you already have wins when the cleaned
+ * text starts with its name ("NETFLIX.COM ****4321" → "Netflix"). Text with no letters is left alone. */
+export function cleanPayee(raw: string, ctx: QuickContext): string {
+  let t = NOISE.reduce((text, re) => text.replace(re, " "), raw);
+  t = t.replace(/^\s*(compra|consumo|pos|cargo)\b\s*(en\s+)?/i, "").replace(/(\s+(mx|mex|mexico|us|usa))+\s*$/i, "");
+  t = t.replace(/\s+/g, " ").replace(/^[\s\-:,.#]+|[\s\-:,.#]+$/g, "");
+  if (!/\p{L}/u.test(t)) return raw.trim();
+  if (t === t.toUpperCase()) t = t.toLowerCase().replace(/(^|\s)\p{L}/gu, c => c.toUpperCase());
+  const key = norm(t);
+  const known = [...new Set(ctx.history.map(h => h.payee))].filter(p => p.length >= 3 && (key === norm(p) || key.startsWith(norm(p) + " ")));
+  return known.sort((a, b) => b.length - a.length)[0] ?? t;
+}
+
+/** True for a row that matches an earlier row of the same file (day, amount and payee). */
+export function repeatedInFile(rows: ImportRow[]): boolean[] {
+  const seen = new Set<string>();
+  return rows.map(r => {
+    if (r.error) return false;
+    const key = `${r.date}|${r.cents}|${norm(r.payee)}`;
+    return seen.has(key) || !seen.add(key);
+  });
+}
+
+export interface Sheet { name: string; rows: string[][] }
+/** `key` groups sheets with the same layout (header names, or column count without a header). */
+export interface SheetPlan { name: string; detection: Detection; usable: boolean; key: string; count: number }
+
+export function planSheets(sheets: Sheet[]): SheetPlan[] {
+  return sheets.map(({ name, rows }) => {
+    const detection = detect(rows);
+    const count = rows.slice(detection.header + 1).filter(r => !blank(r)).length;
+    const usable = count > 0 && detection.roles.includes("date") && detection.roles.some(r => r === "amount" || r === "out" || r === "in");
+    return { name, detection, usable, count, key: signature(rows, detection) ?? `${detection.roles.length} columnas` };
+  });
+}
+/** The usable sheets with the same layout as the biggest one: one sheet per month imports whole. */
+export function defaultSheets(plans: SheetPlan[]): string[] {
+  const main = plans.filter(p => p.usable).sort((a, b) => b.count - a.count)[0];
+  return main ? plans.filter(p => p.usable && p.key === main.key).map(p => p.name) : [];
+}
+/** Rows of the chosen sheets. Sheets laid out like `main` use its (possibly edited) mapping with their own
+ * header row; other sheets keep what was detected in them. */
+export function sheetRows(sheets: Sheet[], plans: SheetPlan[], chosen: string[], main: SheetPlan, ctx: QuickContext): ImportRow[] {
+  return sheets.flatMap((sheet, i) => {
+    const plan = plans[i];
+    if (!chosen.includes(sheet.name)) return [];
+    const m = plan.key === main.key ? { ...main.detection, header: plan.detection.header } : plan.detection;
+    return mapRows(sheet.rows, ctx, m).map(r => ({ ...r, sheet: sheets.length > 1 ? sheet.name : "" }));
+  });
+}
+
+/** What is remembered per bank layout. */
+export type SavedMapping = Omit<Mapping, "header"> & { accountId?: number; skipSheets?: string[] };
+/** Key for remembering a bank's layout: its header names. Files without a header are not remembered,
+ * since two banks with the same number of columns would share one key. */
+export const signature = (rows: string[][], d: Detection): string | null =>
+  d.header < 0 ? null : rows[d.header].map(h => norm(h.trim())).join("|");
+/** The detection with a layout the user chose before, when it fits the same columns. */
+export const withSaved = (d: Detection, saved: SavedMapping | null | undefined): Detection =>
+  saved && saved.roles.length === d.roles.length
+    ? { ...d, roles: saved.roles, dateOrder: saved.dateOrder, decimal: saved.decimal, flip: saved.flip, dateAmbiguous: false } : d;
 
 /** Same account, day, amount and payee as an existing movement. */
 export const isDuplicate = (row: ImportRow, existing: { date: string; amount: number; payeeName: string | null }[]) =>

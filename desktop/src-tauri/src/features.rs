@@ -144,23 +144,47 @@ pub fn import_data(app: AppHandle, state: State<'_, AppState>, source: String) -
     state.changed(); Ok(Some(summary))
 }
 
+const IMPORT_TYPES: [&str; 5] = ["csv", "xlsx", "xls", "ods", "pdf"];
+/// `text` for CSV (parsed in the webview); `sheets` for spreadsheets and PDFs, already split into cells.
 #[derive(serde::Serialize)]
-pub struct CsvFile { name: String, text: String }
-/// Reads a dropped or picked CSV. Only .csv files up to 5 MB, so a stray drop never loads something huge.
+pub struct CsvFile { name: String, text: String, sheets: Option<Vec<Sheet>> }
+#[derive(serde::Serialize)]
+pub struct Sheet { name: String, rows: Vec<Vec<String>> }
+/// Reads a dropped or picked bank file. Only CSV, spreadsheets or PDF statements up to 5 MB, so a stray drop never loads something huge.
 fn read_csv_file(path: &std::path::Path) -> Result<CsvFile, String> {
-    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv")) { return Err("Solo puedo importar archivos .csv".into()); }
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !IMPORT_TYPES.contains(&ext.as_str()) { return Err("Solo puedo importar archivos .csv, .xlsx, .xls, .ods o .pdf".into()); }
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > 5 * 1024 * 1024 { return Err("El archivo pesa más de 5 MB".into()); }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if ext == "pdf" { return Ok(CsvFile { text: String::new(), sheets: Some(vec![Sheet { name: name.clone(), rows: crate::pdf_table::rows(path)? }]), name }); }
+    if ext != "csv" { return Ok(CsvFile { name, text: String::new(), sheets: Some(sheets(path)?) }); }
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     // Some banks export Latin-1; fall back so accents do not break the whole file.
     let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| bytes.iter().map(|&b| b as char).collect());
-    Ok(CsvFile { name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), text })
+    Ok(CsvFile { name, text, sheets: None })
+}
+/// Every sheet that has any cell, as text: dates become `yyyy-mm-dd`, decimals keep two places.
+fn sheets(path: &std::path::Path) -> Result<Vec<Sheet>, String> {
+    use calamine::{Data, Reader};
+    let mut book = calamine::open_workbook_auto(path).map_err(|e| format!("No pude leer la hoja de cálculo: {e}"))?;
+    let cell = |c: &Data| match c {
+        Data::DateTime(d) => d.as_datetime().map(|d| d.date().to_string()).unwrap_or_default(),
+        Data::DateTimeIso(s) => s.chars().take(10).collect(),
+        // Binary floats (0.1 + 0.2) would otherwise show as 0.30000000000000004.
+        Data::Float(f) if f.fract() != 0.0 => format!("{f:.2}"),
+        other => other.to_string(),
+    };
+    let sheets: Vec<Sheet> = book.worksheets().into_iter().filter(|(_, r)| !r.is_empty())
+        .map(|(name, r)| Sheet { name, rows: r.rows().map(|row| row.iter().map(cell).collect()).collect() }).collect();
+    if sheets.is_empty() { return Err("La hoja de cálculo está vacía".into()); }
+    Ok(sheets)
 }
 #[tauri::command(async)]
 pub fn read_csv(path: String) -> Result<CsvFile, String> { read_csv_file(std::path::Path::new(&path)) }
 #[tauri::command(async)]
 pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
-    let Some(file) = app.dialog().file().set_title("Elige el CSV de tu banco").add_filter("CSV", &["csv"]).blocking_pick_file() else { return Ok(None) };
+    let Some(file) = app.dialog().file().set_title("Elige el archivo de tu banco").add_filter("CSV, Excel o PDF", &IMPORT_TYPES).blocking_pick_file() else { return Ok(None) };
     read_csv_file(&file.into_path().map_err(|e| e.to_string())?).map(Some)
 }
 /// Adds every row or none: a failure halfway leaves the ledger untouched. Returns the new ids for undo.
@@ -168,4 +192,54 @@ pub fn pick_csv(app: AppHandle) -> Result<Option<CsvFile>, String> {
 pub fn import_entries(state: State<'_, AppState>, entries: Vec<service::NewEntry>) -> Result<Vec<i64>, String> {
     let ids = state.with_store(|s| s.transaction(|s| entries.into_iter().map(|e| service::add_entry(s, e).map(|row| row.id)).collect::<Result<Vec<_>, _>>()).map_err(|e: service::ServiceError| e.to_string()))?;
     state.changed(); Ok(ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_csv_file;
+
+    #[test]
+    fn excel_files_become_one_row_list_per_sheet_with_data() {
+        let file = read_csv_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/banco.xlsx")).unwrap();
+        assert_eq!(file.name, "banco.xlsx");
+        let sheets = file.sheets.unwrap();
+        // Empty sheets are left out; the others keep their order and names.
+        assert_eq!(sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Movimientos", "Febrero"]);
+        assert_eq!(sheets[1].rows, vec![vec!["Fecha", "Concepto", "Importe"], vec!["2026-02-03", "Uber", "-80"]]);
+        assert_eq!(sheets[0].rows, vec![
+            vec!["Estado de cuenta", "", ""],
+            vec!["", "", ""],
+            vec!["Fecha", "Concepto", "Importe"],
+            vec!["2026-11-09", "Netflix", "-350.50"],
+            vec!["2026-11-10", "Nómina", "3200"],
+            vec!["11/11/2026", "Redondeo", "0.30"],
+        ]);
+    }
+
+    #[test]
+    fn other_files_are_refused() {
+        assert_eq!(read_csv_file(std::path::Path::new("notas.txt")).err().unwrap(), "Solo puedo importar archivos .csv, .xlsx, .xls, .ods o .pdf");
+    }
+}
+
+#[cfg(test)]
+mod pdf_tests {
+    use super::read_csv_file;
+
+    #[test]
+    fn pdf_statements_become_rows_aligned_to_the_header_columns() {
+        let file = read_csv_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/estado.pdf")).unwrap();
+        let sheets = file.sheets.unwrap();
+        assert_eq!(sheets.len(), 1);
+        assert_eq!(sheets[0].rows, vec![
+            vec!["Banco Ejemplo - Estado de cuenta"],
+            vec!["Periodo: 01/11/2026 al 30/11/2026"],
+            vec!["FECHA", "DESCRIPCION", "CARGOS", "ABONOS", "SALDO"],
+            vec!["03/NOV", "COMPRA OXXO CENTRO 1234", "45.50", "", "9,954.50"],
+            vec!["05/NOV", "DEPOSITO NOMINA", "", "15,000.00", "24,954.50"],
+            vec!["07/NOV", "PAGO SERVICIO", "500.00", "", "24,454.50"],
+            vec!["", "TELMEX HOGAR", "", "", ""],
+            vec!["", "SALDO FINAL", "", "", "24,454.50"],
+        ]);
+    }
 }

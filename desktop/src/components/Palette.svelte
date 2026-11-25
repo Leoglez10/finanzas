@@ -5,6 +5,7 @@
   import { app, go, refresh, updateSettings } from "../lib/app.svelte";
   import { COMMANDS, palette, runCommand } from "../lib/commands.svelte";
   import { money } from "../lib/format";
+  import { keyLabel } from "../lib/keys";
   import { describe, parse, quickContext, saveDraft } from "../lib/quick";
   import { norm, type QuickContext } from "../lib/quick-parse";
   import { remember, toast } from "../lib/undo.svelte";
@@ -49,7 +50,7 @@
         .forEach(([id, label]) => out.push({ icon: "moon", label: `Tema: ${label}`, hint: "Apariencia", run: () => updateSettings({ palette: id }) }));
     }
     COMMANDS.filter(c => c.id !== "palette" && (!q || norm(c.label).includes(q)))
-      .forEach(c => out.push({ icon: c.icon, label: c.label, hint: c.keys || c.group, run: () => runCommand(c.id) }));
+      .forEach(c => out.push({ icon: c.icon, label: c.label, hint: keyLabel(c.keys) || c.group, run: () => runCommand(c.id) }));
     return out.slice(0, 10);
   });
   $effect(() => { void items.length; active = Math.min(active, Math.max(0, items.length - 1)); });

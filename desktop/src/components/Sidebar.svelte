@@ -3,6 +3,7 @@
   import AccountBadge from "./AccountBadge.svelte";
   import { app, go, profileColor } from "../lib/app.svelte";
   import { money } from "../lib/format";
+  import { keyLabel } from "../lib/keys";
   import { openPalette } from "../lib/commands.svelte";
   import { openAccount } from "../lib/dialogs.svelte";
   import { installUpdate, restart, updates } from "../lib/updates.svelte";
@@ -19,7 +20,7 @@
 
 <nav class="sidebar" aria-label="Navegación principal">
   <div class="brand" data-tauri-drag-region><div class="logo"><Icon name="chart" /></div><div><b>Finanzas</b><span>Tu dinero, en orden</span></div></div>
-  <button class="cmdk" type="button" onclick={() => openPalette()}><Icon name="search" />Buscar o ejecutar…<kbd>⌘K</kbd></button>
+  <button class="cmdk" type="button" onclick={() => openPalette()}><Icon name="search" />Buscar o ejecutar…<kbd>{keyLabel("⌘K")}</kbd></button>
   {#each menu as [id, label, icon] (id)}
     <button class="nav" aria-current={current(id) ? "page" : undefined} onclick={() => go(id)}>
       <Icon name={icon} /><span>{label}</span>

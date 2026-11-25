@@ -76,12 +76,29 @@ kbd { font: 600 11.5px var(--font); padding: 1px 6px; border-radius: 6px; border
 [popover] { margin: 0; inset: auto; border: 1px solid var(--border); background: var(--glass); backdrop-filter: blur(24px) saturate(1.6); color: var(--ink); border-radius: 12px; box-shadow: 0 16px 40px rgb(0 0 0 / .18); padding: 6px; }
 
 /* App shell */
-.app { display: grid; grid-template-columns: 252px 1fr; height: 100vh; }
-.sidebar { background: var(--sidebar); padding: 44px 12px 14px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; border-right: 1px solid var(--border); }
-.brand { display: flex; align-items: center; gap: 10px; padding: 18px 8px 14px; }
-.logo { width: 36px; height: 36px; border-radius: 11px; background: var(--hero); display: grid; place-items: center; color: #fff; }
+.app { --side-ease: cubic-bezier(.32, .72, 0, 1); display: grid; grid-template-columns: 252px 1fr; height: 100vh; transition: grid-template-columns .28s var(--side-ease); }
+/* 62px centres the icons exactly where they sit when expanded, so collapsing only moves the edge. */
+.app:has(.sidebar.collapsed) { grid-template-columns: 62px 1fr; }
+.sidebar { background: var(--sidebar); padding: 44px 12px 14px; display: flex; flex-direction: column; gap: 2px; overflow: hidden auto; border-right: 1px solid var(--border); min-width: 0; }
+.brand { position: relative; display: flex; align-items: center; gap: 10px; padding: 18px 8px 14px; }
+.logo { width: 36px; height: 36px; border-radius: 11px; background: var(--hero); display: grid; place-items: center; color: #fff; flex: none; }
 .brand b { display: block; font-size: 15px; }
-.brand span { font-size: 12px; color: var(--muted); }
+.brand span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* Pinned to the right edge: it rides the edge while the bar closes and ends centred in the 62px bar. */
+.side-toggle { position: absolute; right: 4px; top: 50%; translate: 0 -50%; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.side-toggle:hover { background: color-mix(in srgb, var(--brand) 8%, transparent); color: var(--ink); }
+/* Collapsed: only the width animates; text fades out in place and the bar's edge covers it, like a curtain.
+   Labels stay in the accessibility tree and show as tooltips. */
+.sidebar :is(.logo, .brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { transition: opacity .2s .1s; }
+.sidebar.collapsed :is(.logo, .brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { opacity: 0; transition-duration: .12s; transition-delay: 0s; }
+.sidebar.collapsed :is(.nav, .cmdk) { overflow: hidden; position: relative; }
+.sidebar.collapsed :is(.nav, .cmdk) > span:not(.count) { flex: none; }
+.sidebar.collapsed .side-foot .avatar { pointer-events: none; }
+.sidebar.collapsed .side-foot .nav { flex: none; width: 100%; }
+.sidebar.collapsed .side-foot { overflow: hidden; }
+.sidebar.collapsed .nav .count { position: absolute; top: 2px; right: 2px; padding: 0 5px; font-size: 10px; }
+.sidebar.collapsed .upd { color: var(--brand); }
+@media (prefers-reduced-motion: reduce) { .app, .sidebar * { transition: none !important; } }
 .avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--c, var(--violet)); flex: none; border: 0; }
 .avatar.lg { width: 64px; height: 64px; font-size: 26px; }
 button.avatar { cursor: pointer; }
@@ -381,7 +398,6 @@ dialog.import { width: min(760px, calc(100vw - 32px)); }
   .budget-row { grid-template-columns: 1fr 120px 100px; } .budget-row .hide-narrow { display: none; }
 }
 @media (width < 760px) {
-  .app { grid-template-columns: 1fr; } .sidebar { display: none; }
   .page { padding: 20px 16px 40px; } .legend { grid-template-columns: 1fr 1fr; } .two { grid-template-columns: 1fr; }
 }
 /* WebKit draws native selects shorter than inputs; give them the field look and a chevron. */
@@ -393,4 +409,5 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 32px; 
 button.edit-name, button.text-link { all: unset; cursor: pointer; border-radius: 4px; }
 button.edit-name:hover, button.text-link:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 button.edit-name:focus-visible, button.text-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-button.link { background: none; border: 0; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; }
+button.link { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; text-underline-offset: 3px; }
+button.link:hover, button.link:focus-visible { text-decoration: underline; }

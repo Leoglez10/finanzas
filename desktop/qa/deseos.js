@@ -70,9 +70,10 @@
     await ok(() => !!t.querySelector('input[placeholder="Viaje a Cancún"]'), () => 'choosing Viaje changes the example name');
     set(t.querySelector('input[placeholder="Viaje a Cancún"]'), 'QA Cancún');
     set(t.querySelector('input[placeholder="25,000.00"]'), '8,400');
-    const now = new Date(), target = new Date(now.getFullYear(), now.getMonth() + 6, 1);
-    const iso = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-01`;
-    set(t.querySelector('input[type="date"]'), iso);
+    // Pick the 1st, six months out, in the app's calendar.
+    t.querySelector('.date-btn').click(); await wait(200);
+    for (let i = 0; i < 6; i++) { t.querySelector('.date-pop [aria-label="Mes siguiente"]').click(); await wait(50); }
+    [...t.querySelectorAll('.date-pop .d:not(.out)')].find(b => b.textContent === '1').click(); await wait(200);
     t.querySelector('button[value="next"]').click(); await wait(300);
     await ok(() => t.querySelector('.review')?.textContent.includes('Viaje'), () => 'the review names the type');
     t.querySelector('button[value="next"]').click(); await wait(1500);

@@ -1,6 +1,6 @@
 use super::{Result, ServiceError};
 use crate::{Entry, Frequency, Id, Recurrence, Schedule, WeekendMode, domain::schedule, store::{EntryRow, Store}};
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{Months, NaiveDate, NaiveDateTime};
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -89,14 +89,27 @@ pub struct ScheduleDraft {
 /// a changed rule starts over from its first occurrence.
 pub fn apply_draft(existing: Option<Schedule>, payee_id: Option<Id>, draft: &ScheduleDraft) -> Schedule {
     let mut schedule = existing.unwrap_or(Schedule { id: 0, name: String::new(), amount: 0, auto_post: false, completed: false, next_date: None, recurrence: None, account_id: None, category_id: None, payee_id: None });
+    let old_next = crate::domain::schedule::effective_next_date(&schedule);
     let old = schedule.recurrence.take();
     let rule = Recurrence { start: draft.start, frequency: draft.frequency, interval: draft.interval.max(1), skip_weekend: draft.skip_weekend,
         weekend_mode: old.as_ref().map_or(WeekendMode::After, |r| r.weekend_mode), end_date: old.as_ref().and_then(|r| r.end_date) };
-    if old.as_ref() != Some(&rule) { schedule.next_date = None; schedule.completed = false; }
+    if old.as_ref() != Some(&rule) {
+        schedule.next_date = old.as_ref().zip(old_next).and_then(|(old, next)| carried_next_date(old, next, &rule));
+        schedule.completed = false;
+    }
     schedule.recurrence = Some(rule);
     schedule.name = draft.name.trim().to_owned(); schedule.amount = draft.amount; schedule.auto_post = draft.auto_post;
     schedule.account_id = Some(draft.account_id); schedule.category_id = draft.category_id; schedule.payee_id = payee_id;
     schedule
+}
+/// Where an edited rule picks up: the new date nearest to the old next one, never repeating
+/// a date the old rule already passed (so moving the day doesn't bring back paid months).
+fn carried_next_date(old: &Recurrence, old_next: NaiveDate, rule: &Recurrence) -> Option<NaiveDate> {
+    let day_before = old_next.pred_opt()?;
+    let passed = old.occurrences(day_before.checked_sub_months(Months::new(24))?, day_before).last().copied();
+    let from = passed.and_then(|d| d.succ_opt()).unwrap_or(rule.start);
+    let through = old_next.checked_add_months(Months::new(24))?;
+    rule.occurrences(from, through).into_iter().min_by_key(|d| (*d - old_next).num_days().abs())
 }
 /// Creates (`id` None) or edits a schedule from a draft; returns its id.
 pub fn save_schedule(store: &mut Store, id: Option<Id>, draft: &ScheduleDraft) -> Result<Id> {
@@ -132,6 +145,16 @@ mod draft_tests {
         s.completed = true;
         let reset = apply_draft(Some(s), None, &ScheduleDraft { interval: 2, ..draft() });
         assert_eq!((reset.next_date, reset.completed), (None, false));
+    }
+    #[test]
+    fn moving_the_day_keeps_progress_at_the_nearest_new_date() {
+        let day = |m, d| NaiveDate::from_ymd_opt(2026, m, d);
+        let mut s = apply_draft(None, None, &ScheduleDraft { start: day(5, 13).unwrap(), ..draft() });
+        s.next_date = day(12, 13);
+        let later = apply_draft(Some(s.clone()), None, &ScheduleDraft { start: day(5, 15).unwrap(), ..draft() });
+        assert_eq!(later.next_date, day(12, 15));
+        let earlier = apply_draft(Some(s), None, &ScheduleDraft { start: day(5, 11).unwrap(), ..draft() });
+        assert_eq!(earlier.next_date, day(12, 11));
     }
     #[test]
     fn save_schedule_creates_then_edits_and_rejects_a_missing_id() {

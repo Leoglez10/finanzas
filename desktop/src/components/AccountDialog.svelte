@@ -9,6 +9,7 @@
   import { cardForm, cardTerms } from "../lib/debts";
   import CardFields from "./CardFields.svelte";
   import StylePicker from "./StylePicker.svelte";
+  import DatePicker from "./DatePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
@@ -44,7 +45,7 @@
       <label class="field">Nombre<input class="input" bind:value={name} placeholder="Cuenta principal" autofocus /></label>
       <div class="two">
         <label class="field"><span>Saldo actual <span class="opt">· opcional</span></span><input class="input num" bind:value={opening} inputmode="decimal" placeholder="0.00" aria-describedby="opening-hint" /><small id="opening-hint">Negativo si es deuda, como una tarjeta.</small></label>
-        <label class="field">A la fecha<input class="input" type="date" bind:value={date} /></label>
+        <div class="field">A la fecha<DatePicker bind:value={date} label="A la fecha" /></div>
       </div>
       <StylePicker bind:icon bind:color />
       <label class="setting"><div class="grow"><b>Tarjeta de crédito</b><p>Lleva el límite, los cortes y las compras a meses.</p></div><input type="checkbox" role="switch" class="switch" bind:checked={isCard} /></label>

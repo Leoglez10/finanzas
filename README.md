@@ -108,6 +108,7 @@ Keyboard shortcuts (⌘ on macOS, Ctrl on Windows and Linux); they are also list
 | ⌘, | Ajustes |
 | ⌘F | Search movements |
 | ⌘I | Import a CSV or Excel file |
+| ⌘S | Collapse or expand the sidebar (it also collapses to icons in narrow windows) |
 | ⌘Z | Undo the last change |
 | ⇧⌘L | Switch light / dark |
 | Esc | Close a dialog or cancel an edit |

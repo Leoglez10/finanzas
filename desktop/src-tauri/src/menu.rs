@@ -41,6 +41,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         &item(app, "go-presupuesto", "Presupuesto", Some("CmdOrCtrl+3"))?,
         &item(app, "go-proximos", "Próximos pagos", Some("CmdOrCtrl+4"))?,
         &item(app, "go-deseos", "Deseos", Some("CmdOrCtrl+5"))?, &sep()?,
+        &item(app, "sidebar", "Mostrar u ocultar la barra lateral", Some("CmdOrCtrl+S"))?,
         &item(app, "theme", "Cambiar entre claro y oscuro", Some("CmdOrCtrl+Shift+L"))?,
         &PredefinedMenuItem::fullscreen(app, Some("Pantalla completa"))?,
     ])?;

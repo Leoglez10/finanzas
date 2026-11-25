@@ -8,6 +8,7 @@
   import { parseCents } from "../lib/quick-parse";
   import { remember } from "../lib/undo.svelte";
   import { KINDS, kindOf, type Kind } from "../lib/goals";
+  import DatePicker from "./DatePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
@@ -118,8 +119,8 @@
           </div>
           {#if errors.items}<p class="err" role="alert">{errors.items}</p>{/if}
         </div>
-        <label class="field"><span>¿Para cuándo? <span class="opt">· opcional</span></span><input class="input" type="date" bind:value={targetDate} />
-          <small>Con una fecha te decimos cuánto apartar cada mes.</small></label>
+        <div class="field"><span>¿Para cuándo? <span class="opt">· opcional</span></span><DatePicker bind:value={targetDate} label="¿Para cuándo?" optional />
+          <small>Con una fecha te decimos cuánto apartar cada mes.</small></div>
         <label class="field"><span>Enlace <span class="opt">· opcional</span></span><input class="input" type="url" bind:value={url} placeholder="https://" aria-invalid={!!errors.url || undefined} />
           {#if errors.url}<p class="err" role="alert">{errors.url}</p>{/if}</label>
         <label class="field"><span>Nota <span class="opt">· opcional</span></span><textarea class="input" bind:value={notes}></textarea></label>

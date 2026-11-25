@@ -6,6 +6,7 @@
   import { isoDay, money } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember } from "../lib/undo.svelte";
+  import DatePicker from "./DatePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
@@ -92,7 +93,7 @@
       </div>
       <div class="two">
         <label class="field">Cuenta<select class="input" bind:value={accountId}>{#each app.accounts.filter(a => !a.closed) as a (a.id)}<option value={a.id}>{a.name}</option>{/each}</select></label>
-        <label class="field">Fecha<input class="input" type="date" bind:value={date} required /></label>
+        <div class="field">Fecha<DatePicker bind:value={date} label="Fecha" /></div>
         <label class="field">Comercio<input class="input" bind:value={payee} list="payee-list" placeholder="¿Dónde?" oninput={suggest} onchange={payeeChosen} /></label>
         <label class="field">Categoría
           <select class="input" bind:value={categoryId} onchange={() => categoryTouched = true}>

@@ -6,6 +6,7 @@
   import { isoDay } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember } from "../lib/undo.svelte";
+  import DatePicker from "./DatePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
@@ -73,7 +74,7 @@
             {#each groups as g (g.id)}<optgroup label={g.name}>{#each g.categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}
           </select></label>
         <label class="field">Comercio <input class="input" bind:value={payee} placeholder="Opcional" /></label>
-        <label class="field">Primera fecha<input class="input" type="date" bind:value={start} /></label>
+        <div class="field">Primera fecha<DatePicker bind:value={start} label="Primera fecha" /></div>
         <label class="field">Se repite<select class="input" bind:value={frequency}>{#each FREQUENCIES as [value, label] (value)}<option {value}>{label}</option>{/each}</select></label>
         <label class="field">Cada<span style="display:flex;gap:8px;align-items:center"><input class="input num" type="number" min="1" max="52" bind:value={interval} style="width:90px" /><span class="muted">{FREQUENCIES.find(f => f[0] === frequency)?.[2]}</span></span></label>
       </div>

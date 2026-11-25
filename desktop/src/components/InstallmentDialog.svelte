@@ -8,6 +8,7 @@
   import { isoDay, money } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember } from "../lib/undo.svelte";
+  import DatePicker from "./DatePicker.svelte";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement;
@@ -51,7 +52,7 @@
         <label class="field">Meses<input class="input num" bind:value={months} inputmode="numeric" placeholder="12" /></label>
       </div>
       <div class="two">
-        <label class="field">Fecha de compra<input class="input" type="date" bind:value={start} /></label>
+        <div class="field">Fecha de compra<DatePicker bind:value={start} label="Fecha de compra" /></div>
         <label class="field"><span>Tasa anual <span class="opt">· vacía si es sin intereses</span></span><input class="input num" bind:value={rate} inputmode="decimal" placeholder="0 %" /></label>
       </div>
       {#if preview}<p class="muted" style="font-size:13px">Sin intereses: {preview} al mes.</p>{/if}

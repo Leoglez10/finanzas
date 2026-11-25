@@ -11,8 +11,8 @@ Branch: feat/redesign-no-slop · Delivery: ask-on-risk, one small PR per task wi
 
 ## Tasks
 
-- [ ] T0 Ship pending work (link underline only on hover; collapsible sidebar with ⌘S and smooth animation; `desktop/qa/sidebar.js`) — S3 — inline — uncommitted in the working tree
-- [ ] T1 `DESIGN.md` + central theme tokens (color roles, radii, spacing, type scale, banned list); no visible change — S2, S5 — inline
+- [x] T0 Ship pending work (link underline on hover; collapsible sidebar ⌘S) — S3 — inline — 915f0e7, 9922ceb (PR #25)
+- [x] T1 `DESIGN.md` + central theme tokens (color roles, radii, spacing, type scale, banned list); no visible change — S2, S5 — inline
 - [ ] T2 Quick cleanup: glass, uppercase labels, ✨, logo tagline, the 11 radii down to 2 — S4, S5 — inline
 - [ ] T3 Bundled fonts: one UI face + one monospace for amounts and captions, same on Mac/Windows/Linux — S2, S5 — inline
 - [ ] T4 One accent action per screen (e.g. account header: Gasto primary, the rest secondary) — S5 — inline
@@ -30,3 +30,4 @@ Branch: feat/redesign-no-slop · Delivery: ask-on-risk, one small PR per task wi
 - L4 Research evidence: Krebs Show HN study (23.5% uncustomized shadcn, 28% gradients) https://www.adriankrebs.ch/blog/design-slop/ ; avoid-ai-design and no-slop-ui rule sets; OpenCode Desktop README says "built with Electron"; Rune PLAN.md ("Feel is the product", "Same pixels on every platform", OpenCode theme is the reference theme); Hex AGENTS.md (theme tokens only, one Primary action per screen, sentence case, light/dark snapshots).
 - L5 Audit of the current app: system font, no gradients (good); `--glass` + backdrop-filter in 3 places, 5 uppercase rules, 11 distinct radii, 8 pill radii, KPI cards with icon tiles, logo tagline, sparkle icon on updates.
 - L6 Next: T0 on branch feat/redesign-no-slop, then T1.
+- L7 (2026-11-25) "pudemos empezar el rediseño". T0 shipped in PR #25. T1 done: desktop/DESIGN.md + new tokens (--r-control/--r-panel, --space-*, --text-*, --font-mono, --shadow-float) added unused, so no visible change; check 0 errors, tests pass. Branch stacked on fix/schedule-dates. Next: T2.

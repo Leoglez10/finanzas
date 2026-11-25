@@ -17,6 +17,12 @@
   --radius: 16px; --radius-sm: 10px;
   --shadow: 0 1px 2px rgb(15 30 45 / .04), 0 4px 16px rgb(15 30 45 / .05);
   --font: system-ui, -apple-system, "SF Pro Text", sans-serif;
+  /* Redesign scale (see desktop/DESIGN.md). New and touched code uses only these. */
+  --r-control: 6px; --r-panel: 10px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+  --text-sm: 12px; --text-md: 13px; --text-lg: 16px; --text-xl: 24px;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --shadow-float: 0 8px 24px rgb(0 0 0 / .14), 0 1px 3px rgb(0 0 0 / .08);
   accent-color: var(--brand);
   scrollbar-color: var(--border) transparent;
 }

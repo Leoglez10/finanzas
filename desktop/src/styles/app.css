@@ -1,5 +1,6 @@
 /* Bundled fonts (SIL OFL 1.1, licenses next to the files) so every platform renders the same. */
 @font-face { font-family: "Funnel Sans"; font-weight: 300 800; font-display: block; src: url(./fonts/funnel-sans.woff2) format("woff2"); }
+@font-face { font-family: "Funnel Display"; font-weight: 400 700; font-display: block; src: url(./fonts/funnel-display.woff2) format("woff2"); }
 @font-face { font-family: "DM Mono"; font-weight: 100 400; font-display: block; src: url(./fonts/dm-mono-400.woff2) format("woff2"); }
 @font-face { font-family: "DM Mono"; font-weight: 500 900; font-display: block; src: url(./fonts/dm-mono-500.woff2) format("woff2"); }
 /* Design tokens. light-dark() follows color-scheme; data-theme forces one. */
@@ -87,16 +88,16 @@ kbd { font: 600 var(--text-sm) var(--font); padding: 1px 6px; border-radius: var
 /* 62px centres the icons exactly where they sit when expanded, so collapsing only moves the edge. */
 .app:has(.sidebar.collapsed) { grid-template-columns: 62px 1fr; }
 .sidebar { background: var(--sidebar); padding: 44px 12px 14px; display: flex; flex-direction: column; gap: 2px; overflow: hidden auto; border-right: 1px solid var(--border); min-width: 0; }
-.brand { position: relative; display: flex; align-items: center; gap: 10px; padding: 18px 8px 14px; }
+.brand { position: relative; display: flex; align-items: center; gap: 10px; padding: 24px 10px 18px; }
 .logo { width: 36px; height: 36px; border-radius: var(--r-panel); background: var(--hero); display: grid; place-items: center; color: #fff; flex: none; }
-.brand b { display: block; font-size: var(--text-md); }
+.brand b { display: block; font-family: "Funnel Display", var(--font); font-size: var(--text-xl); font-weight: 700; letter-spacing: -.02em; line-height: 1; } /* the wordmark: display face, used only here */
 /* Pinned to the right edge: it rides the edge while the bar closes and ends centred in the 62px bar. */
 .side-toggle { position: absolute; right: 4px; top: 50%; translate: 0 -50%; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: var(--r-control); background: none; color: var(--muted); cursor: pointer; }
 .side-toggle:hover { background: color-mix(in srgb, var(--brand) 8%, transparent); color: var(--ink); }
 /* Collapsed: only the width animates; text fades out in place and the bar's edge covers it, like a curtain.
    Labels stay in the accessibility tree and show as tooltips. */
-.sidebar :is(.logo, .brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { transition: opacity .2s .1s; }
-.sidebar.collapsed :is(.logo, .brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { opacity: 0; transition-duration: .12s; transition-delay: 0s; }
+.sidebar :is(.brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { transition: opacity .2s .1s; }
+.sidebar.collapsed :is(.brand-text, .section, .cmdk kbd, .nav > span:not(.count), .cmdk > span, .side-foot .avatar) { opacity: 0; transition-duration: .12s; transition-delay: 0s; }
 .sidebar.collapsed :is(.nav, .cmdk) { overflow: hidden; position: relative; }
 .sidebar.collapsed :is(.nav, .cmdk) > span:not(.count) { flex: none; }
 .sidebar.collapsed .side-foot .avatar { pointer-events: none; }

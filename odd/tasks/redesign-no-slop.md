@@ -18,7 +18,7 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 - [x] T4 One accent action per screen (e.g. account header: Gasto primary, the rest secondary) — S5 — inline — 0385f2b
 - [x] T5 Flatter and denser: fewer shadowed cards, sections divided by lines, compact tables, shadows only on floating layers — S4, S5 — inline — 79f91b9
 - [x] T6 Metrics as a strip: Saldo / Entradas / Salidas as large numbers without icon tiles — S4 — inline — d9cbc0e
-- [ ] T7 Components one by one: sidebar → tables → dialogs → ⌘K → charts — S4, S5 — inline
+- [x] T7 Components one by one: sidebar → tables → dialogs → ⌘K → charts — S4, S5 — inline — 2fd2c8f
 - [ ] T8 Screen by screen: Resumen → Movimientos → Presupuesto → Próximos → Deudas → Deseos → Ajustes — S4, S5 — inline
 - [x] T9 Visual review harness: QA script that captures every screen in light and dark for comparison — S3 — inline — aa45968
 
@@ -39,3 +39,4 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 - L13 (2026-11-25) "sí, sigue con T6" then mid-task: "sigue con todos sin parar es el /goal llegar al final, cuando acabes me dices, ve haciendo commits de cada fase y si falla ve arreglando" — run T6..T9 without pausing, one commit per phase, fix failures.
 - L14 T6 done (d9cbc0e): Kpi component drops the icon tile (icon prop removed from all callers); .kpis is one bordered panel with 1px dividers (grid gap over --border), cells 12/16 padding, 24px numbers, number tinted only for tone ok/bad; Deudas installments no longer green. Fixed qa/edicion.js: it read window.__finanzas before the app mounted and died silently; now read after the first wait. Also found a stale debug app instance blocking QA runs (single-instance) — kill target/debug/finanzas-desktop before runs. qa edicion/deudas/sidebar PASS.
 - L15 T9 done early to review T7/T8 (aa45968): desktop/qa/shots.sh <out-dir> walks 7 screens × light/dark (enables Deudas first) and captures each from the log's SHOT lines; montage builds a contact sheet. First light run found the clickable KPI cells grey and unpadded (global button.link wins over .kpi) → fixed in e69a034.
+- L16 T7 done (2fd2c8f): all font sizes mapped to --text-sm/md/lg/xl (body 15→13, page title 26→24); kept literal only for display numbers (hero 46, amount entry 40/28) and avatar glyphs/collapsed badge. Dialog header/body/footer, ⌘K input and rows on the 4px scale; palette rows use control radius; toast slide 300→160ms. Donut legend now wraps under the donut (flex-basis 220px) with ellipsis names — fixes the pre-existing overflow. check 0 errors, 60 tests, qa comandos/movimientos/sidebar/fecha PASS, shots reviewed.

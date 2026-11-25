@@ -3,6 +3,7 @@
   import * as api from "../lib/api";
   import { app, go, refresh } from "../lib/app.svelte";
   import { openEntry } from "../lib/dialogs.svelte";
+  import { showMenu, type MenuEntry } from "../lib/contextmenu";
   import { runCommand } from "../lib/commands.svelte";
   import { categoryColor, money, parseDay } from "../lib/format";
   import { rangeOfParams, inRange, type Range } from "../lib/period";
@@ -69,6 +70,15 @@
       await refresh();
     } catch (e) { toast(String(e)); }
   }
+  const kindOfRow = (r: api.EntryRow) => r.amount < 0 ? "gasto" as const : "ingreso" as const;
+  const rowMenu = (r: api.EntryRow): MenuEntry[] => [
+    ["Editar…", () => openEntry(kindOfRow(r), r)],
+    ["Duplicar con fecha de hoy…", () => openEntry(kindOfRow(r), null, { cents: Math.abs(r.amount), payee: r.payeeName ?? "", categoryId: r.categoryId, accountId: r.accountId })],
+    r.categoryId !== null && [`Ver solo ${r.categoryName ?? "esta categoría"}`, () => go(`movimientos?categoria=${r.categoryId}`)],
+    r.accountId !== null && !accountId && [`Abrir ${r.accountName ?? "la cuenta"}`, () => go(`cuenta-${r.accountId}`)],
+    null,
+    ["Eliminar", () => remove(r)],
+  ];
   async function remove(row: api.EntryRow) {
     const before = api.inputOf(row);
     try {
@@ -126,7 +136,7 @@
       <tbody>
         <tr><th colspan={accountId ? 5 : 6} class="day" scope="rowgroup">{longDay(date)}<span class="num" class:pos={dayTotal(list) > 0}>{money(dayTotal(list), true)}</span></th></tr>
         {#each list as r (r.id)}
-          <tr class="tx">
+          <tr class="tx" oncontextmenu={e => showMenu(e, rowMenu(r))}>
             <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b><button class="edit-name" title="Editar movimiento" onclick={() => openEntry(r.amount < 0 ? "gasto" : "ingreso", r)}>{r.payeeName ?? "Sin comercio"}</button></b>{#if r.wishId}<span class="chip violet" title="Etiquetado con una meta"><Icon name="star" />{goalNames.get(r.wishId) ?? "Meta"}</span>{/if}</div></td>
             <td data-edit ondblclick={() => startEdit(r.id, "category")} title="Doble clic para cambiar">
               {#if editing?.id === r.id && editing?.field === "category"}

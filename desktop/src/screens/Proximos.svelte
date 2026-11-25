@@ -1,7 +1,8 @@
 <script lang="ts">
   import * as api from "../lib/api";
-  import { app, refresh } from "../lib/app.svelte";
+  import { app, go, refresh } from "../lib/app.svelte";
   import { openSchedule } from "../lib/dialogs.svelte";
+  import { showMenu } from "../lib/contextmenu";
   import { categoryColor, daysBetween, dayMonth, dayNumber, money, monthKey, parseDay } from "../lib/format";
   import { remember, toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
@@ -50,7 +51,13 @@
 
 {#snippet row(u: api.UpcomingItem)}
   {@const d = parseDay(u.date)}{@const n = days(u)}{@const canAct = actionable.has(`${u.scheduleId}:${u.date}`)}
-  <div class="row">
+  <div class="row" role="group" aria-label={u.name} oncontextmenu={e => showMenu(e, [
+    canAct && ["Registrar", () => register(u)],
+    canAct && ["Saltar esta vez", () => skip(u)],
+    canAct && null,
+    ["Editar pago programado…", () => openSchedule(schedules.find(v => v.schedule.id === u.scheduleId) ?? null)],
+    u.accountId !== null && [`Abrir ${u.account ?? "la cuenta"}`, () => go(`cuenta-${u.accountId}`)],
+  ])}>
     <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
     <div class="grow">
       <p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(schedules.find(v => v.schedule.id === u.scheduleId) ?? null)}>{u.name}</button></p>
@@ -92,7 +99,7 @@
   <div class="card-h"><h2>Pagos programados</h2>{#if app.settings?.enabled}<span class="chip brand"><Icon name="bell" />Te aviso {app.settings.days} días antes</span>{/if}</div>
   <div class="list">
     {#each schedules as v (v.schedule.id)}
-      <div class="row">
+      <div class="row" role="group" aria-label={v.schedule.name} oncontextmenu={e => showMenu(e, [["Editar…", () => openSchedule(v)], null, ["Eliminar", () => remove(v)]])}>
         <span class="merchant" style="--c:{categoryColor(v.schedule.categoryId)}"><Icon name="repeat" /></span>
         <div class="grow"><p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(v)}>{v.schedule.name}</button></p><p class="meta">{v.label}{v.account ? ` · ${v.account}` : ""}</p></div>
         <b class="num" class:pos={v.schedule.amount > 0}>{money(v.schedule.amount, true)}</b>

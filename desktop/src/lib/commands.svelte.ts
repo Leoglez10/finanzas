@@ -11,6 +11,13 @@ export interface Command { id: string; label: string; group: string; icon: strin
 export const palette = $state({ open: false, text: "" });
 export const openPalette = (text = "") => Object.assign(palette, { open: true, text });
 
+// Collapsed to icons by choice (remembered on this computer); narrow windows collapse it on their own.
+export const sidebar = $state({ collapsed: localStorage.getItem("sidebar-collapsed") === "1" });
+export function toggleSidebar() {
+  sidebar.collapsed = !sidebar.collapsed;
+  localStorage.setItem("sidebar-collapsed", sidebar.collapsed ? "1" : "0");
+}
+
 const isDark = () => app.settings?.dark ?? matchMedia("(prefers-color-scheme: dark)").matches;
 
 export const COMMANDS: Command[] = [
@@ -31,6 +38,7 @@ export const COMMANDS: Command[] = [
   { id: "import", label: "Importar CSV, Excel o PDF…", group: "Acciones", icon: "upload", keys: "⌘I", run: () => pickCsv().then(f => f && openImport(f)).catch(e => toast(String(e))) },
   { id: "search", label: "Buscar movimientos", group: "Editar", icon: "search", keys: "⌘F", run: () => { go("movimientos"); setTimeout(() => document.querySelector<HTMLInputElement>("#main input[type=search]")?.focus()); } },
   { id: "undo", label: "Deshacer el último cambio", group: "Editar", icon: "undo", keys: "⌘Z", run: () => undo() },
+  { id: "sidebar", label: "Mostrar u ocultar la barra lateral", group: "Ver", icon: "sidebar", keys: "⌘S", run: () => toggleSidebar() },
   { id: "theme", label: "Cambiar entre claro y oscuro", group: "Ver", icon: "moon", keys: "⇧⌘L", run: () => updateSettings({ dark: !isDark() }) },
   { id: "palette", label: "Paleta de comandos", group: "Ventana", icon: "command", keys: "⌘K", run: () => openPalette() },
 ];

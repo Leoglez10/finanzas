@@ -5,7 +5,8 @@
   import { money } from "../lib/format";
   import { keyLabel } from "../lib/keys";
   import { openPalette } from "../lib/commands.svelte";
-  import { openAccount } from "../lib/dialogs.svelte";
+  import { openAccount, openAccountStyle } from "../lib/dialogs.svelte";
+  import { showMenu } from "../lib/contextmenu";
   import { installUpdate, restart, updates } from "../lib/updates.svelte";
 
   const current = (id: string) => app.route === id || app.route.startsWith(id + "/") || app.route.startsWith(id + "?");
@@ -29,7 +30,8 @@
   {/each}
   <div class="section">Cuentas</div>
   {#each open as a (a.id)}
-    <button class="nav" aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}>
+    <button class="nav" aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}
+      oncontextmenu={e => showMenu(e, [["Abrir", () => go(`cuenta-${a.id}`)], ["Apariencia…", () => openAccountStyle(a.id)]])}>
       <AccountBadge account={a} size={22} /><span>{a.name}</span><span class="bal num" class:neg={a.balance < 0}>{money(a.balance)}</span>
     </button>
   {/each}

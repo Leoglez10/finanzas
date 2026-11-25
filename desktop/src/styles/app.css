@@ -170,6 +170,9 @@ button.chip { cursor: pointer; }
 .g-2 { grid-template-columns: 1fr 1fr; align-items: start; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .kpi { display: flex; gap: 14px; align-items: center; }
+.kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+.kpi.link:hover { border-color: var(--brand); }
+.kpi.link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
 .ic.ok { background: var(--income-soft); color: var(--income); }
 .ic.bad { background: var(--expense-soft); color: var(--expense); }
@@ -386,4 +389,8 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 32px; 
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238193a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
 
 /* Inline text button that reads as a link. */
+/* A name that opens its edit dialog (edit-name) or what it names (text-link): text until hovered or focused. */
+button.edit-name, button.text-link { all: unset; cursor: pointer; border-radius: 4px; }
+button.edit-name:hover, button.text-link:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+button.edit-name:focus-visible, button.text-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 button.link { background: none; border: 0; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; }

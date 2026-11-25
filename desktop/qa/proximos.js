@@ -52,6 +52,14 @@
     await ok(() => !programmed(), () => 'Eliminar removes it without a confirmation dialog');
     await undo();
     await ok(() => programmed()?.textContent.includes('-$400.00'), () => 'Deshacer brings the deleted schedule back');
+    location.hash = 'proximos'; await wait(900);
+    rowOf('Renta').querySelector('button.edit-name').click();
+    await ok(() => $('dialog[open] #schedule-title') && $('dialog[open] input[autofocus]')?.value === 'Renta', () => `clicking an upcoming payment's name opens its schedule to edit ("${$('dialog[open] input[autofocus]')?.value}")`);
+    $('dialog[open]').close(); await wait(300);
+    location.hash = 'movimientos'; await wait(900);
+    document.querySelector('tr.tx button.edit-name').click();
+    await ok(() => $('dialog[open] #tx-title')?.textContent === 'Editar movimiento', () => 'clicking a movement name opens it to edit');
+    $('dialog[open]').close();
   } catch (e) { say(false, 'exception: ' + e); }
   window.__TAURI_INTERNALS__.invoke('qa_log', { line: 'DONE' });
 })();

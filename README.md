@@ -64,7 +64,11 @@ Everything stays on your computer: no account, cloud or telemetry.
   Also available as a Resumen widget.
 - **Undo instead of "are you sure?"** — deleting, registering, importing or editing shows **Deshacer** (or press ⌘Z).
   Only deleting a whole profile asks first, because it removes its database.
-- **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles.
+- **Command palette (⌘K)** — commands, payees, `uber 120 ayer` to record a movement, `apartar 200 playstation`, themes and profiles, and
+  `editar gym` (or just `gym`) to open a scheduled payment, goal or movement for editing.
+- **Edit from where you see it** — click a payment, movement, goal or installment name to edit it; right-click a row
+  for its actions (edit, duplicate, filter by category, open the account, register, skip, archive, delete). Summary
+  cards and account or category names take you to what they show.
 - **Quick capture (⌥⇧F)** — a small window from any app: type `super 450.50 tarjeta`, press Enter. Payee spelling,
   category and account come from your own history.
 - **CSV, Excel and PDF import** — drop a bank CSV, .xlsx, .xls, .ods or PDF statement on the window (or ⌘I). PDF

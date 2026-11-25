@@ -3,6 +3,7 @@
   import * as api from "../lib/api";
   import { app, go, refresh } from "../lib/app.svelte";
   import { openEntry } from "../lib/dialogs.svelte";
+  import { showMenu, type MenuEntry } from "../lib/contextmenu";
   import { runCommand } from "../lib/commands.svelte";
   import { categoryColor, money, parseDay } from "../lib/format";
   import { rangeOfParams, inRange, type Range } from "../lib/period";
@@ -19,7 +20,8 @@
   // Filters live in the route: movimientos?desde=2026-11-01&hasta=2026-11-30&categoria=4 (mes=202611 still works).
   let params = $derived(new URLSearchParams(app.route.split("?")[1] ?? ""));
   let search = $state(new URLSearchParams(location.hash.split("?")[1] ?? "").get("q") ?? "");
-  let kind = $state<"todos" | "gastos" | "ingresos">("todos");
+  // movimientos?tipo=gastos opens with that filter (the Resumen cards link here).
+  let kind = $state<"todos" | "gastos" | "ingresos">((["gastos", "ingresos"] as const).find(k => k === new URLSearchParams(location.hash.split("?")[1] ?? "").get("tipo")) ?? "todos");
   let range = $derived(rangeOfParams(params));
   let categoryFilter = $derived(Number(params.get("categoria")) || 0);
   let rows = $state<api.EntryRow[]>([]);
@@ -69,6 +71,15 @@
       await refresh();
     } catch (e) { toast(String(e)); }
   }
+  const kindOfRow = (r: api.EntryRow) => r.amount < 0 ? "gasto" as const : "ingreso" as const;
+  const rowMenu = (r: api.EntryRow): MenuEntry[] => [
+    ["Editar…", () => openEntry(kindOfRow(r), r)],
+    ["Duplicar con fecha de hoy…", () => openEntry(kindOfRow(r), null, { cents: Math.abs(r.amount), payee: r.payeeName ?? "", categoryId: r.categoryId, accountId: r.accountId })],
+    r.categoryId !== null && [`Ver solo ${r.categoryName ?? "esta categoría"}`, () => go(`movimientos?categoria=${r.categoryId}`)],
+    r.accountId !== null && !accountId && [`Abrir ${r.accountName ?? "la cuenta"}`, () => go(`cuenta-${r.accountId}`)],
+    null,
+    ["Eliminar", () => remove(r)],
+  ];
   async function remove(row: api.EntryRow) {
     const before = api.inputOf(row);
     try {
@@ -99,9 +110,9 @@
 </Topbar>
 
 <section class="kpis">
-  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} />
-  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} />
-  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} />
+  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
+  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
+  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
 </section>
 
 <div class="toolbar">
@@ -126,8 +137,8 @@
       <tbody>
         <tr><th colspan={accountId ? 5 : 6} class="day" scope="rowgroup">{longDay(date)}<span class="num" class:pos={dayTotal(list) > 0}>{money(dayTotal(list), true)}</span></th></tr>
         {#each list as r (r.id)}
-          <tr class="tx">
-            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b>{r.payeeName ?? "Sin comercio"}</b>{#if r.wishId}<span class="chip violet" title="Etiquetado con una meta"><Icon name="star" />{goalNames.get(r.wishId) ?? "Meta"}</span>{/if}</div></td>
+          <tr class="tx" oncontextmenu={e => showMenu(e, rowMenu(r))}>
+            <td><div class="who"><span class="merchant" style="--c:{categoryColor(r.categoryId)}">{initials(r.payeeName)}</span><b><button class="edit-name" title="Editar movimiento" onclick={() => openEntry(r.amount < 0 ? "gasto" : "ingreso", r)}>{r.payeeName ?? "Sin comercio"}</button></b>{#if r.wishId}<span class="chip violet" title="Etiquetado con una meta"><Icon name="star" />{goalNames.get(r.wishId) ?? "Meta"}</span>{/if}</div></td>
             <td data-edit ondblclick={() => startEdit(r.id, "category")} title="Doble clic para cambiar">
               {#if editing?.id === r.id && editing?.field === "category"}
                 <select class="input inline" aria-label="Categoría de {r.payeeName ?? 'movimiento'}" use:focusOnMount
@@ -140,7 +151,7 @@
                 <span class="chip" style="--c:{categoryColor(r.categoryId)}"><span class="dot"></span>{r.categoryName ?? "Sin categoría"}</span>
               {/if}
             </td>
-            {#if !accountId}<td class="hide-narrow muted">{r.accountName ?? ""}</td>{/if}
+            {#if !accountId}<td class="hide-narrow muted">{#if r.accountId !== null}<button class="text-link" title="Abrir la cuenta" onclick={() => go(`cuenta-${r.accountId}`)}>{r.accountName}</button>{/if}</td>{/if}
             <td class="hide-narrow muted">{r.notes}</td>
             <td class="r amt" class:pos={r.amount > 0} data-edit ondblclick={() => startEdit(r.id, "amount")} title="Doble clic para editar">
               {#if editing?.id === r.id && editing?.field === "amount"}

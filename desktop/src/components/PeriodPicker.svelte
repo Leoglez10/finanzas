@@ -74,7 +74,7 @@
 
 <style>
   .period-btn { font-weight: 550; }
-  .period-pop { position: fixed; inset: auto; margin: 0; padding: 12px; gap: 12px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: 0 12px 40px rgb(15 30 45 / .18); }
+  .period-pop { position: fixed; inset: auto; margin: 0; padding: 12px; gap: 12px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: var(--shadow-float); }
   .period-pop:popover-open { display: flex; }
   .presets { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding-right: 12px; border-right: 1px solid var(--border); }
   .presets button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: var(--r-control); cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }

@@ -66,7 +66,7 @@
   .date-btn span::first-letter { text-transform: uppercase; }
   .date-btn.empty { color: var(--muted); }
   .date-btn :global(svg) { color: var(--muted); flex: none; }
-  .date-pop { position: fixed; inset: auto; margin: 0; padding: 12px; width: 272px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: 0 12px 40px rgb(0 0 0 / .22); }
+  .date-pop { position: fixed; inset: auto; margin: 0; padding: 12px; width: 272px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: var(--shadow-float); }
   .date-pop:popover-open { animation: pop .14s ease-out; }
   .cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .cal-h b { font-size: 14px; }

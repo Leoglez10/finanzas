@@ -384,12 +384,12 @@
   .w :global(.size-preview) { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; pointer-events: none; border: 2px dashed var(--brand); border-radius: var(--r-panel); background: color-mix(in srgb, var(--brand) 10%, transparent); }
   .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: var(--r-control); background: var(--brand); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 var(--r-control) 0; cursor: ew-resize; touch-action: none; }
-  .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--r-panel); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
+  .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--r-panel); background: var(--canvas); box-shadow: var(--shadow-float); animation: lift .18s ease-out; }
   .floating > :global(*) { height: 100%; }
   @keyframes lift { from { rotate: 0deg; scale: 1; } }
   @media (prefers-reduced-motion: reduce) { .floating { animation: none; rotate: none; scale: none; } }
   /* The tools float on the widget's top edge, so they never cover its title or links. */
-  .w-tools { position: absolute; top: -17px; right: 14px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .w-tools { position: absolute; top: -17px; right: 14px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-float); }
   .w-tools .btn { border: 0; background: none; box-shadow: none; color: var(--text, inherit); }
   .editing { row-gap: 34px; padding-top: 14px; }
   .handle { cursor: grab; touch-action: none; }

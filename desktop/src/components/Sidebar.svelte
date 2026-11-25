@@ -5,7 +5,7 @@
   import { money } from "../lib/format";
   import { keyLabel } from "../lib/keys";
   import { openPalette, sidebar, toggleSidebar } from "../lib/commands.svelte";
-  import { openAccount, openAccountStyle } from "../lib/dialogs.svelte";
+  import { openAccount, openAccountStyle, openCard } from "../lib/dialogs.svelte";
   import { showMenu } from "../lib/contextmenu";
   import { installUpdate, restart, updates } from "../lib/updates.svelte";
 
@@ -30,7 +30,7 @@
 </script>
 
 <nav class="sidebar" class:collapsed aria-label="Navegación principal">
-  <div class="brand" data-tauri-drag-region><div class="logo"><Icon name="chart" /></div><div class="brand-text"><b>Finanzas</b></div>
+  <div class="brand" data-tauri-drag-region><div class="brand-text"><b>Finanzas</b></div>
     {#if !narrow}<button class="side-toggle" type="button" onclick={toggleSidebar} aria-expanded={!collapsed}
       title="{collapsed ? 'Mostrar' : 'Ocultar'} la barra lateral ({keyLabel('⌘S')})" aria-label="{collapsed ? 'Mostrar' : 'Ocultar'} la barra lateral"><Icon name="sidebar" /></button>{/if}
   </div>
@@ -44,7 +44,7 @@
   <div class="section">Cuentas</div>
   {#each open as a (a.id)}
     <button class="nav" title={tip(a.name)} aria-current={current(`cuenta-${a.id}`) ? "page" : undefined} onclick={() => go(`cuenta-${a.id}`)}
-      oncontextmenu={e => showMenu(e, [["Abrir", () => go(`cuenta-${a.id}`)], ["Apariencia…", () => openAccountStyle(a.id)]])}>
+      oncontextmenu={e => { const card = app.cards.find(c => c.accountId === a.id); showMenu(e, [["Abrir", () => go(`cuenta-${a.id}`)], ["Apariencia…", () => openAccountStyle(a.id)], ...(card ? [["Datos de la tarjeta…", () => openCard(card)] as [string, () => void]] : [])]); }}>
       <AccountBadge account={a} size={22} /><span>{a.name}</span><span class="bal num" class:neg={a.balance < 0}>{money(a.balance)}</span>
     </button>
   {/each}

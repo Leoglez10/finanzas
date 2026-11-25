@@ -3,7 +3,7 @@
   import { app, go, refresh } from "../lib/app.svelte";
   import { openCard, openInstallment } from "../lib/dialogs.svelte";
   import { showMenu } from "../lib/contextmenu";
-  import { advice, looksLikeCard, missingText } from "../lib/debts";
+  import { advice, looksLikeCard, missingText, termsLine } from "../lib/debts";
   import { money, parseDay } from "../lib/format";
   import { remember, toast } from "../lib/undo.svelte";
   import Icon from "../components/Icon.svelte";
@@ -72,8 +72,9 @@
           {#if d.overdue}<span class="chip bad">Vencido · {date(d.dueDate!)}</span>
           {:else if d.dueDate && (d.toAvoidInterest ?? 0) > 0}<span class="chip warn">Pagar antes del {date(d.dueDate)}</span>
           {:else if d.dueDate}<span class="chip ok">Próximo pago {date(d.dueDate)}</span>{/if}
-          <button class="btn icon sm ghost" aria-label="Datos de {d.name}" title="Datos de la tarjeta" onclick={() => openCard(d)}><Icon name="edit" /></button>
+          <button class="btn sm ghost" aria-label="Datos de {d.name}" title="Tasa, corte, pago y límite" onclick={() => openCard(d)}><Icon name="edit" />Datos</button>
         </header>
+        {#if termsLine(d.terms)}<p class="terms"><button class="link" title="Editar datos de la tarjeta" onclick={() => openCard(d)}>{termsLine(d.terms)}</button></p>{/if}
         <div class="owed">
           <div><span class="muted">Debes</span> <b class="num">{money(d.debt)}</b></div>
           {#if d.terms?.creditLimit}<span class="muted num">de {money(d.terms.creditLimit)} de límite</span>{/if}
@@ -141,6 +142,8 @@
   .debt { display: grid; gap: 10px; }
   .debt-h { display: flex; align-items: center; gap: 10px; }
   .debt-h .name { font-size: var(--text-lg); margin-right: auto; }
+  .terms { margin: var(--space-1) 0 0; font-size: var(--text-sm); }
+  .terms .link { color: var(--muted); font-family: var(--font-mono); }
   .owed { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .owed b { font-size: var(--text-xl); }
   .small { font-size: var(--text-md); margin: 0; }

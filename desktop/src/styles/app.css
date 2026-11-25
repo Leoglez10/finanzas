@@ -194,8 +194,8 @@ button.chip { cursor: pointer; }
 /* Metrics strip: one panel, cells split by 1px lines (the grid gap shows the border color). */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; }
 .kpi { display: grid; align-content: start; gap: 2px; padding: var(--space-3) var(--space-4); background: var(--surface); min-width: 0; }
-.kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; width: 100%; }
-.kpi.link:hover { background: var(--surface-2); }
+.kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; width: 100%; background: var(--surface); padding: var(--space-3) var(--space-4); text-decoration: none; }
+.kpi.link:hover { background: var(--surface-2); text-decoration: none; }
 .kpi.link:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .ic { width: 42px; height: 42px; border-radius: var(--r-panel); display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
 .ic.ok { background: var(--income-soft); color: var(--income); }

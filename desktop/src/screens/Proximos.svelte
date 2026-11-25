@@ -29,6 +29,7 @@
   let total = $derived(app.accounts.filter(a => !a.closed).reduce((s, a) => s + a.balance, 0));
   let endOfMonth = $derived(total + sum(items.filter(u => monthKey(parseDay(u.date)) === monthKey(app.today))));
 
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   async function act(label: string, run: () => Promise<() => Promise<unknown>>) {
     if (busy) return;
     busy = true;
@@ -61,7 +62,7 @@
     <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
     <div class="grow">
       <p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(schedules.find(v => v.schedule.id === u.scheduleId) ?? null)}>{u.name}</button></p>
-      <p class="meta">{u.account ?? "Sin cuenta"} · {#if u.overdue}<span class="chip bad">Vencido hace {-n} d</span>{:else if n === 0}<span class="chip warn">Hoy</span>{:else}en {n} días{/if}{#if u.autoPost}{" · se registra solo"}{/if}</p>
+      <p class="meta">{#if u.accountId !== null}<button class="text-link" title="Abrir la cuenta" onclick={() => go(`cuenta-${u.accountId}`)}>{u.account}</button>{:else}Sin cuenta{/if} · {#if u.overdue}<span class="chip bad">Vencido hace {-n} d</span>{:else if n === 0}<span class="chip warn">Hoy</span>{:else}en {n} días{/if}{#if u.autoPost}{" · se registra solo"}{/if}</p>
     </div>
     <div style="display:grid;justify-items:end;gap:2px">
       <b class="num" class:pos={u.amount > 0}>{money(u.amount, true)}</b>
@@ -75,7 +76,7 @@
 {/snippet}
 
 {#snippet section(title: string, list: api.UpcomingItem[], empty: string)}
-  <article class="card">
+  <article class="card" id={title.toLowerCase().replace(/\s+/g, "-")}>
     <div class="card-h"><h2>{title}</h2><span class="chip">{list.length}</span></div>
     {#if list.length}<div class="list">{#each list as u (u.scheduleId + u.date)}{@render row(u)}{/each}</div>{:else}<p class="muted">{empty}</p>{/if}
   </article>
@@ -87,8 +88,9 @@
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 <section class="kpis">
-  <Kpi icon="alert" tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}" />
-  <Kpi icon="clock" tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} />
+  <Kpi icon="alert" tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}"
+    onclick={overdue.length ? () => scrollTo("vencidos") : undefined} hint="Ver los pagos vencidos" />
+  <Kpi icon="clock" tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} onclick={() => scrollTo("esta-semana")} hint="Ver lo que viene" />
   <Kpi icon="wallet" tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
 </section>
 {#if overdue.length}{@render section("Vencidos", overdue, "")}{/if}
@@ -101,7 +103,7 @@
     {#each schedules as v (v.schedule.id)}
       <div class="row" role="group" aria-label={v.schedule.name} oncontextmenu={e => showMenu(e, [["Editar…", () => openSchedule(v)], null, ["Eliminar", () => remove(v)]])}>
         <span class="merchant" style="--c:{categoryColor(v.schedule.categoryId)}"><Icon name="repeat" /></span>
-        <div class="grow"><p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(v)}>{v.schedule.name}</button></p><p class="meta">{v.label}{v.account ? ` · ${v.account}` : ""}</p></div>
+        <div class="grow"><p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(v)}>{v.schedule.name}</button></p><p class="meta">{v.label}{#if v.account && v.schedule.accountId !== null}{" · "}<button class="text-link" title="Abrir la cuenta" onclick={() => go(`cuenta-${v.schedule.accountId}`)}>{v.account}</button>{/if}</p></div>
         <b class="num" class:pos={v.schedule.amount > 0}>{money(v.schedule.amount, true)}</b>
         <button class="btn icon sm ghost" aria-label="Editar {v.schedule.name}" onclick={() => openSchedule(v)}><Icon name="edit" /></button>
         <button class="btn icon sm ghost" aria-label="Eliminar {v.schedule.name}" disabled={busy} onclick={() => remove(v)}><Icon name="trash" /></button>

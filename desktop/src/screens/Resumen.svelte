@@ -249,10 +249,10 @@
     </article>
     {:else if id === "kpis"}
   <section class="kpis">
-    <Kpi icon="wallet" label="Saldo en cuentas" cents={o.totalBalance} />
-    <Kpi icon="up" tone="ok" label="Ingresos" cents={income} note={change(o.incomeChange, shiftMonth(month, -1), against)} />
-    <Kpi icon="down" tone="bad" label="Gastos" cents={spent} note={change(o.expensesChange, shiftMonth(month, -1), against)} />
-    <Kpi icon="gift" tone="violet" label="Apartado en deseos" cents={data.reserved} />
+    <Kpi icon="wallet" label="Saldo en cuentas" cents={o.totalBalance} onclick={() => go("movimientos")} hint="Ver movimientos" />
+    <Kpi icon="up" tone="ok" label="Ingresos" cents={income} note={change(o.incomeChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=ingresos`)} hint="Ver los ingresos de este periodo" />
+    <Kpi icon="down" tone="bad" label="Gastos" cents={spent} note={change(o.expensesChange, shiftMonth(month, -1), against)} onclick={() => go(`movimientos?${periodQuery}&tipo=gastos`)} hint="Ver los gastos de este periodo" />
+    <Kpi icon="gift" tone="violet" label="Apartado en deseos" cents={data.reserved} onclick={() => go("deseos")} hint="Ver deseos y metas" />
   </section>
     {:else if id === "gasto"}
     <article class="card">
@@ -309,7 +309,7 @@
           {#each o.recentEntries as r (r.id)}
             <div class="row">
               <span class="dot" style="width:10px;height:10px;border-radius:50%;background:{categoryColor(r.categoryId)}"></span>
-              <div class="grow"><p class="title"><button class="edit-name" title="Editar movimiento" onclick={() => openEntry(r.amount < 0 ? "gasto" : "ingreso", r)}>{r.payeeName ?? "Sin comercio"}</button></p><p class="meta">{r.categoryName ?? "Sin categoría"} · {dayNumber(parseDay(r.date))} {dayMonth(parseDay(r.date))}</p></div>
+              <div class="grow"><p class="title"><button class="edit-name" title="Editar movimiento" onclick={() => openEntry(r.amount < 0 ? "gasto" : "ingreso", r)}>{r.payeeName ?? "Sin comercio"}</button></p><p class="meta">{#if r.categoryId !== null}<button class="text-link" title="Ver movimientos de esta categoría" onclick={() => go(`movimientos?categoria=${r.categoryId}`)}>{r.categoryName}</button>{:else}Sin categoría{/if} · {dayNumber(parseDay(r.date))} {dayMonth(parseDay(r.date))}</p></div>
               <b class="num" class:pos={r.amount > 0}>{money(r.amount, true)}</b>
             </div>
           {:else}<p class="muted">Aún no hay movimientos.</p>{/each}

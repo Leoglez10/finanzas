@@ -20,7 +20,8 @@
   // Filters live in the route: movimientos?desde=2026-11-01&hasta=2026-11-30&categoria=4 (mes=202611 still works).
   let params = $derived(new URLSearchParams(app.route.split("?")[1] ?? ""));
   let search = $state(new URLSearchParams(location.hash.split("?")[1] ?? "").get("q") ?? "");
-  let kind = $state<"todos" | "gastos" | "ingresos">("todos");
+  // movimientos?tipo=gastos opens with that filter (the Resumen cards link here).
+  let kind = $state<"todos" | "gastos" | "ingresos">((["gastos", "ingresos"] as const).find(k => k === new URLSearchParams(location.hash.split("?")[1] ?? "").get("tipo")) ?? "todos");
   let range = $derived(rangeOfParams(params));
   let categoryFilter = $derived(Number(params.get("categoria")) || 0);
   let rows = $state<api.EntryRow[]>([]);
@@ -109,9 +110,9 @@
 </Topbar>
 
 <section class="kpis">
-  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} />
-  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} />
-  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} />
+  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
+  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
+  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
 </section>
 
 <div class="toolbar">
@@ -150,7 +151,7 @@
                 <span class="chip" style="--c:{categoryColor(r.categoryId)}"><span class="dot"></span>{r.categoryName ?? "Sin categoría"}</span>
               {/if}
             </td>
-            {#if !accountId}<td class="hide-narrow muted">{r.accountName ?? ""}</td>{/if}
+            {#if !accountId}<td class="hide-narrow muted">{#if r.accountId !== null}<button class="text-link" title="Abrir la cuenta" onclick={() => go(`cuenta-${r.accountId}`)}>{r.accountName}</button>{/if}</td>{/if}
             <td class="hide-narrow muted">{r.notes}</td>
             <td class="r amt" class:pos={r.amount > 0} data-edit ondblclick={() => startEdit(r.id, "amount")} title="Doble clic para editar">
               {#if editing?.id === r.id && editing?.field === "amount"}

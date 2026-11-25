@@ -20,7 +20,7 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 - [x] T6 Metrics as a strip: Saldo / Entradas / Salidas as large numbers without icon tiles — S4 — inline — d9cbc0e
 - [ ] T7 Components one by one: sidebar → tables → dialogs → ⌘K → charts — S4, S5 — inline
 - [ ] T8 Screen by screen: Resumen → Movimientos → Presupuesto → Próximos → Deudas → Deseos → Ajustes — S4, S5 — inline
-- [ ] T9 Visual review harness: QA script that captures every screen in light and dark for comparison — S3 — inline
+- [x] T9 Visual review harness: QA script that captures every screen in light and dark for comparison — S3 — inline — aa45968
 
 ## Log
 
@@ -38,3 +38,4 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 - L12 (2026-11-25) "sí, sigue con T5". T5 done (79f91b9): --shadow token removed (cards, active nav, pressed segment now flat, border only); every floating layer (popover, dialog, toast, tooltip, date/month/period pickers, dragged widget, widget tools) uses --shadow-float; card padding 20→16; tables: th 8/12 with fixed 16px line-height, day header sticky top 41→33, td 6/12, merchant tile 36→28; list rows 10→8 vertical; card header gap/margin on tokens. check 0 errors, 60 tests, qa fuentes/movimientos/presupuesto/paridad/deudas PASS; dark screenshots reviewed. Light mode not captured yet (T9 harness). Section-by-line layouts per screen deferred to T8. Next: T6 metrics strip.
 - L13 (2026-11-25) "sí, sigue con T6" then mid-task: "sigue con todos sin parar es el /goal llegar al final, cuando acabes me dices, ve haciendo commits de cada fase y si falla ve arreglando" — run T6..T9 without pausing, one commit per phase, fix failures.
 - L14 T6 done (d9cbc0e): Kpi component drops the icon tile (icon prop removed from all callers); .kpis is one bordered panel with 1px dividers (grid gap over --border), cells 12/16 padding, 24px numbers, number tinted only for tone ok/bad; Deudas installments no longer green. Fixed qa/edicion.js: it read window.__finanzas before the app mounted and died silently; now read after the first wait. Also found a stale debug app instance blocking QA runs (single-instance) — kill target/debug/finanzas-desktop before runs. qa edicion/deudas/sidebar PASS.
+- L15 T9 done early to review T7/T8 (aa45968): desktop/qa/shots.sh <out-dir> walks 7 screens × light/dark (enables Deudas first) and captures each from the log's SHOT lines; montage builds a contact sheet. First light run found the clickable KPI cells grey and unpadded (global button.link wins over .kpi) → fixed in e69a034.

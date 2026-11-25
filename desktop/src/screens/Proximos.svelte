@@ -69,9 +69,9 @@
       {#if u.projectedBalance !== null}<small class="muted num" class:neg={u.projectedBalance < 0}>Saldo: {money(u.projectedBalance)}</small>{/if}
     </div>
     {#if canAct}
-      <button class="btn sm primary" disabled={busy} onclick={() => register(u)}><Icon name="check" />Registrar</button>
+      <button class="btn sm" disabled={busy} onclick={() => register(u)}><Icon name="check" />Registrar</button>
       <button class="btn sm ghost" disabled={busy} onclick={() => skip(u)}>Saltar</button>
-    {:else}<span class="muted" style="font-size:12px;width:150px;text-align:right">Después del anterior</span>{/if}
+    {:else}<span class="muted" style="font-size: var(--text-sm);width:150px;text-align:right">Después del anterior</span>{/if}
   </div>
 {/snippet}
 
@@ -88,10 +88,10 @@
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
 <section class="kpis">
-  <Kpi icon="alert" tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}"
+  <Kpi tone="bad" label="Vencido" cents={-sum(overdue.filter(u => u.amount < 0))} note="{overdue.length} pago{overdue.length === 1 ? '' : 's'}"
     onclick={overdue.length ? () => scrollTo("vencidos") : undefined} hint="Ver los pagos vencidos" />
-  <Kpi icon="clock" tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} onclick={() => scrollTo("esta-semana")} hint="Ver lo que viene" />
-  <Kpi icon="wallet" tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
+  <Kpi tone="warn" label="Por pagar en 30 días" cents={-sum(items.filter(u => u.amount < 0))} onclick={() => scrollTo("esta-semana")} hint="Ver lo que viene" />
+  <Kpi tone="ok" label="Saldo proyectado a fin de mes" cents={endOfMonth} />
 </section>
 {#if overdue.length}{@render section("Vencidos", overdue, "")}{/if}
 {@render section("Esta semana", week, "Nada esta semana.")}

@@ -8,13 +8,14 @@
   const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
   const ok = async (check, message) => { let pass = false; for (let i = 0; i < 60 && !(pass = !!(await check())); i++) await wait(100); say(pass, message()); };
   const close = async () => { $('dialog[open]')?.close(); await wait(300); };
-  const qa = window.__finanzas; qa.capture = true; // right-click menus are recorded instead of shown
+  let qa; // window.__finanzas appears once the app mounts
   const rightClick = el => { qa.lastMenu = null; el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); };
   const menu = () => (qa.lastMenu ?? []).map(x => x ? x[0] : '—');
   const pick = label => qa.lastMenu.find(x => x && x[0] === label)[1]();
   const options = () => $$('dialog.palette [role="option"]');
   try {
     await wait(1200);
+    qa = window.__finanzas; qa.capture = true; // right-click menus are recorded instead of shown
 
     // Próximos: name, right-click, card, account link.
     location.hash = 'proximos'; await wait(1200);

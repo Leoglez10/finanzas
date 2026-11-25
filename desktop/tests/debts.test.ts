@@ -1,7 +1,7 @@
 // Run: pnpm --dir desktop test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { advice, cardForm, debtCandidates, looksLikeCard, cardTerms, emptyCardForm, missingText, parsePercent } from "../src/lib/debts.ts";
+import { advice, cardForm, debtCandidates, looksLikeCard, cardTerms, emptyCardForm, missingText, parsePercent, termsLine } from "../src/lib/debts.ts";
 import type { DebtView } from "../src/lib/api.ts";
 
 const debt = (over: Partial<DebtView>): DebtView => ({ accountId: 1, name: "Visa", isCard: true, terms: null, debt: 0, available: null, utilization: null, lastCut: null, nextCut: null, dueDate: null, overdue: false, statement: null, toAvoidInterest: null, minimum: null, interestIfMinimum: null, installments: [], missing: [], ...over });
@@ -49,4 +49,11 @@ test("accounts in debt or named like a card suggest the Deudas page", () => {
 
 test("card-like names are recognized for the Configurar tarjeta button", () => {
   assert.deepEqual(["Nu Leo Credito", "Cartera", "Visa", "Ahorro"].map(looksLikeCard), [true, false, true, false]);
+});
+
+test("the terms line lists only the card data that is set", () => {
+  assert.equal(termsLine({ creditLimit: 1_000_000, cutDay: 12, dueDay: 2, annualRate: 4550, minPayment: 500 }), "Tasa 45.5% · Corte día 12 · Pago día 2 · Mínimo 5% · Límite $10,000.00");
+  assert.equal(termsLine({ creditLimit: null, cutDay: 20, dueDay: null, annualRate: null, minPayment: null }), "Corte día 20");
+  assert.equal(termsLine({ creditLimit: null, cutDay: null, dueDay: null, annualRate: 0, minPayment: null }), "Tasa 0%");
+  assert.equal(termsLine(null), "");
 });

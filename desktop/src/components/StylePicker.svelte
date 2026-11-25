@@ -21,7 +21,7 @@
 
 <style>
   .icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 6px; }
-  .icons button { height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+  .icons button { height: 38px; border-radius: var(--r-panel); border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
   .icons button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
   .colors { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .colors button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); background: var(--sw); cursor: pointer; box-shadow: 0 0 0 1px var(--border); }

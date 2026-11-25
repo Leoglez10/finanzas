@@ -20,6 +20,19 @@ export const cardForm = (t: CardTerms | null): CardForm => ({
   rate: percentText(t?.annualRate ?? null), minPayment: percentText(t?.minPayment ?? null),
 });
 
+/** One line with the card data that is set, for the Deudas card ("Tasa 45.5% · Corte día 12 · …"). */
+export function termsLine(t: CardTerms | null): string {
+  if (!t) return "";
+  const parts = [
+    t.annualRate !== null ? `Tasa ${t.annualRate / 100}%` : "",
+    t.cutDay ? `Corte día ${t.cutDay}` : "",
+    t.dueDay ? `Pago día ${t.dueDay}` : "",
+    t.minPayment !== null ? `Mínimo ${t.minPayment / 100}%` : "",
+    t.creditLimit ? `Límite ${money(t.creditLimit)}` : "",
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
 /** Every field is optional: empty ones stay null. Returns an error text for the first invalid one. */
 export function cardTerms(f: CardForm): CardTerms | string {
   const limit = f.limit.trim() ? parseCents(f.limit) : null;

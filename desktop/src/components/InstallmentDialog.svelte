@@ -55,7 +55,7 @@
         <div class="field">Fecha de compra<DatePicker bind:value={start} label="Fecha de compra" /></div>
         <label class="field"><span>Tasa anual <span class="opt">· vacía si es sin intereses</span></span><input class="input num" bind:value={rate} inputmode="decimal" placeholder="0 %" /></label>
       </div>
-      {#if preview}<p class="muted" style="font-size:13px">Sin intereses: {preview} al mes.</p>{/if}
+      {#if preview}<p class="muted" style="font-size: var(--text-md)">Sin intereses: {preview} al mes.</p>{/if}
       {#if error}<p class="err" role="alert">{error}</p>{/if}
     </div>
     <div class="dlg-f"><button class="btn" type="button" onclick={() => dialog.close()}>Cancelar</button><button class="btn primary" value="save" disabled={saving}>Guardar</button></div>

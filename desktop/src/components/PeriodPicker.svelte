@@ -74,22 +74,22 @@
 
 <style>
   .period-btn { font-weight: 550; }
-  .period-pop { position: fixed; inset: auto; margin: 0; padding: 12px; gap: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: inherit; box-shadow: 0 12px 40px rgb(15 30 45 / .18); }
+  .period-pop { position: fixed; inset: auto; margin: 0; padding: 12px; gap: 12px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: var(--shadow-float); }
   .period-pop:popover-open { display: flex; }
   .presets { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding-right: 12px; border-right: 1px solid var(--border); }
-  .presets button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }
+  .presets button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: var(--r-control); cursor: pointer; font-size: var(--text-md); font-weight: 550; color: var(--muted); }
   .presets button:hover { background: var(--surface-2); color: inherit; }
   .presets button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
   .cal { width: 252px; }
   .cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .cal-h b { text-transform: capitalize; font-size: 14px; }
+  .cal-h b { text-transform: capitalize; font-size: var(--text-md); }
   .grid7 { display: grid; grid-template-columns: repeat(7, 1fr); }
-  .wd { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0; }
-  .day { aspect-ratio: 1; border: 0; background: none; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; border-radius: 8px; }
+  .wd { text-align: center; font-size: var(--text-sm); color: var(--muted); padding: 4px 0; }
+  .day { aspect-ratio: 1; border: 0; background: none; cursor: pointer; font-size: var(--text-md); font-variant-numeric: tabular-nums; border-radius: var(--r-control); }
   .day:hover { background: var(--surface-2); }
   .day.out { color: var(--muted); opacity: .55; }
   .day.today { font-weight: 700; color: var(--brand); }
   .day.in { background: var(--brand-soft); border-radius: 0; }
-  .day.edge { background: var(--brand); color: var(--brand-ink); border-radius: 8px; opacity: 1; }
-  .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+  .day.edge { background: var(--brand); color: var(--brand-ink); border-radius: var(--r-control); opacity: 1; }
+  .hint { margin: 8px 0 0; font-size: var(--text-sm); color: var(--muted); text-align: center; }
 </style>

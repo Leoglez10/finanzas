@@ -7,6 +7,7 @@ export const app = $state({
   version: "",
   error: null as string | null,
   accounts: [] as api.AccountOverview[],
+  cards: [] as api.DebtView[], // accounts set up as credit cards, so any screen can open their data
   overdue: 0,
   profiles: { active: "personal", list: [] } as api.Profiles,
   settings: null as api.Settings | null,
@@ -24,8 +25,8 @@ export function applyAppearance(settings: api.Settings) {
 }
 
 async function refreshAccounts() {
-  const [accounts, upcoming, profiles] = await Promise.all([api.accountsOverview(), api.upcoming(), api.profiles()]);
-  app.accounts = accounts; app.overdue = upcoming.filter(u => u.overdue).length; app.profiles = profiles;
+  const [accounts, upcoming, profiles, debts] = await Promise.all([api.accountsOverview(), api.upcoming(), api.profiles(), api.debts()]);
+  app.accounts = accounts; app.cards = debts.debts.filter(d => d.isCard); app.overdue = upcoming.filter(u => u.overdue).length; app.profiles = profiles;
 }
 async function tick() {
   try {

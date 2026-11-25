@@ -14,7 +14,7 @@
   import PeriodPicker from "../components/PeriodPicker.svelte";
   import Topbar from "../components/Topbar.svelte";
   import AccountBadge from "../components/AccountBadge.svelte";
-  import { openAccountStyle } from "../lib/dialogs.svelte";
+  import { openAccountStyle, openCard } from "../lib/dialogs.svelte";
 
   let { accountId = 0 }: { accountId?: number } = $props();
   // Filters live in the route: movimientos?desde=2026-11-01&hasta=2026-11-30&categoria=4 (mes=202611 still works).
@@ -38,6 +38,7 @@
   });
 
   let account = $derived(app.accounts.find(a => a.id === accountId));
+  let card = $derived(app.cards.find(c => c.accountId === accountId));
   let categories = $derived(groups.flatMap(g => g.categories));
   let categoryName = $derived(categories.find(c => c.id === categoryFilter)?.name);
   let visible = $derived.by(() => {
@@ -103,6 +104,7 @@
   {#snippet lead()}{#if account}<button class="badge-btn" title="Cambiar apariencia" aria-label="Cambiar apariencia de {account.name}" onclick={() => openAccountStyle(account!.id)}><AccountBadge {account} size={40} /></button>{/if}{/snippet}
   {#snippet actions()}
     {#if account}<button class="btn ghost" onclick={() => openAccountStyle(account!.id)}><Icon name="edit" />Apariencia</button>{/if}
+    {#if card}<button class="btn ghost" onclick={() => openCard(card!)}><Icon name="card" />Datos de la tarjeta</button>{/if}
     <button class="btn" onclick={() => runCommand("import")}><Icon name="upload" />Importar</button>
     <button class="btn" onclick={() => openEntry("ingreso", null, { accountId: accountId || null })}><Icon name="plus" />Ingreso</button>
     <button class="btn primary" onclick={() => openEntry("gasto", null, { accountId: accountId || null })}><Icon name="minus" />Gasto</button>
@@ -110,9 +112,9 @@
 </Topbar>
 
 <section class="kpis">
-  <Kpi icon="wallet" label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
-  <Kpi icon="up" tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
-  <Kpi icon="down" tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
+  <Kpi label={account ? "Saldo de la cuenta" : "Saldo total"} cents={balance} onclick={() => kind = "todos"} hint="Ver todos los movimientos" />
+  <Kpi tone="ok" label="Entradas" cents={inflow} onclick={() => kind = "ingresos"} hint="Ver solo las entradas" />
+  <Kpi tone="bad" label="Salidas" cents={outflow} onclick={() => kind = "gastos"} hint="Ver solo las salidas" />
 </section>
 
 <div class="toolbar">
@@ -124,7 +126,7 @@
   </div>
   <PeriodPicker {range} today={app.today} onchange={setRange} />
   {#if categoryFilter}<button class="chip brand" onclick={() => clearFilter("categoria")} aria-label="Quitar filtro de categoría">{categoryName ?? "Categoría"} <Icon name="x" /></button>{/if}
-  <span class="muted" style="margin-left:auto;font-size:13px">{visible.length} movimientos · doble clic en monto o categoría para editar</span>
+  <span class="muted" style="margin-left:auto;font-size: var(--text-md)">{visible.length} movimientos · doble clic en monto o categoría para editar</span>
 </div>
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
@@ -174,6 +176,6 @@
 </div>
 
 <style>
-  .badge-btn { all: unset; cursor: pointer; border-radius: 12px; }
+  .badge-btn { all: unset; cursor: pointer; border-radius: var(--r-panel); }
   .badge-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 </style>

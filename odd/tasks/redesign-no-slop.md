@@ -1,11 +1,11 @@
 Objective: remove the "AI-made" look step by step, toward an OpenCode/Hex-like design that looks the same on every platform, keeping Tauri + Svelte.
-Branch: feat/redesign-no-slop · Delivery: ask-on-risk, one small PR per task with before/after screenshots · Runner: `pnpm --dir desktop test` + `pnpm --dir desktop check`; QA scripts via `desktop/qa/run.sh`
+Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one final PR · Runner: `pnpm --dir desktop test` + `pnpm --dir desktop check`; QA scripts via `desktop/qa/run.sh`
 
 ## Specs
 
 - S1 Stack: "sin cambiar el lenguaje, manteniendo el tauri que tenemos" — stay on Tauri + Svelte. Rune and GPUI were evaluated and rejected (Rune is pre-release, macOS-first and built for Anomaly's own products; GPUI is pre-1.0; both mean rewriting the UI; the app already went Tauri → Rune → Tauri). OpenCode Desktop itself is Electron, so its look comes from design, not the framework.
 - S2 Direction: "no quiero que sea tan nativa porque la quiero en muchas plataformas, por eso me vot mas a un opencode, o una app asi como Hex o de esas de Anomaly" — same pixels on every platform: bundled fonts instead of system-ui, one token-driven theme in light and dark.
-- S3 Pace: "quiero que avancemos de poqiuoto en poquito" — one task per PR; each PR shows before/after screenshots of the affected screens in light and dark.
+- S3 Pace: "quiero que avancemos de poqiuoto en poquito" — one task per commit; a single final PR for the whole redesign ("eso del pr quitaklo del plan, haremos un pr final solamente").
 - S4 Remove AI tells: "como se puede quitar el ia slop" — no glassmorphism/backdrop blur, no ALL-CAPS tracked labels (sentence case), no ✨ sparkle icon, no marketing tagline under the logo, no icon-in-tinted-square stat cards, no pills everywhere, no decorative shadows, no decorative motion.
 - S5 Design rules written down (from the research): colors only through named theme roles, never literals; 2 radii (6px controls, 10px panels); 4px spacing scale; 4 text sizes; a monospace face for amounts and small captions; accent (primary) fill for at most one main action per screen; shadows only on floating layers.
 
@@ -20,7 +20,7 @@ Branch: feat/redesign-no-slop · Delivery: ask-on-risk, one small PR per task wi
 - [ ] T6 Metrics as a strip: Saldo / Entradas / Salidas as large numbers without icon tiles — S4 — inline
 - [ ] T7 Components one by one: sidebar → tables → dialogs → ⌘K → charts — S4, S5 — inline
 - [ ] T8 Screen by screen: Resumen → Movimientos → Presupuesto → Próximos → Deudas → Deseos → Ajustes — S4, S5 — inline
-- [ ] T9 Visual review harness: QA script that captures every screen in light and dark for before/after comparison — S3 — inline
+- [ ] T9 Visual review harness: QA script that captures every screen in light and dark for comparison — S3 — inline
 
 ## Log
 
@@ -31,3 +31,4 @@ Branch: feat/redesign-no-slop · Delivery: ask-on-risk, one small PR per task wi
 - L5 Audit of the current app: system font, no gradients (good); `--glass` + backdrop-filter in 3 places, 5 uppercase rules, 11 distinct radii, 8 pill radii, KPI cards with icon tiles, logo tagline, sparkle icon on updates.
 - L6 Next: T0 on branch feat/redesign-no-slop, then T1.
 - L7 (2026-11-25) "pudemos empezar el rediseño". T0 shipped in PR #25. T1 done: desktop/DESIGN.md + new tokens (--r-control/--r-panel, --space-*, --text-*, --font-mono, --shadow-float) added unused, so no visible change; check 0 errors, tests pass. Branch stacked on fix/schedule-dates. Next: T2.
+- L8 (2026-11-25) "eso del pr quitaklo del plan, haremos un pr final solamente" — dropped one-PR-per-task; delivery is now single-pr with one commit per task.

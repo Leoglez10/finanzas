@@ -223,13 +223,13 @@
       <Money cents={free} />
       <p class="note">Después de pagar lo programado · {pct(free).toFixed(0)}% de tus ingresos</p>
       <div class="flow" role="img" aria-label="Gastado {pct(spent).toFixed(0)}%, por pagar {pct(pending).toFixed(0)}%, libre {pct(free).toFixed(0)}%">
-        <span style="width:{pct(spent)}%;background:#fff"></span><span style="width:{pct(pending)}%;background:rgb(255 255 255 / .55)"></span><span style="width:{pct(free)}%;background:#7CF0C0"></span>
+        <span style="width:{pct(spent)}%;background:var(--expense)"></span><span style="width:{pct(pending)}%;background:var(--warn)"></span><span style="width:{pct(free)}%;background:var(--income)"></span>
       </div>
       <div class="legend">
-        <div><p><i style="background:rgb(255 255 255 / .3)"></i>Ingresos</p><b>{money(income)}</b></div>
-        <div><p><i style="background:#fff"></i>Gastado</p><b>{money(spent)}</b></div>
-        <div><p><i style="background:rgb(255 255 255 / .55)"></i>Por pagar</p><b>{money(pending)}</b></div>
-        <div><p><i style="background:#7CF0C0"></i>Libre</p><b>{money(free)}</b></div>
+        <div><p><i style="background:var(--muted)"></i>Ingresos</p><b class="num">{money(income)}</b></div>
+        <div><p><i style="background:var(--expense)"></i>Gastado</p><b class="num">{money(spent)}</b></div>
+        <div><p><i style="background:var(--warn)"></i>Por pagar</p><b class="num">{money(pending)}</b></div>
+        <div><p><i style="background:var(--income)"></i>Libre</p><b class="num">{money(free)}</b></div>
       </div>
     </article>
     {:else if id === "pagos"}

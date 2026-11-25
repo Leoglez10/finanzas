@@ -197,26 +197,26 @@ button.chip { cursor: pointer; }
 .kpi.link { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; width: 100%; background: var(--surface); padding: var(--space-3) var(--space-4); text-decoration: none; }
 .kpi.link:hover { background: var(--surface-2); text-decoration: none; }
 .kpi.link:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
-.ic { width: 42px; height: 42px; border-radius: var(--r-panel); display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
-.ic.ok { background: var(--income-soft); color: var(--income); }
-.ic.bad { background: var(--expense-soft); color: var(--expense); }
-.ic.warn { background: var(--warn-soft); color: var(--warn); }
-.ic.violet { background: var(--violet-soft); color: var(--violet); }
-.ic.sm { width: 32px; height: 32px; border-radius: var(--r-panel); }
+.ic { width: 24px; height: 24px; display: grid; place-items: center; color: var(--brand); flex: none; } /* a bare icon in its role color, no tinted tile */
+.ic.ok { color: var(--income); }
+.ic.bad { color: var(--expense); }
+.ic.warn { color: var(--warn); }
+.ic.violet { color: var(--violet); }
+.ic.sm { width: 20px; height: 20px; }
 .kpi p { font-size: var(--text-md); color: var(--muted); }
 .kpi .note { font-size: var(--text-sm); }
 .kpi .money { font-size: var(--text-xl); color: var(--ink); }
 .kpi.ok .money { color: var(--income); } .kpi.bad .money { color: var(--expense); }
 
 /* Hero */
-.hero { background: var(--hero); color: #fff; border: 0; position: relative; overflow: hidden; }
-.hero .label { font-size: var(--text-md); opacity: .85; }
+.hero { position: relative; overflow: hidden; }
+.hero .label { font-size: var(--text-md); color: var(--muted); }
 .hero .money { font-size: 46px; margin: 4px 0 2px; }
-.hero .note { font-size: var(--text-md); opacity: .9; }
-.flow { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: rgb(255 255 255 / .18); margin: 18px 0 14px; gap: 2px; }
+.hero .note { font-size: var(--text-md); color: var(--muted); }
+.flow { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); margin: 18px 0 14px; gap: 2px; }
 .flow span { display: block; }
 .legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; position: relative; z-index: 1; }
-.legend p { font-size: var(--text-sm); opacity: .8; display: flex; align-items: center; gap: 6px; }
+.legend p { font-size: var(--text-sm); color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .legend p i { width: 8px; height: 8px; border-radius: 50%; }
 .legend b { font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
 

@@ -68,10 +68,10 @@
       <p class="note">{view.toBudget >= 0 ? "Dale un destino a cada peso: escribe cuánto va a cada categoría." : "Tus categorías suman más que el dinero disponible. Baja alguna."}</p>
       {#if view.uncategorizedIncome}<p class="note" style="margin-top:6px">Hay {money(view.uncategorizedIncome)} de ingresos sin categoría este mes.</p>{/if}
       <div style="display:flex;gap:8px;margin-top:18px;position:relative;z-index:1">
-        <button class="btn" style="background:#fff;color:var(--hero);border:0" onclick={copyPrevious}>Copiar de {previousName}</button>
+        <button class="btn" onclick={copyPrevious}>Copiar de {previousName}</button>
       </div>
     </article>
-    <div class="grid" style="gap:16px">
+    <div class="kpis" style="grid-template-columns:1fr">
       <Kpi label="Asignado" cents={view.assigned} />
       <Kpi tone="bad" label="Gastado" cents={spent} note={view.assigned ? `${(spent / view.assigned * 100).toFixed(0)}% de lo asignado` : ""} />
     </div>

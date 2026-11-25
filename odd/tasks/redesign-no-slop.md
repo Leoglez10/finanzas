@@ -13,7 +13,7 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 
 - [x] T0 Ship pending work (link underline on hover; collapsible sidebar ⌘S) — S3 — inline — 915f0e7, 9922ceb (PR #25)
 - [x] T1 `DESIGN.md` + central theme tokens (color roles, radii, spacing, type scale, banned list); no visible change — S2, S5 — inline
-- [ ] T2 Quick cleanup: glass, uppercase labels, ✨, logo tagline, the 11 radii down to 2 — S4, S5 — inline
+- [x] T2 Quick cleanup: glass, uppercase labels, ✨, logo tagline, the 11 radii down to 2 — S4, S5 — inline — 0c8607f
 - [ ] T3 Bundled fonts: one UI face + one monospace for amounts and captions, same on Mac/Windows/Linux — S2, S5 — inline
 - [ ] T4 One accent action per screen (e.g. account header: Gasto primary, the rest secondary) — S5 — inline
 - [ ] T5 Flatter and denser: fewer shadowed cards, sections divided by lines, compact tables, shadows only on floating layers — S4, S5 — inline
@@ -32,3 +32,4 @@ Branch: feat/redesign-no-slop · Delivery: single-pr, one commit per task, one f
 - L6 Next: T0 on branch feat/redesign-no-slop, then T1.
 - L7 (2026-11-25) "pudemos empezar el rediseño". T0 shipped in PR #25. T1 done: desktop/DESIGN.md + new tokens (--r-control/--r-panel, --space-*, --text-*, --font-mono, --shadow-float) added unused, so no visible change; check 0 errors, tests pass. Branch stacked on fix/schedule-dates. Next: T2.
 - L8 (2026-11-25) "eso del pr quitaklo del plan, haremos un pr final solamente" — dropped one-PR-per-task; delivery is now single-pr with one commit per task.
+- L9 (2026-11-25) "sí, sigue con T2". T2 done (0c8607f): glass + backdrop blur removed (popover, cmdk, update, notif, dialog backdrop) → --surface + --shadow-float; uppercase tracked labels → sentence case (sidebar sections, table heads, budget head, date caption, Deudas groups); sparkle icon removed from sprite (updates → down, Agentes IA → bolt, Deudas tips → check); logo tagline removed; radii collapsed to --r-control/--r-panel (--radius/--radius-sm/--glass tokens deleted; tiny swatches → 50%; chips and counts no longer pills; switch and progress tracks keep round ends). check 0 errors, 60 tests pass, qa sidebar.js + deudas.js PASS, screenshot reviewed. Next: T3 fonts.

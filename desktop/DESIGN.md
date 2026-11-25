@@ -17,7 +17,8 @@ are migrated screen by screen (see `odd/tasks/redesign-no-slop.md`).
 ## Shape
 
 - Two radii: `--r-control` (6px) for buttons, inputs, chips, rows; `--r-panel` (10px)
-  for panels, dialogs, popovers. Circles (`50%`) only for avatars and dots.
+  for panels, dialogs, popovers. Circles (`50%`) only for avatars and dots;
+  fully round ends (`99px`) only for switches and progress tracks.
 - Spacing on a 4px grid: `--space-1` 4 · `--space-2` 8 · `--space-3` 12 ·
   `--space-4` 16 · `--space-6` 24 · `--space-8` 32.
 - Sections are divided by a 1px `--border` line, not by stacking shadowed cards.

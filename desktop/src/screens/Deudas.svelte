@@ -96,7 +96,7 @@
           <div class="plans-h"><h3>Compras a meses</h3><button class="btn sm ghost" onclick={() => openInstallment(d.accountId)}><Icon name="plus" />Agregar</button></div>
           {#each d.installments as p (p.installment.id)}
             <div class="row">
-              <div class="grow"><p class="title">{p.installment.name}</p>
+              <div class="grow"><p class="title"><button class="edit-name" title="Editar compra a meses" onclick={() => openInstallment(d.accountId, p.installment)}>{p.installment.name}</button></p>
                 <p class="meta">{money(p.monthly)} al mes · {p.left ? `faltan ${p.left} de ${p.installment.months}` : "pagada"}{p.installment.annualRate ? ` · ${p.installment.annualRate / 100}% anual` : " · sin intereses"}</p>
                 <div class="bar" style="margin-top:6px"><span style="width:{p.billed / p.installment.months * 100}%"></span></div></div>
               <b class="num">{money(p.remaining)}</b>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as api from "../lib/api";
   import { app, go, updateSettings } from "../lib/app.svelte";
-  import { openAccount, openEntry } from "../lib/dialogs.svelte";
+  import { openAccount, openEntry, openSchedule, openWish } from "../lib/dialogs.svelte";
   import { money, monthKey, monthTitle, monthShort, shiftMonth, change, categoryColor, parseDay, daysBetween, dayNumber, dayMonth, monthDate, isoDay, monthSpan } from "../lib/format";
   import Icon from "../components/Icon.svelte";
   import AccountBadge from "../components/AccountBadge.svelte";
@@ -240,7 +240,7 @@
           {@const d = parseDay(u.date)}{@const days = daysBetween(app.today, d)}
           <div class="row">
             <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
-            <div class="grow"><p class="title">{u.name}</p>
+            <div class="grow"><p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => api.schedules().then(list => openSchedule(list.find(v => v.schedule.id === u.scheduleId) ?? null))}>{u.name}</button></p>
               <p class="meta">{#if u.overdue}<span class="chip bad">Vencido hace {-days} d</span>{:else if days === 0}<span class="chip warn">Hoy</span>{:else}en {days} días{/if}{#if u.autoPost}{" · automático"}{/if}</p></div>
             <b class="num" class:pos={u.amount > 0}>{money(u.amount, true)}</b>
           </div>
@@ -309,7 +309,7 @@
           {#each o.recentEntries as r (r.id)}
             <div class="row">
               <span class="dot" style="width:10px;height:10px;border-radius:50%;background:{categoryColor(r.categoryId)}"></span>
-              <div class="grow"><p class="title">{r.payeeName ?? "Sin comercio"}</p><p class="meta">{r.categoryName ?? "Sin categoría"} · {dayNumber(parseDay(r.date))} {dayMonth(parseDay(r.date))}</p></div>
+              <div class="grow"><p class="title"><button class="edit-name" title="Editar movimiento" onclick={() => openEntry(r.amount < 0 ? "gasto" : "ingreso", r)}>{r.payeeName ?? "Sin comercio"}</button></p><p class="meta">{r.categoryName ?? "Sin categoría"} · {dayNumber(parseDay(r.date))} {dayMonth(parseDay(r.date))}</p></div>
               <b class="num" class:pos={r.amount > 0}>{money(r.amount, true)}</b>
             </div>
           {:else}<p class="muted">Aún no hay movimientos.</p>{/each}
@@ -351,10 +351,10 @@
       <article class="card">
         <div class="card-h"><h2>Deseos y metas</h2><button class="link" onclick={() => go("deseos")}>Ver todos</button></div>
         <div class="list">
-          {#each data.wishes.slice(0, 5) as { wish, plan } (wish.id)}
+          {#each data.wishes.slice(0, 5) as { wish, plan, items } (wish.id)}
             {@const share = wish.price > 0 ? Math.min(100, wish.reserved / wish.price * 100) : 0}
             <div class="row" style="display:grid;gap:6px">
-              <div style="display:flex;justify-content:space-between;gap:8px"><b style="display:inline-flex;align-items:center;gap:6px"><Icon name={kindOf(wish.kind).icon} />{wish.name}</b><span class="muted num">{money(wish.reserved)} de {money(wish.price)}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px"><b style="display:inline-flex;align-items:center;gap:6px"><Icon name={kindOf(wish.kind).icon} /><button class="edit-name" title="Editar meta" onclick={() => openWish(wish, items)}>{wish.name}</button></b><span class="muted num">{money(wish.reserved)} de {money(wish.price)}</span></div>
               <div class="bar" role="img" aria-label="{wish.name}: {share.toFixed(0)}% apartado"><span style="width:{share}%;--c:var(--violet)"></span></div>
               {#if plan}<p class="meta" style="margin:0" class:neg={plan.overdue}>{planText(plan)}</p>{/if}
             </div>

@@ -53,7 +53,7 @@
   <div class="row">
     <div class="date" class:over={u.overdue}><b>{dayNumber(d)}</b><small>{dayMonth(d)}</small></div>
     <div class="grow">
-      <p class="title">{u.name}</p>
+      <p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(schedules.find(v => v.schedule.id === u.scheduleId) ?? null)}>{u.name}</button></p>
       <p class="meta">{u.account ?? "Sin cuenta"} · {#if u.overdue}<span class="chip bad">Vencido hace {-n} d</span>{:else if n === 0}<span class="chip warn">Hoy</span>{:else}en {n} días{/if}{#if u.autoPost}{" · se registra solo"}{/if}</p>
     </div>
     <div style="display:grid;justify-items:end;gap:2px">
@@ -94,7 +94,7 @@
     {#each schedules as v (v.schedule.id)}
       <div class="row">
         <span class="merchant" style="--c:{categoryColor(v.schedule.categoryId)}"><Icon name="repeat" /></span>
-        <div class="grow"><p class="title">{v.schedule.name}</p><p class="meta">{v.label}{v.account ? ` · ${v.account}` : ""}</p></div>
+        <div class="grow"><p class="title"><button class="edit-name" title="Editar pago programado" onclick={() => openSchedule(v)}>{v.schedule.name}</button></p><p class="meta">{v.label}{v.account ? ` · ${v.account}` : ""}</p></div>
         <b class="num" class:pos={v.schedule.amount > 0}>{money(v.schedule.amount, true)}</b>
         <button class="btn icon sm ghost" aria-label="Editar {v.schedule.name}" onclick={() => openSchedule(v)}><Icon name="edit" /></button>
         <button class="btn icon sm ghost" aria-label="Eliminar {v.schedule.name}" disabled={busy} onclick={() => remove(v)}><Icon name="trash" /></button>

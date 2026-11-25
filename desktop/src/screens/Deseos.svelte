@@ -98,7 +98,7 @@
     {@const w = v.wish}{@const k = kindOf(w.kind)}{@const pct = Math.min(100, (w.reserved + w.paid) / w.price * 100)}{@const [tone, text] = verdict(v)}
     <article class="card wish">
       <div class="wish-top"><div class="ic violet" title={k.label}><Icon name={k.icon} /></div>
-        <div style="flex:1;min-width:0"><h3>{w.name}</h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
+        <div style="flex:1;min-width:0"><h3><button class="edit-name" title="Editar meta" onclick={() => openWish(w, v.items)}>{w.name}</button></h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
       <Money cents={w.price} class="price" />
       {#if w.archived}
         {#if w.achievedDate}<span class="chip ok"><Icon name="star" />Logro · {k.done.toLowerCase()} el {shortDay(w.achievedDate)} {w.achievedDate.slice(0, 4)}</span>

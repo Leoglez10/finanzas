@@ -110,7 +110,7 @@
       </article>
       <article class="card">
         <div class="card-h"><h2>Tus perfiles</h2></div>
-        <p class="muted" style="margin:-6px 0 8px;font-size:13px">Cada perfil tiene sus propias cuentas, presupuesto y deseos.</p>
+        <p class="muted" style="margin:-6px 0 8px;font-size: var(--text-md)">Cada perfil tiene sus propias cuentas, presupuesto y deseos.</p>
         <div class="list">
           {#each app.profiles.list as p, i (p.slug)}
             <div class="row">
@@ -157,7 +157,7 @@
       <article class="card">
         <div class="card-h"><h2>Deudas</h2></div>
         {@render toggle("debts_page", "Mostrar la página Deudas", "Junta tus tarjetas de crédito, préstamos y compras a meses, con cuánto pagar para no generar intereses.")}
-        {#if s.debts_page}<p class="muted" style="font-size:13px">Ya aparece en la barra lateral. <button class="link" onclick={() => go("deudas")}>Abrir Deudas</button></p>{/if}
+        {#if s.debts_page}<p class="muted" style="font-size: var(--text-md)">Ya aparece en la barra lateral. <button class="link" onclick={() => go("deudas")}>Abrir Deudas</button></p>{/if}
       </article>
     {:else if tab[0] === "avisos"}
       <article class="card">
@@ -166,7 +166,7 @@
         {@render stepper("days", "Días de anticipación", `${s.days} ${s.days === 1 ? "día" : "días"}`, 0, 14)}
         {@render stepper("hour", "Hora del aviso", `${String(s.hour).padStart(2, "0")}:00`, 0, 23)}
         <div class="setting"><div class="grow"><b>Probar</b><p>Así se verá el aviso.</p></div><button class="btn sm" onclick={() => api.testNotification().catch(e => toast(String(e)))}>Enviar aviso de prueba</button></div>
-        <p class="muted" style="font-size:13px;padding-top:6px">Los pagos marcados como “Registrar automáticamente” se anotan solos en su fecha, al abrir la app y cada hora.</p>
+        <p class="muted" style="font-size: var(--text-md);padding-top:6px">Los pagos marcados como “Registrar automáticamente” se anotan solos en su fecha, al abrir la app y cada hora.</p>
       </article>
     {:else if tab[0] === "datos"}
       <article class="card">
@@ -178,23 +178,23 @@
           <button class="btn" disabled={importable !== null && !importable[0]} onclick={() => runImport("actual")}><Icon name="upload" />Desde Actual Budget…</button>
           {#if importable?.[1]}<button class="btn" disabled={!importable[0]} onclick={() => runImport("legacy")}>Desde la app anterior de Mac</button>{/if}
         </div>
-        {#if importable && !importable[0]}<p class="muted" style="font-size:13px;margin-top:10px">Este perfil ya tiene datos. Crea un perfil nuevo para importar.</p>{/if}
+        {#if importable && !importable[0]}<p class="muted" style="font-size: var(--text-md);margin-top:10px">Este perfil ya tiene datos. Crea un perfil nuevo para importar.</p>{/if}
       </article>
       <article class="card">
         <div class="card-h"><h2>Base de datos</h2></div>
-        <p class="muted" style="font-size:13px">Tus datos viven aquí, fuera de la app: reinstalar o actualizar no los toca. Para un respaldo, copia este archivo con la app cerrada.</p>
-        <pre style="margin:10px 0 0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{dbPath}</pre>
+        <p class="muted" style="font-size: var(--text-md)">Tus datos viven aquí, fuera de la app: reinstalar o actualizar no los toca. Para un respaldo, copia este archivo con la app cerrada.</p>
+        <pre style="margin:10px 0 0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size: var(--text-sm)">{dbPath}</pre>
       </article>
     {:else if tab[0] === "agentes"}
       <article class="card">
         <div class="card-h"><h2>Agentes MCP</h2><button class="link" onclick={() => api.agents().then(a => agentList = a)}>Actualizar</button></div>
-        <p class="muted" style="font-size:13px;margin-bottom:6px">Conecta un agente de IA para consultar y registrar tus finanzas. El punto se pone verde mientras el agente tiene Finanzas abierto.</p>
+        <p class="muted" style="font-size: var(--text-md);margin-bottom:6px">Conecta un agente de IA para consultar y registrar tus finanzas. El punto se pone verde mientras el agente tiene Finanzas abierto.</p>
         {#each agentList as a (a.name)}
           <div class="setting" style="display:grid;gap:8px">
-            <div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:{a.connected ? 'var(--income)' : 'var(--border)'}"></span><b>{a.name}</b><span class="muted" style="font-size:13px">{a.connected ? "Conectado" : "Sin conexión"}</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:{a.connected ? 'var(--income)' : 'var(--border)'}"></span><b>{a.name}</b><span class="muted" style="font-size: var(--text-md)">{a.connected ? "Conectado" : "Sin conexión"}</span></div>
             {#if !a.connected}
               <p>{a.instructions}</p>
-              <pre style="margin:0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{a.config}</pre>
+              <pre style="margin:0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size: var(--text-sm)">{a.config}</pre>
               <div><button class="btn sm" onclick={() => copy(a)}>{copied === a.name ? "Copiado" : "Copiar configuración"}</button></div>
             {/if}
           </div>
@@ -210,7 +210,7 @@
           {:else}<button class="btn sm" disabled={updates.status === "checking" || updates.status === "downloading"} onclick={() => checkUpdates()}>Buscar actualizaciones</button>{/if}
         </div>
         {#if updates.status === "error"}<p class="err" role="alert">{updates.error}</p>{/if}
-        {#if updates.notes && updates.status !== "none"}<p class="muted" style="font-size:13px;white-space:pre-line">{updates.notes}</p>{/if}
+        {#if updates.notes && updates.status !== "none"}<p class="muted" style="font-size: var(--text-md);white-space:pre-line">{updates.notes}</p>{/if}
         <label class="setting"><div class="grow"><b>Buscar actualizaciones al abrir</b><p>Se descargan solo cuando tú lo pides.</p></div><input type="checkbox" role="switch" class="switch" checked={s.auto_update} onchange={e => save({ auto_update: e.currentTarget.checked })} /></label>
       </article>
     {:else if tab[0] === "comentarios"}
@@ -248,7 +248,7 @@
   <form method="dialog">
     <div class="dlg-b" style="padding-top:22px">
       <div class="ic bad"><Icon name="trash" /></div>
-      <h2 id="del-title" style="font-size:18px">¿Eliminar el perfil {deleting?.label}?</h2>
+      <h2 id="del-title" style="font-size: var(--text-lg)">¿Eliminar el perfil {deleting?.label}?</h2>
       <p id="del-text" class="muted">Se borran sus cuentas, movimientos, presupuesto y deseos. Esto no se puede deshacer.</p>
     </div>
     <!-- svelte-ignore a11y_autofocus (the safe choice gets focus in a destructive confirmation) -->

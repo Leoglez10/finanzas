@@ -99,7 +99,7 @@
     {@const w = v.wish}{@const k = kindOf(w.kind)}{@const pct = Math.min(100, (w.reserved + w.paid) / w.price * 100)}{@const [tone, text] = verdict(v)}
     <article class="card wish" oncontextmenu={e => showMenu(e, [["Editar…", () => openWish(w, v.items)], null, !w.archived && ["Archivar", () => archive(w)]])}>
       <div class="wish-top"><div class="ic violet" title={k.label}><Icon name={k.icon} /></div>
-        <div style="flex:1;min-width:0"><h3><button class="edit-name" title="Editar meta" onclick={() => openWish(w, v.items)}>{w.name}</button></h3><p class="muted" style="font-size:13px">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
+        <div style="flex:1;min-width:0"><h3><button class="edit-name" title="Editar meta" onclick={() => openWish(w, v.items)}>{w.name}</button></h3><p class="muted" style="font-size: var(--text-md)">{k.label} · {categoryName(w.categoryId)}{w.notes ? ` · ${w.notes}` : ""}</p></div></div>
       <Money cents={w.price} class="price" />
       {#if w.archived}
         {#if w.achievedDate}<span class="chip ok"><Icon name="star" />Logro · {k.done.toLowerCase()} el {shortDay(w.achievedDate)} {w.achievedDate.slice(0, 4)}</span>
@@ -107,7 +107,7 @@
       {:else}
         <div style="display:grid;gap:6px">
           <div class="bar" style="--c:var(--violet)"><span style="width:{pct}%"></span></div>
-          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span class="muted">{w.paid ? `Pagado ${money(w.paid)} · ` : ""}Apartado {money(w.reserved)} de {money(w.price)}</span><b class="num">{pct.toFixed(0)}%</b></div>
+          <div style="display:flex;justify-content:space-between;font-size: var(--text-sm)"><span class="muted">{w.paid ? `Pagado ${money(w.paid)} · ` : ""}Apartado {money(w.reserved)} de {money(w.price)}</span><b class="num">{pct.toFixed(0)}%</b></div>
         </div>
         {#if v.items.length}
           <ul class="items" aria-label="Partidas de {w.name}">
@@ -153,23 +153,23 @@
     </article>
   {/each}
   {#if !showArchived}
-    <button class="card empty-add" onclick={() => openWish()}><Icon name="plus" /><b>Agregar una meta</b><span style="font-size:13px">Una compra, un viaje, una experiencia o un fondo</span></button>
+    <button class="card empty-add" onclick={() => openWish()}><Icon name="plus" /><b>Agregar una meta</b><span style="font-size: var(--text-md)">Una compra, un viaje, una experiencia o un fondo</span></button>
   {:else if !views.length}<p class="muted">No tienes metas archivadas.</p>{/if}
 </section>
 
 <style>
-  .plan { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 550; color: var(--brand); }
+  .plan { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-md); font-weight: 550; color: var(--brand); }
   .plan.late { color: var(--expense); }
-  .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+  .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-md); }
   .items li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
   .items label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-  .history summary { cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 550; }
-  .history ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12.5px; }
+  .history summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); font-weight: 550; }
+  .history ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: var(--text-sm); }
   .history li { display: flex; justify-content: space-between; }
   .spark { display: block; width: 100%; height: 40px; margin-top: 6px; }
   .spark polyline { fill: none; stroke: var(--violet); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-  .spent { color: var(--muted); font-size: 12px; }
+  .spent { color: var(--muted); font-size: var(--text-sm); }
   .over { color: var(--expense) !important; }
-  .spent-total { display: flex; justify-content: space-between; margin: 0; font-size: 12.5px; }
+  .spent-total { display: flex; justify-content: space-between; margin: 0; font-size: var(--text-sm); }
   .items .done { text-decoration: line-through; color: var(--muted); }
 </style>

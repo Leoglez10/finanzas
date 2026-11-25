@@ -71,7 +71,7 @@
     {#if canAct}
       <button class="btn sm" disabled={busy} onclick={() => register(u)}><Icon name="check" />Registrar</button>
       <button class="btn sm ghost" disabled={busy} onclick={() => skip(u)}>Saltar</button>
-    {:else}<span class="muted" style="font-size:12px;width:150px;text-align:right">Después del anterior</span>{/if}
+    {:else}<span class="muted" style="font-size: var(--text-sm);width:150px;text-align:right">Después del anterior</span>{/if}
   </div>
 {/snippet}
 

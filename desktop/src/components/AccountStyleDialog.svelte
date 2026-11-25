@@ -57,6 +57,6 @@
 </dialog>
 
 <style>
-  .preview { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+  .preview { display: flex; align-items: center; gap: 12px; font-size: var(--text-lg); }
   .img-row { display: flex; gap: 8px; margin-top: 6px; }
 </style>

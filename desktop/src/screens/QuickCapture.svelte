@@ -77,5 +77,5 @@
 
 <style>
   .quick-window { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
-  .quick-window .pal-input input { font-size: 22px; font-weight: 600; }
+  .quick-window .pal-input input { font-size: var(--text-xl); font-weight: 600; }
 </style>

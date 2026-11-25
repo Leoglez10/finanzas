@@ -73,16 +73,16 @@
   .month-pop { position: fixed; inset: auto; margin: 0; padding: 12px; gap: 12px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: var(--shadow-float); }
   .month-pop:popover-open { display: flex; }
   .presets { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding-right: 12px; border-right: 1px solid var(--border); }
-  .presets button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: var(--r-control); cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }
+  .presets button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: var(--r-control); cursor: pointer; font-size: var(--text-md); font-weight: 550; color: var(--muted); }
   .presets button:hover { background: var(--surface-2); color: inherit; }
   .presets button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
   .cal { width: 240px; }
   .cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 0; }
-  .m { height: 40px; border: 0; background: none; cursor: pointer; font-size: 13px; text-transform: capitalize; border-radius: var(--r-control); }
+  .m { height: 40px; border: 0; background: none; cursor: pointer; font-size: var(--text-md); text-transform: capitalize; border-radius: var(--r-control); }
   .m:hover { background: var(--surface-2); }
   .m.now { font-weight: 700; color: var(--brand); }
   .m.in { background: var(--brand-soft); border-radius: 0; }
   .m.edge { background: var(--brand); color: var(--brand-ink); border-radius: var(--r-control); }
-  .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+  .hint { margin: 8px 0 0; font-size: var(--text-sm); color: var(--muted); text-align: center; }
 </style>

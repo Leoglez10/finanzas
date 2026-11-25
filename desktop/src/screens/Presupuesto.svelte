@@ -77,7 +77,7 @@
     </div>
   </section>
 
-  <p class="muted" style="font-size:13px">Escribe cuánto asignas, o usa <b>+100</b>, <b>-50</b> o <b>550*2</b>. Enter para guardar.</p>
+  <p class="muted" style="font-size: var(--text-md)">Escribe cuánto asignas, o usa <b>+100</b>, <b>-50</b> o <b>550*2</b>. Enter para guardar.</p>
   <article class="card">
     <div class="budget-row head"><span>Categoría</span><span class="hide-narrow">Progreso</span><span style="text-align:right">Asignado</span><span class="hide-narrow" style="text-align:right">Gastado</span><span style="text-align:right">Disponible</span></div>
     {#each expenseGroups as g (g.id)}
@@ -109,5 +109,5 @@
       {/each}
     {/each}
   </article>
-  <p class="muted" style="font-size:13px">Disponible total en categorías: <b class="num">{money(available)}</b></p>
+  <p class="muted" style="font-size: var(--text-md)">Disponible total en categorías: <b class="num">{money(available)}</b></p>
 {/if}

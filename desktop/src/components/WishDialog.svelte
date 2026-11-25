@@ -128,12 +128,12 @@
         <div class="review">
           <div><span class="muted">{info.label}</span><b>{name.trim()}</b></div>
           {#if targetDate}<div><span class="muted">Para</span><span>{parseDay(targetDate).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}</span></div>{/if}
-          <div><span class="muted">{priceLabel} interpretado</span><b class="num" style="font-size:20px">{money(cents ?? 0)}</b></div>
+          <div><span class="muted">{priceLabel} interpretado</span><b class="num" style="font-size: var(--text-lg)">{money(cents ?? 0)}</b></div>
           <div><span class="muted">Categoría</span>{#if category}<span class="chip" style="--c:{categoryColor(category.id)}"><span class="dot"></span>{category.name}</span>{:else}<span class="muted">Sin categoría</span>{/if}</div>
           {#if rows.length}<div><span class="muted">Partidas</span><span>{rows.map((r, i) => `${r.name.trim()} ${money(rowCents[i] ?? 0)}`).join(" · ")}</span></div>{/if}
           {#if notes.trim()}<div><span class="muted">Nota</span><span>{notes.trim()}</span></div>{/if}
         </div>
-        <p class="muted" style="font-size:13px">¿El precio es correcto? Si no, regresa y corrígelo.</p>
+        <p class="muted" style="font-size: var(--text-md)">¿El precio es correcto? Si no, regresa y corrígelo.</p>
         {#if errors.save}<p class="err" role="alert">{errors.save}</p>{/if}
       {/if}
     </div>
@@ -147,7 +147,7 @@
 
 <style>
   .kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .kinds button { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface-2); cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }
+  .kinds button { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface-2); cursor: pointer; font-size: var(--text-md); font-weight: 550; color: var(--muted); }
   .kinds button:hover { color: inherit; }
   .kinds button[aria-checked="true"] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
   .kinds :global(.i) { width: 22px; height: 22px; }

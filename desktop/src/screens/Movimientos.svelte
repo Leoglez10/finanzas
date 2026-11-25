@@ -124,7 +124,7 @@
   </div>
   <PeriodPicker {range} today={app.today} onchange={setRange} />
   {#if categoryFilter}<button class="chip brand" onclick={() => clearFilter("categoria")} aria-label="Quitar filtro de categoría">{categoryName ?? "Categoría"} <Icon name="x" /></button>{/if}
-  <span class="muted" style="margin-left:auto;font-size:13px">{visible.length} movimientos · doble clic en monto o categoría para editar</span>
+  <span class="muted" style="margin-left:auto;font-size: var(--text-md)">{visible.length} movimientos · doble clic en monto o categoría para editar</span>
 </div>
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}

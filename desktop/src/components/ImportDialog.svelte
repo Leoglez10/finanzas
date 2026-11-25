@@ -140,7 +140,7 @@
               <label class="check"><input type="checkbox" bind:checked={mapping.flip} />Los gastos vienen en positivo</label>
             {/if}
           </div>
-          {#if mapping.dateAmbiguous}<p class="muted" style="font-size:12.5px;margin-top:8px">Todas las fechas sirven en los dos órdenes (por ejemplo 03/11). Confirma cuál usa tu banco.</p>{/if}
+          {#if mapping.dateAmbiguous}<p class="muted" style="font-size: var(--text-sm);margin-top:8px">Todas las fechas sirven en los dos órdenes (por ejemplo 03/11). Confirma cuál usa tu banco.</p>{/if}
         </details>
       {/if}
       {#if !rows.length}
@@ -170,7 +170,7 @@
             </tbody>
           </table>
         </div>
-        <p class="muted" style="font-size:12.5px">Los duplicados (mismo día, comercio y monto en esa cuenta) y las filas repetidas en el archivo quedan sin marcar; puedes marcarlas si son compras distintas. Los nombres del banco se limpian y el texto original queda en la nota. Las categorías se sugieren con tu historial. Las columnas que elijas se recuerdan para este banco.</p>
+        <p class="muted" style="font-size: var(--text-sm)">Los duplicados (mismo día, comercio y monto en esa cuenta) y las filas repetidas en el archivo quedan sin marcar; puedes marcarlas si son compras distintas. Los nombres del banco se limpian y el texto original queda en la nota. Las categorías se sugieren con tu historial. Las columnas que elijas se recuerdan para este banco.</p>
       {/if}
       {#if error}<p class="err" role="alert">{error}</p>{/if}
     </div>

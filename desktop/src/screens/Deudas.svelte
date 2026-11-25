@@ -134,21 +134,21 @@
   .tips { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
   .tips li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
   .group { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 4px -4px; }
-  .group h2 { font-size: 13px; color: var(--muted); margin: 0; }
+  .group h2 { font-size: var(--text-md); color: var(--muted); margin: 0; }
   .name { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
   .name:hover { color: var(--brand); }
   .name:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-control); }
   .debt { display: grid; gap: 10px; }
   .debt-h { display: flex; align-items: center; gap: 10px; }
-  .debt-h .name { font-size: 16px; margin-right: auto; }
+  .debt-h .name { font-size: var(--text-lg); margin-right: auto; }
   .owed { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .owed b { font-size: 26px; }
-  .small { font-size: 13px; margin: 0; }
-  .callout { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--warn-soft); color: var(--warn); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+  .owed b { font-size: var(--text-xl); }
+  .small { font-size: var(--text-md); margin: 0; }
+  .callout { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--warn-soft); color: var(--warn); font-size: var(--text-md); display: flex; gap: 6px; align-items: center; }
   .callout.bad { background: var(--expense-soft); color: var(--expense); }
   .callout.ok { background: var(--income-soft); color: var(--income); }
-  .note { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--brand-soft); color: var(--brand); font-size: 13px; }
+  .note { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--brand-soft); color: var(--brand); font-size: var(--text-md); }
   .plans { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 10px; }
   .plans-h { display: flex; justify-content: space-between; align-items: center; }
-  .plans h3 { font-size: 14px; margin: 0; }
+  .plans h3 { font-size: var(--text-md); margin: 0; }
 </style>

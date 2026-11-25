@@ -19,5 +19,5 @@
 
 <style>
   .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .card-note { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--brand-soft); color: var(--brand); font-size: 13px; }
+  .card-note { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--brand-soft); color: var(--brand); font-size: var(--text-md); }
 </style>

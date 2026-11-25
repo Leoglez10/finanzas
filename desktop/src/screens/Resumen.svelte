@@ -332,7 +332,7 @@
       <article class="card">
         <div class="card-h"><h2>Deudas</h2><button class="link" onclick={() => go("deudas")}>Ver todas</button></div>
         {#if data.debts.debts.length}
-          <p style="margin:0 0 8px"><span class="muted">Debes</span> <b class="num" style="font-size:20px">{money(data.debts.total)}</b>{#if data.debts.monthlyInstallments}<span class="muted"> · {money(data.debts.monthlyInstallments)} al mes a meses</span>{/if}</p>
+          <p style="margin:0 0 8px"><span class="muted">Debes</span> <b class="num" style="font-size: var(--text-lg)">{money(data.debts.total)}</b>{#if data.debts.monthlyInstallments}<span class="muted"> · {money(data.debts.monthlyInstallments)} al mes a meses</span>{/if}</p>
           <div class="list">
             {#each data.debts.debts.slice(0, 4) as d (d.accountId)}
               {@const pct = Math.min(100, Math.round((d.utilization ?? 0) * 100))}
@@ -382,7 +382,7 @@
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); z-index: 5; }
   .w :global(.size-preview) { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; pointer-events: none; border: 2px dashed var(--brand); border-radius: var(--r-panel); background: color-mix(in srgb, var(--brand) 10%, transparent); }
-  .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: var(--r-control); background: var(--brand); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
+  .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: var(--r-control); background: var(--brand); color: var(--brand-ink); font-size: var(--text-sm); font-weight: 600; }
   .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 var(--r-control) 0; cursor: ew-resize; touch-action: none; }
   .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--r-panel); background: var(--canvas); box-shadow: var(--shadow-float); animation: lift .18s ease-out; }
   .floating > :global(*) { height: 100%; }
@@ -394,5 +394,5 @@
   .editing { row-gap: 34px; padding-top: 14px; }
   .handle { cursor: grab; touch-action: none; }
   .dash-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--r-panel); background: var(--surface); }
-  .dash-tray .muted { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+  .dash-tray .muted { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-md); }
 </style>

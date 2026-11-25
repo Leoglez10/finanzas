@@ -11,7 +11,7 @@
   import Icon from "../components/Icon.svelte";
   import Topbar from "../components/Topbar.svelte";
 
-  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["deudas", "Deudas", "card"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "sparkle"], ["actualizaciones", "Actualizaciones", "sparkle"], ["comentarios", "Fallas y mejoras", "alert"], ["atajos", "Atajos", "command"]];
+  const TABS: [string, string, string][] = [["perfil", "Perfil", "wallet"], ["general", "General", "gear"], ["avisos", "Avisos", "bell"], ["deudas", "Deudas", "card"], ["datos", "Datos", "upload"], ["agentes", "Agentes IA", "bolt"], ["actualizaciones", "Actualizaciones", "down"], ["comentarios", "Fallas y mejoras", "alert"], ["atajos", "Atajos", "command"]];
   const PALETTES: [string, string, string][] = [["petroleo", "Petróleo", "El original"], ["bosque", "Bosque", "Verde oliva sobrio"], ["ciruela", "Ciruela", "Violeta profundo"], ["grafito", "Grafito", "Casi sin color"], ["arena", "Arena", "Cálido, tonos café"], ["sistema", "Sistema", "Acento de macOS"]];
   let tab = $derived(TABS.find(t => t[0] === app.route.split("/")[1]) ?? TABS[0]);
   let s = $derived(app.settings);
@@ -183,7 +183,7 @@
       <article class="card">
         <div class="card-h"><h2>Base de datos</h2></div>
         <p class="muted" style="font-size:13px">Tus datos viven aquí, fuera de la app: reinstalar o actualizar no los toca. Para un respaldo, copia este archivo con la app cerrada.</p>
-        <pre style="margin:10px 0 0;padding:12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{dbPath}</pre>
+        <pre style="margin:10px 0 0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{dbPath}</pre>
       </article>
     {:else if tab[0] === "agentes"}
       <article class="card">
@@ -194,7 +194,7 @@
             <div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:{a.connected ? 'var(--income)' : 'var(--border)'}"></span><b>{a.name}</b><span class="muted" style="font-size:13px">{a.connected ? "Conectado" : "Sin conexión"}</span></div>
             {#if !a.connected}
               <p>{a.instructions}</p>
-              <pre style="margin:0;padding:12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{a.config}</pre>
+              <pre style="margin:0;padding:12px;border-radius: var(--r-panel);background:var(--surface-2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:12.5px">{a.config}</pre>
               <div><button class="btn sm" onclick={() => copy(a)}>{copied === a.name ? "Copiado" : "Copiar configuración"}</button></div>
             {/if}
           </div>

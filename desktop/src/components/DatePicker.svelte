@@ -66,14 +66,14 @@
   .date-btn span::first-letter { text-transform: uppercase; }
   .date-btn.empty { color: var(--muted); }
   .date-btn :global(svg) { color: var(--muted); flex: none; }
-  .date-pop { position: fixed; inset: auto; margin: 0; padding: 12px; width: 272px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: inherit; box-shadow: 0 12px 40px rgb(0 0 0 / .22); }
+  .date-pop { position: fixed; inset: auto; margin: 0; padding: 12px; width: 272px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); color: inherit; box-shadow: 0 12px 40px rgb(0 0 0 / .22); }
   .date-pop:popover-open { animation: pop .14s ease-out; }
   .cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .cal-h b { font-size: 14px; }
   .cal-h b::first-letter { text-transform: uppercase; }
   .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
   .wd { text-align: center; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 0; }
-  .d { height: 34px; border: 0; background: none; border-radius: 8px; cursor: pointer; font-size: 13px; color: inherit; }
+  .d { height: 34px; border: 0; background: none; border-radius: var(--r-control); cursor: pointer; font-size: 13px; color: inherit; }
   .d:hover { background: var(--surface-2); }
   .d.out { color: var(--muted); opacity: .55; }
   .d.today { font-weight: 700; color: var(--brand); }

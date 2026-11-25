@@ -174,6 +174,6 @@
 </div>
 
 <style>
-  .badge-btn { all: unset; cursor: pointer; border-radius: 12px; }
+  .badge-btn { all: unset; cursor: pointer; border-radius: var(--r-panel); }
   .badge-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 </style>

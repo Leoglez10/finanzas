@@ -30,7 +30,7 @@
 </script>
 
 <nav class="sidebar" class:collapsed aria-label="Navegación principal">
-  <div class="brand" data-tauri-drag-region><div class="logo"><Icon name="chart" /></div><div class="brand-text"><b>Finanzas</b><span>Tu dinero, en orden</span></div>
+  <div class="brand" data-tauri-drag-region><div class="logo"><Icon name="chart" /></div><div class="brand-text"><b>Finanzas</b></div>
     {#if !narrow}<button class="side-toggle" type="button" onclick={toggleSidebar} aria-expanded={!collapsed}
       title="{collapsed ? 'Mostrar' : 'Ocultar'} la barra lateral ({keyLabel('⌘S')})" aria-label="{collapsed ? 'Mostrar' : 'Ocultar'} la barra lateral"><Icon name="sidebar" /></button>{/if}
   </div>
@@ -58,11 +58,11 @@
   <div class="spacer"></div>
   {#if collapsed && (updates.status === "available" || updates.status === "ready")}
     <button class="nav upd" type="button" title={updates.status === "ready" ? "Reiniciar Finanzas para usar la actualización" : `Instalar Finanzas ${updates.version}`}
-      onclick={updates.status === "ready" ? restart : installUpdate}><Icon name="sparkle" /><span>{updates.status === "ready" ? "Reiniciar Finanzas" : "Instalar actualización"}</span></button>
+      onclick={updates.status === "ready" ? restart : installUpdate}><Icon name="down" /><span>{updates.status === "ready" ? "Reiniciar Finanzas" : "Instalar actualización"}</span></button>
   {:else if !collapsed && (updates.status === "available" || updates.status === "downloading" || updates.status === "ready")}
     <div class="update" role="status">
       {#if updates.status === "available"}
-        <b><Icon name="sparkle" />Finanzas {updates.version}</b><span class="muted">Hay una versión nueva.</span>
+        <b><Icon name="down" />Finanzas {updates.version}</b><span class="muted">Hay una versión nueva.</span>
         <button class="btn sm primary" onclick={installUpdate}>Instalar actualización</button>
       {:else if updates.status === "downloading"}
         <b>Descargando {updates.version}…</b><div class="bar"><span style="width:{Math.round(updates.progress * 100)}%;animation:none"></span></div>

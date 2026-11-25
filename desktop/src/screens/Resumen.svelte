@@ -374,25 +374,25 @@
   .moving :global(*) { transition: none !important; }
   .w > :global(.card) { height: 100%; }
   @media (width < 1000px) { .w { grid-column: span 6 !important; } }
-  .editing .w { outline: 2px dashed var(--border); outline-offset: 4px; border-radius: var(--radius); }
+  .editing .w { outline: 2px dashed var(--border); outline-offset: 4px; border-radius: var(--r-panel); }
   .editing .w > :not(.w-tools, .grip) { pointer-events: none; }
   .moving { user-select: none; cursor: grabbing; }
   .w.off > :not(.w-tools) { filter: grayscale(1); opacity: .4; }
   .w.dragging { outline: 2px dashed var(--brand); background: var(--brand-soft); }
   .w.dragging > :not(.w-tools, .grip) { opacity: 0; }
   .w.sizing { outline-color: var(--brand); z-index: 5; }
-  .w :global(.size-preview) { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; pointer-events: none; border: 2px dashed var(--brand); border-radius: var(--radius); background: color-mix(in srgb, var(--brand) 10%, transparent); }
-  .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: 99px; background: var(--brand); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
-  .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 6px 0; cursor: ew-resize; touch-action: none; }
-  .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--radius); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
+  .w :global(.size-preview) { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; pointer-events: none; border: 2px dashed var(--brand); border-radius: var(--r-panel); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  .w :global(.size-preview)::after { content: attr(data-label); position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: var(--r-control); background: var(--brand); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
+  .grip { position: absolute; right: 6px; bottom: 6px; z-index: 2; width: 16px; height: 16px; border-right: 3px solid var(--brand); border-bottom: 3px solid var(--brand); border-radius: 0 0 var(--r-control) 0; cursor: ew-resize; touch-action: none; }
+  .floating { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: translate; rotate: 1.5deg; scale: 1.03; border-radius: var(--r-panel); background: var(--canvas); box-shadow: 0 24px 60px rgb(15 30 45 / .28), 0 6px 16px rgb(15 30 45 / .12); animation: lift .18s ease-out; }
   .floating > :global(*) { height: 100%; }
   @keyframes lift { from { rotate: 0deg; scale: 1; } }
   @media (prefers-reduced-motion: reduce) { .floating { animation: none; rotate: none; scale: none; } }
   /* The tools float on the widget's top edge, so they never cover its title or links. */
-  .w-tools { position: absolute; top: -17px; right: 14px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .w-tools { position: absolute; top: -17px; right: 14px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
   .w-tools .btn { border: 0; background: none; box-shadow: none; color: var(--text, inherit); }
   .editing { row-gap: 34px; padding-top: 14px; }
   .handle { cursor: grab; touch-action: none; }
-  .dash-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface); }
+  .dash-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--r-panel); background: var(--surface); }
   .dash-tray .muted { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 </style>

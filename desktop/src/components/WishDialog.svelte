@@ -147,7 +147,7 @@
 
 <style>
   .kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .kinds button { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }
+  .kinds button { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface-2); cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); }
   .kinds button:hover { color: inherit; }
   .kinds button[aria-checked="true"] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
   .kinds :global(.i) { width: 22px; height: 22px; }

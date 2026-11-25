@@ -393,4 +393,5 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 32px; 
 button.edit-name, button.text-link { all: unset; cursor: pointer; border-radius: 4px; }
 button.edit-name:hover, button.text-link:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 button.edit-name:focus-visible, button.text-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-button.link { background: none; border: 0; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; }
+button.link { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; text-underline-offset: 3px; }
+button.link:hover, button.link:focus-visible { text-decoration: underline; }

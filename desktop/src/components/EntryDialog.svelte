@@ -3,7 +3,7 @@
   import * as api from "../lib/api";
   import { app, refresh } from "../lib/app.svelte";
   import { entryDialog } from "../lib/dialogs.svelte";
-  import { isoDay, money } from "../lib/format";
+  import { isoDay, money, parseDay } from "../lib/format";
   import { parseCents } from "../lib/quick-parse";
   import { remember } from "../lib/undo.svelte";
   import DatePicker from "./DatePicker.svelte";
@@ -35,6 +35,20 @@
     // Archived goals are loaded too: movements recorded when a goal was completed stay tagged with it.
     api.wishes(true).then(w => goals = w).catch(() => goals = []);
     if (!dialog.open) dialog.showModal();
+  }
+
+  // Only the day is stored, so a purchase made on the cut day after the cut cannot be told apart:
+  // remind to check the statement and offer to move it to the next day.
+  let card = $derived(app.cards.find(c => c.accountId === accountId && c.terms?.cutDay));
+  let onCutDay = $derived.by(() => {
+    if (!card || !date) return false;
+    const d = parseDay(date), last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return d.getDate() === Math.min(card.terms!.cutDay!, last);
+  });
+  function afterCut() {
+    const d = parseDay(date);
+    if (!notes.trim()) notes = `Compra del ${d.getDate()} después del corte`;
+    d.setDate(d.getDate() + 1); date = isoDay(d);
   }
 
   async function suggest() {
@@ -94,6 +108,8 @@
       <div class="two">
         <label class="field">Cuenta<select class="input" bind:value={accountId}>{#each app.accounts.filter(a => !a.closed) as a (a.id)}<option value={a.id}>{a.name}</option>{/each}</select></label>
         <div class="field">Fecha<DatePicker bind:value={date} label="Fecha" /></div>
+        {#if onCutDay}<p class="hint" role="status" style="grid-column:1/-1;text-align:left">Es el día de corte de {card!.name}. Revisa tu estado de cuenta: si esta compra no entró, regístrala un día después.
+          <button class="btn sm ghost" type="button" onclick={afterCut}>Fue después del corte</button></p>{/if}
         <label class="field">Comercio<input class="input" bind:value={payee} list="payee-list" placeholder="¿Dónde?" oninput={suggest} onchange={payeeChosen} /></label>
         <label class="field">Categoría
           <select class="input" bind:value={categoryId} onchange={() => categoryTouched = true}>

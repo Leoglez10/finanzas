@@ -29,6 +29,9 @@ async function refreshAccounts() {
   app.accounts = accounts; app.cards = debts.debts.filter(d => d.isCard); app.overdue = upcoming.filter(u => u.overdue).length; app.profiles = profiles;
 }
 async function tick() {
+  // The app stays open for days in the tray: roll `today` over at midnight, or new entries keep the launch date.
+  const now = new Date();
+  if (now.toDateString() !== app.today.toDateString()) app.today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   try {
     const version = await api.dataVersion();
     if (version !== app.version) { await refreshAccounts(); app.version = version; void api.refreshTray(); }
